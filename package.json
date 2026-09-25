@@ -1,0 +1,24 @@
+{
+  "name": "bloomery",
+  "version": "0.0.1",
+  "description": "",
+  "keywords": [
+    "Minecraft",
+    "Bloomery"
+  ],
+  "homepage": "https://github.com/EtherosGroup/Bloomery#readme",
+  "bugs": {
+    "url": "https://github.com/EtherosGroup/Bloomery/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EtherosGroup/Bloomery.git"
+  },
+  "license": "Apache-2.0",
+  "author": "EtherosGroup",
+  "type": "module",
+  "main": "main.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
