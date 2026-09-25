@@ -14,7 +14,7 @@ export function printHelp(name?: CommandName): void {
 
 function overview(): string {
     const lines = [
-        `${NAME} — Minecraft 启动器`,
+        "Bloomery Minecraft 启动器",
         "",
         "用法",
         `  ${NAME} [全局选项] <命令> [命令选项] [参数]`,
