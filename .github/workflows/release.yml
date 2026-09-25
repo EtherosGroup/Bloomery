@@ -1,0 +1,174 @@
+# 推一个 v* 标签即发布一个 Release，附上打包好的 tarball
+#
+#   npm version minor
+#   git push origin HEAD --tags
+#
+# 同一个标签会触发两条工作流，互不依赖：
+#   本文件：构建并打包 -> 装包冒烟 -> 建 Release 并附上 Bloomery-<版本>.tgz
+#   publish-npm.yml：把这一版发到 npm（它自己盯 v* 标签，原因见该文件头部：
+#   npm 的 Trusted Publisher 认触发这次运行的入口工作流，用 workflow_call 从别的文件调用会 404）
+#
+# 不需要任何密钥：创建 Release 与上传附件用仓库自带的 GITHUB_TOKEN
+#
+# 为什么拆成三个 job：打包与冒烟互不依赖，各自把产物传成 workflow artifact，
+# 最后由 release job 汇总；冒烟在 Node 20/22/24 三个版本上各跑一遍，对应 engines 的声明。
+# 打包与冒烟都成功才发版：要么附件可用，要么没有 Release，不留一个装不起来的包。
+#
+# 手动触发（Actions 页面或 gh workflow run release.yml）走的是演练路径：
+# 同样打包与冒烟，但只把 tgz 上传为 workflow artifact，不创建 Release、不打标签。
+# 因此正式发版之前可以先把产物下载下来核验一遍。
+
+name: release
+
+on:
+    push:
+        tags: ["v*"]
+    # 演练：只产出产物，不创建 Release
+    workflow_dispatch:
+
+permissions:
+    contents: read # 默认只读，创建 Release 的那一步单独提权
+
+# 同一个标签不并发运行两次：重复推送时后一次排队，避免两个 run 同时上传同一个附件
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    package:
+        # 固定镜像版本：ubuntu-latest 会随 GitHub 的迁移计划更换，构建环境不应随之改变
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: npm
+
+            # 使用锁文件安装依赖：与作者本地一致，且能提前发现 package.json 与锁文件不一致
+            - run: npm ci
+
+            - run: npm run check
+
+            # 标签与 package.json 里的版本必须一致，否则附件名与 npm 上那一版会互相矛盾
+            - name: 核对标签与 package.json 的版本
+              if: github.event_name == 'push'
+              run: |
+                  set -e
+                  tag="${{ github.ref_name }}"
+                  version="v$(node -p "require('./package.json').version")"
+                  if [ "$tag" != "$version" ]; then
+                    echo "标签是 $tag，但 package.json 里是 $version。"
+                    echo "先跑 npm version 改版本号并提交，再用同名标签。"
+                    exit 1
+                  fi
+                  echo "版本对得上：$tag"
+
+            # npm pack 会先跑 prepack（即构建）。dist/ 不在仓库里，因此清单必须现场核对
+            - name: 打包并核对清单
+              run: |
+                  set -euo pipefail
+                  npm pack 2>&1 | tee /tmp/pack.txt
+                  # dist/main.js 是 bin 的指向，少一个字节装完都是不能用的空壳
+                  grep -q "dist/main.js" /tmp/pack.txt
+                  grep -E "total files|package size|unpacked size" /tmp/pack.txt
+
+            # 附件名与参考仓库的约定一致：项目名-版本.后缀
+            - name: 归置产物
+              run: |
+                  set -euo pipefail
+                  version="$(node -p "require('./package.json').version")"
+                  mkdir -p release
+                  cp "bloomery-${version}.tgz" "release/Bloomery-${version}.tgz"
+                  ls -l release/
+
+            # 推标签时由 release job 取出来发版，手动触发时留作演练产物，因此两条路都上传
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: release-tarball-${{ github.sha }}
+                  path: release/*.tgz
+                  if-no-files-found: error
+
+    # engines 声明的是 >=20，因此真的装到那三个版本上跑一遍
+    smoke:
+        needs: package
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        strategy:
+            fail-fast: false
+            matrix:
+                node: [20, 22, 24]
+        steps:
+            - uses: actions/download-artifact@v7
+              with:
+                  name: release-tarball-${{ github.sha }}
+                  path: assets
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: ${{ matrix.node }}
+
+            - name: 装进空项目并跑起来
+              run: |
+                  set -euo pipefail
+                  mkdir -p /tmp/consumer
+                  cd /tmp/consumer
+                  npm init -y >/dev/null
+                  npm i --no-audit --no-fund "$GITHUB_WORKSPACE"/assets/*.tgz
+                  ./node_modules/.bin/bloomery --help | grep -q "Bloomery Minecraft 启动器"
+
+                  # 用法错误固定给退出码 2
+                  set +e
+                  ./node_modules/.bin/bloomery nope >/dev/null 2>&1
+                  code=$?
+                  set -e
+                  test "$code" = "2" || {
+                      echo "未知命令的退出码是 $code，期望 2"
+                      exit 1
+                  }
+                  echo "node ${{ matrix.node }} 上装包可用"
+
+    release:
+        # 打包与三个版本的冒烟都过了才发版
+        needs: [package, smoke]
+        if: github.event_name == 'push'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            contents: write # 创建 Release、上传附件
+        steps:
+            # gh 需要有仓库上下文才干活：没有 checkout 时它报「failed to run git: not a git
+            # repository」。产物仍然全从 artifact 取，这里签到只是为了给 gh 一个仓库
+            - uses: actions/checkout@v7
+
+            - name: 取 tarball
+              uses: actions/download-artifact@v7
+              with:
+                  name: release-tarball-${{ github.sha }}
+                  path: assets
+
+            - name: 建 Release 并附上 tarball
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG: ${{ github.ref_name }}
+              run: |
+                  set -e
+                  files=(assets/*.tgz)
+                  # 少一个附件就整个失败：宁可没有 Release，也不要一个附件不全的 Release
+                  for f in "${files[@]}"; do
+                    test -f "$f" || { echo "缺少附件：$f"; exit 1; }
+                  done
+                  ls -l "${files[@]}"
+                  # 再显式给一次仓库，不依赖上面那份 checkout
+                  repo="$GITHUB_REPOSITORY"
+                  if gh release view "$TAG" -R "$repo" >/dev/null 2>&1; then
+                    gh release upload "$TAG" "${files[@]}" -R "$repo" --clobber
+                  else
+                    gh release create "$TAG" -R "$repo" \
+                      --title "$TAG" \
+                      --generate-notes \
+                      "${files[@]}"
+                  fi
+                  gh release view "$TAG" -R "$repo" --json url --jq .url
