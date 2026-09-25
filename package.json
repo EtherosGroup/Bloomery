@@ -1,7 +1,7 @@
 {
     "name": "bloomery",
     "version": "1.0.0",
-    "description": "",
+    "description": "Minecraft 启动器",
     "keywords": [
         "Bloomery",
         "Minecraft"
@@ -16,10 +16,18 @@
         "type": "git",
         "url": "git+https://github.com/EtherosGroup/Bloomery.git"
     },
+    "bin": {
+        "bloomery": "dist/main.js"
+    },
+    "files": [
+        "dist"
+    ],
     "type": "module",
-    "main": "src/main.ts",
+    "main": "dist/main.js",
     "scripts": {
         "start": "node ./src/main.ts",
+        "build": "tsc -p tsconfig.build.json",
+        "prepack": "npm run build",
         "check": "tsc --noEmit",
         "fmt": "oxfmt",
         "fmt:check": "oxfmt --check"
@@ -28,5 +36,8 @@
         "@types/node": "^26.6.2",
         "oxfmt": "^0.70.0",
         "typescript": "^7.0.2"
+    },
+    "engines": {
+        "node": ">=20"
     }
 }

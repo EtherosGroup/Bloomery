@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { run } from "./cli/index.ts";
 import { handleError } from "./error/index.ts";
 import { flush } from "./output/index.ts";
