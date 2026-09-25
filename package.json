@@ -1,24 +1,32 @@
 {
-  "name": "bloomery",
-  "version": "0.0.1",
-  "description": "",
-  "keywords": [
-    "Minecraft",
-    "Bloomery"
-  ],
-  "homepage": "https://github.com/EtherosGroup/Bloomery#readme",
-  "bugs": {
-    "url": "https://github.com/EtherosGroup/Bloomery/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/EtherosGroup/Bloomery.git"
-  },
-  "license": "Apache-2.0",
-  "author": "EtherosGroup",
-  "type": "module",
-  "main": "main.ts",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  }
+    "name": "bloomery",
+    "version": "1.0.0",
+    "description": "",
+    "keywords": [
+        "Bloomery",
+        "Minecraft"
+    ],
+    "homepage": "https://github.com/EtherosGroup/Bloomery#readme",
+    "bugs": {
+        "url": "https://github.com/EtherosGroup/Bloomery/issues"
+    },
+    "license": "Apache-2.0",
+    "author": "EtherosGroup",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/EtherosGroup/Bloomery.git"
+    },
+    "type": "module",
+    "main": "src/main.ts",
+    "scripts": {
+        "start": "node ./src/main.ts",
+        "check": "tsc --noEmit",
+        "fmt": "oxfmt",
+        "fmt:check": "oxfmt --check"
+    },
+    "devDependencies": {
+        "@types/node": "^26.6.2",
+        "oxfmt": "^0.70.0",
+        "typescript": "^7.0.2"
+    }
 }
