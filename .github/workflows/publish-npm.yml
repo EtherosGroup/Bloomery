@@ -1,0 +1,105 @@
+# 把包发到 npm
+#
+# 入口两个：
+#   1. 推 v* 标签时自动跑
+#   2. 手动触发（Actions 页面或 gh workflow run publish-npm.yml）：dry-run 默认 true，只演练
+#
+# 授权用 Trusted Publishing（OIDC），不需要长期 token：
+#   npmjs.com -> 包 Settings -> Trusted Publisher -> GitHub Actions
+#   仓库填 EtherosGroup/Bloomery，工作流文件名填 publish-npm.yml
+#   npm 侧认的是触发这次运行的入口工作流，因此本文件改名后要同步改 npm 侧配置；
+#   被别的文件用 workflow_call 调用时会拿到 OIDC 但 registry 回 404（EhBrowser 里实测）
+#   （另一条路是传统 Token：仓库密钥 NPM_TOKEN + 放开下面 NODE_AUTH_TOKEN 那行）
+#
+# 发布包内容取决于构建产物，dist/ 不在仓库里，因此先构建再核对清单
+# 演练：手动触发时将 dry-run 保持 true，只查看打包结果，不实际发布
+
+name: publish-npm
+
+on:
+    push:
+        tags: ["v*"]
+    workflow_dispatch:
+        inputs:
+            dry-run:
+                description: 只打包演练，不真正发布
+                type: boolean
+                default: true
+
+permissions:
+    contents: read
+    id-token: write # Trusted Publishing（OIDC）需要它
+
+jobs:
+    publish:
+        runs-on: ubuntu-24.04 # 固定镜像版本，构建环境不随 ubuntu-latest 迁移而变
+        timeout-minutes: 15
+        # 发版不能并发：同一时刻只让一个 run 碰 npm
+        concurrency:
+            group: publish-npm
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24 # 自带 npm 11.x，满足 Trusted Publishing 要求的 npm >= 11.5.1
+                  registry-url: https://registry.npmjs.org/
+                  cache: npm
+
+            - run: npm ci
+
+            - run: npm run check
+
+            - run: npm run fmt:check
+
+            - name: 构建并核对发布包内容
+              run: |
+                  set -euo pipefail
+                  npm run build
+                  # npm 把清单写在 stderr，因此需要 2>&1，否则 tee 拿到的是空文件
+                  npm pack --dry-run 2>&1 | tee /tmp/pack.txt
+                  # dist/main.js 是 bin 的指向，少一个字节装完都是不能用的空壳
+                  grep -q "dist/main.js" /tmp/pack.txt
+                  grep -q "dist/cli/parse.js" /tmp/pack.txt
+                  grep -E "total files|package size|unpacked size" /tmp/pack.txt
+
+            # 推标签进来的那条路也核一次：发出去的版本号必须与标签一致
+            - name: 核对标签与 package.json 的版本
+              if: github.event_name == 'push'
+              run: |
+                  set -e
+                  tag="${{ github.ref_name }}"
+                  version="v$(node -p "require('./package.json').version")"
+                  if [ "$tag" != "$version" ]; then
+                    echo "标签是 $tag，但 package.json 里是 $version。"
+                    exit 1
+                  fi
+                  echo "版本对得上：$tag"
+
+            - name: 该版本已经在 npm 上就跳过
+              id: check
+              # 重复推同一个标签时 npm 不接受重复发布同一个版本号，先查一次，避免留一条失败记录
+              run: |
+                  set -euo pipefail
+                  name="$(node -p "require('./package.json').name")"
+                  version="$(node -p "require('./package.json').version")"
+                  if npm view "${name}@${version}" version >/dev/null 2>&1; then
+                    echo "${name}@${version} 已经发布过，跳过发布"
+                    echo "skip=1" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "${name}@${version} 还没发布过，继续"
+                  fi
+
+            - name: 演练（不发布）
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+              # 同样会运行 prepack（再次构建），因此这里打印的是实际的内容清单
+              run: npm publish --dry-run
+
+            - name: 发布
+              # 推标签时直接发；手动触发时只有把 dry-run 关掉才发。已经发过的版本跳过
+              if: ${{ (github.event_name == 'push' || !inputs.dry-run) && steps.check.outputs.skip != '1' }}
+              # prepack 会自动运行 npm run build，因此这里不必再构建一次
+              run: npm publish --provenance --access public
+              # env:
+              #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # 用 Trusted Publishing 时不需要
