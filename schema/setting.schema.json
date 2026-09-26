@@ -1,0 +1,514 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/EtherosGroup/Bloomery/main/schema/setting.schema.json",
+    "title": "Bloomery 设置",
+    "description": "启动器的用户设置。null 一律表示「未设置，跟随上层或默认」；数组一律是追加，空数组表示不追加。",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion"],
+    "properties": {
+        "$schema": {
+            "title": "Schema 地址",
+            "description": "编辑器据此补全与校验，程序忽略这个键。",
+            "type": "string"
+        },
+        "schemaVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "设置格式版本",
+            "description": "用于迁移。当前是 1。",
+            "default": 1
+        },
+        "language": {
+            "title": "界面语言",
+            "description": "system 表示跟随系统区域。",
+            "default": "system",
+            "oneOf": [
+                { "const": "system", "title": "跟随系统" },
+                {
+                    "type": "string",
+                    "pattern": "^[a-z]{2}(-[A-Za-z]{2,4})*$",
+                    "title": "BCP-47 标签"
+                }
+            ]
+        },
+        "appearance": {
+            "title": "终端呈现",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "color": {
+                    "title": "着色",
+                    "description": "auto 按 TTY 与 NO_COLOR / FORCE_COLOR 判定。",
+                    "enum": ["auto", "always", "never"],
+                    "default": "auto"
+                },
+                "unicode": {
+                    "title": "框线字符",
+                    "description": "关掉则退化为 ASCII。",
+                    "type": "boolean",
+                    "default": true
+                },
+                "progress": {
+                    "title": "进度显示",
+                    "enum": ["bar", "plain", "off"],
+                    "default": "bar"
+                }
+            }
+        },
+        "log": {
+            "title": "日志",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "title": "写日志文件",
+                    "type": "boolean",
+                    "default": true
+                },
+                "level": {
+                    "title": "级别闸门",
+                    "description": "低于它的记录直接丢弃。命令行旗标优先于这里。",
+                    "enum": ["debug", "info", "warning", "error", "silent"],
+                    "default": "info"
+                },
+                "directory": {
+                    "title": "日志目录",
+                    "description": "null 表示 <配置目录>/logs。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "keep": {
+                    "title": "保留归档个数",
+                    "description": "负数表示不限制。",
+                    "type": "integer",
+                    "default": -1
+                }
+            }
+        },
+        "network": {
+            "title": "网络",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "proxy": {
+                    "title": "代理",
+                    "description": "如 http://127.0.0.1:7897。null 表示直连。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "noProxy": {
+                    "title": "不走代理的主机",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": ["localhost", "127.0.0.1", "::1"]
+                },
+                "timeoutMs": {
+                    "title": "单次请求超时",
+                    "description": "毫秒。",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "default": 15000
+                },
+                "retries": {
+                    "title": "重试次数",
+                    "description": "单个请求失败后重试几次。",
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 3
+                },
+                "concurrency": {
+                    "title": "并发下载数",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 64,
+                    "default": 8
+                }
+            }
+        },
+        "download": {
+            "title": "下载",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "verify": {
+                    "title": "sha1 校验强度",
+                    "description": "strict 校验不过就重下并报错，warn 只警告，off 不校验。",
+                    "enum": ["strict", "warn", "off"],
+                    "default": "strict"
+                },
+                "sources": {
+                    "title": "下载源",
+                    "description": "按顺序尝试，全不通才报错。",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/downloadSource" }
+                }
+            }
+        },
+        "java": {
+            "title": "Java",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "autoDetect": {
+                    "title": "自动探测",
+                    "description": "扫描 PATH 与常见安装位置。",
+                    "type": "boolean",
+                    "default": true
+                },
+                "autoDownload": {
+                    "title": "自动下载运行时",
+                    "description": "版本要求的 Java 缺失时去 Mojang 取。",
+                    "type": "boolean",
+                    "default": true
+                },
+                "runtimeDirectory": {
+                    "title": "运行时存放目录",
+                    "description": "null 表示 <配置目录>/java。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "list": {
+                    "title": "已知 Java",
+                    "description": "探测结果的缓存，用时逐个复核。",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/javaEntry" }
+                }
+            }
+        },
+        "launch": {
+            "title": "启动默认值",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "memory": {
+                    "title": "内存",
+                    "$ref": "#/$defs/memory"
+                },
+                "window": {
+                    "title": "窗口",
+                    "$ref": "#/$defs/window"
+                },
+                "jvmArgs": {
+                    "title": "额外 JVM 参数",
+                    "description": "追加到版本 json 的 jvm 参数之后。",
+                    "type": "array",
+                    "items": { "type": "string" }
+                },
+                "gameArgs": {
+                    "title": "额外游戏参数",
+                    "description": "追加到版本 json 的游戏参数之后。",
+                    "type": "array",
+                    "items": { "type": "string" }
+                },
+                "waitForExit": {
+                    "title": "等待游戏退出",
+                    "description": "launch 是否等游戏进程结束再返回。",
+                    "type": "boolean",
+                    "default": true
+                }
+            }
+        },
+        "mod": {
+            "title": "模组",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "provider": {
+                    "title": "检索源",
+                    "enum": ["modrinth", "curseforge"],
+                    "default": "modrinth"
+                },
+                "installDependencies": {
+                    "title": "一并装依赖",
+                    "description": "装模组时把它声明的依赖也装上。",
+                    "type": "boolean",
+                    "default": true
+                }
+            }
+        },
+        "cleanup": {
+            "title": "清理",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "orphan": {
+                    "title": "孤儿数据",
+                    "description": "没有实例引用的库与 assets 对象怎么处理。",
+                    "enum": ["ask", "auto", "never"],
+                    "default": "ask"
+                }
+            }
+        },
+        "selectedAccount": {
+            "title": "当前账号",
+            "description": "账号 id，对应 accounts.json。",
+            "type": ["string", "null"],
+            "default": null
+        },
+        "selectedFolder": {
+            "title": "当前文件夹",
+            "description": "文件夹 id。",
+            "type": ["string", "null"],
+            "default": null
+        },
+        "folders": {
+            "title": "游戏目录",
+            "description": "清单是缓存提示，启动前逐个复核。",
+            "type": "array",
+            "items": { "$ref": "#/$defs/folder" },
+            "default": []
+        }
+    },
+    "$defs": {
+        "memory": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["minMb", "maxMb"],
+            "properties": {
+                "minMb": {
+                    "title": "-Xms",
+                    "description": "单位 MB。",
+                    "type": "integer",
+                    "minimum": 128
+                },
+                "maxMb": {
+                    "title": "-Xmx",
+                    "description": "单位 MB。",
+                    "type": "integer",
+                    "minimum": 512
+                }
+            }
+        },
+        "memoryPatch": {
+            "title": "内存覆盖",
+            "description": "只写要覆盖的键，其余跟随上层。",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "minMb": { "type": "integer", "minimum": 128 },
+                "maxMb": { "type": "integer", "minimum": 512 }
+            }
+        },
+        "window": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "width": { "type": "integer", "minimum": 320 },
+                "height": { "type": "integer", "minimum": 240 },
+                "fullscreen": { "type": "boolean", "default": false }
+            }
+        },
+        "loader": {
+            "title": "模组加载器",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type"],
+            "properties": {
+                "type": {
+                    "enum": ["vanilla", "fabric", "forge", "neoforge", "quilt"],
+                    "default": "vanilla"
+                },
+                "version": {
+                    "description": "加载器版本；vanilla 时为 null。",
+                    "type": ["string", "null"]
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": { "type": { "const": "vanilla" } },
+                        "required": ["type"]
+                    },
+                    "then": { "properties": { "version": { "type": "null" } } },
+                    "else": {
+                        "required": ["version"],
+                        "properties": { "version": { "type": "string", "minLength": 1 } }
+                    }
+                }
+            ]
+        },
+        "javaEntry": {
+            "title": "一个 Java",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+                "path": {
+                    "description": "java 可执行文件，或 JAVA_HOME。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "major": {
+                    "description": "主版本号，探测得来，要跟版本 json 的 javaVersion 比对。",
+                    "type": ["integer", "null"]
+                },
+                "kind": { "enum": ["jdk", "jre"], "default": "jdk" },
+                "arch": { "enum": ["x64", "x86", "arm64", "arm", null] },
+                "vendor": { "type": ["string", "null"] },
+                "source": {
+                    "description": "manual 是用户指定的，坏了要报；detected 是扫描缓存，坏了可以静默重扫。",
+                    "enum": ["manual", "detected", "downloaded"],
+                    "default": "detected"
+                }
+            }
+        },
+        "downloadSource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider"],
+            "properties": {
+                "provider": { "enum": ["official", "bmclapi", "custom"] },
+                "enabled": { "type": "boolean", "default": true },
+                "url": {
+                    "description": "custom 时的根地址；official 与 bmclapi 留 null 用内置地址。",
+                    "type": ["string", "null"],
+                    "default": null
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": { "provider": { "const": "custom" } },
+                        "required": ["provider"]
+                    },
+                    "then": { "required": ["url"], "properties": { "url": { "type": "string" } } }
+                }
+            ]
+        },
+        "instance": {
+            "title": "实例",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "target"],
+            "properties": {
+                "id": {
+                    "title": "标识",
+                    "description": "同时是 versions/<id>/ 的目录名，稳定不改。不能含 / \\ : * ? \" < > |",
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^/\\\\:*?\"<>|]+$"
+                },
+                "name": {
+                    "title": "显示名",
+                    "description": "省略时用 id。",
+                    "type": "string"
+                },
+                "target": {
+                    "title": "继承的版本",
+                    "description": "版本 json 的 id，如 1.20.6。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "loader": { "$ref": "#/$defs/loader" },
+                "useGlobalSettings": {
+                    "title": "使用全局设置",
+                    "description": "按字段选择是否改用上层（文件夹 → 全局）的值。解析时先读它：为 true 就忽略本实例该字段的值，改用上层；没写或为 false 才看本实例自己的值。被忽略的值保留在配置里，关掉开关就恢复。id / name / target / loader / notes 不受它影响。",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "isolation": { "title": "版本隔离", "type": "boolean", "default": false },
+                        "java": { "title": "Java", "type": "boolean", "default": false },
+                        "memory": { "title": "内存", "type": "boolean", "default": false },
+                        "window": { "title": "窗口", "type": "boolean", "default": false },
+                        "jvmArgs": { "title": "JVM 参数", "type": "boolean", "default": false },
+                        "gameArgs": { "title": "游戏参数", "type": "boolean", "default": false }
+                    }
+                },
+                "isolation": {
+                    "title": "版本隔离",
+                    "description": "null 表示跟随文件夹。开着的实例把 mods/saves/config/logs 收在自己目录下。",
+                    "type": ["boolean", "null"],
+                    "default": null
+                },
+                "java": {
+                    "title": "Java 路径",
+                    "description": "null 表示跟随文件夹或全局。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "memory": {
+                    "title": "内存覆盖",
+                    "oneOf": [{ "$ref": "#/$defs/memoryPatch" }, { "type": "null" }]
+                },
+                "jvmArgs": {
+                    "title": "额外 JVM 参数",
+                    "description": "追加到全局与文件夹的之后。",
+                    "type": "array",
+                    "items": { "type": "string" }
+                },
+                "gameArgs": {
+                    "title": "额外游戏参数",
+                    "type": "array",
+                    "items": { "type": "string" }
+                },
+                "window": {
+                    "title": "窗口覆盖",
+                    "oneOf": [{ "$ref": "#/$defs/window" }, { "type": "null" }]
+                },
+                "notes": {
+                    "title": "备注",
+                    "type": ["string", "null"]
+                }
+            }
+        },
+        "folder": {
+            "title": "游戏目录",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "path"],
+            "properties": {
+                "id": {
+                    "title": "标识",
+                    "description": "供 selectedFolder 引用。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "name": {
+                    "title": "显示名",
+                    "type": "string"
+                },
+                "path": {
+                    "title": "目录",
+                    "description": "如 ~/.minecraft。启动前检查存在与可写。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "isolation": {
+                    "title": "版本隔离",
+                    "description": "默认值，实例可以各自覆盖。",
+                    "type": "boolean",
+                    "default": false
+                },
+                "autoDiscover": {
+                    "title": "自动发现实例",
+                    "description": "磁盘上有但清单里没写的实例也列出来。",
+                    "type": "boolean",
+                    "default": true
+                },
+                "missingEntries": {
+                    "title": "清单失效条目",
+                    "description": "清单里的实例在磁盘上不存在时怎么办。keep 保留并标为不可用，drop 从清单摘掉。",
+                    "enum": ["keep", "drop"],
+                    "default": "keep"
+                },
+                "java": {
+                    "title": "该文件夹的 Java",
+                    "description": "null 表示用全局默认。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "memory": {
+                    "title": "该文件夹的内存",
+                    "oneOf": [{ "$ref": "#/$defs/memoryPatch" }, { "type": "null" }]
+                },
+                "instances": {
+                    "title": "实例清单",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/instance" },
+                    "default": []
+                }
+            }
+        }
+    }
+}
