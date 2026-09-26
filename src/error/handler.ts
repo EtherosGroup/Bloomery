@@ -34,11 +34,12 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     UnknownCommand: "运行 bloomery --help 查看全部命令",
 };
 
-export function handleError(error: unknown): number {
+export function handleError(error: unknown, logPath?: string): number {
     if (!(error instanceof AppError)) {
         log.error("内部错误 %s", error instanceof Error ? error.message : String(error));
         printError("错误：内部错误，这是 bug，请附带下面的调用栈反馈");
         printError(format(error));
+        printLogPath(logPath);
         return EXIT_CODES.UnknownError;
     }
 
@@ -52,7 +53,16 @@ export function handleError(error: unknown): number {
     if (hint !== undefined) {
         printError(hint);
     }
+    printLogPath(logPath, error.code);
     return EXIT_CODES[error.code];
+}
+
+// 用法类错误在抛出前还没写出日志，给路径反而指向一个不存在的文件
+function printLogPath(logPath: string | undefined, code?: ErrorCode): void {
+    if (logPath === undefined || code === "UsageError" || code === "UnknownCommand") {
+        return;
+    }
+    printError(`详细日志：${logPath}`);
 }
 
 // detail 是主细节，其余上下文键作为补充
