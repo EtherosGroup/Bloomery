@@ -1,8 +1,12 @@
 /**
- * 输出层：分级日志
+ * 输出层：终端与文件两条出口
  *
- * 数据走 stdout，诊断走 stderr，管道里能直接拿到干净结果
- * 控制台同步写，顺序等于调用顺序；异步落点走串行队列，退出前用 flush 等它
+ *   out()   只输出到终端
+ *   log()   只写日志文件，终端看不见
+ *   print() 只输出到终端的纯正文，不受级别闸门影响
+ *
+ * 终端只给正文；文件行带时间、级别与来源。两边互不影响，终端上出现过什么不进文件
+ * 终端同步写，顺序等于调用顺序；异步落点走串行队列，退出前用 flush 等它
  * 级别与颜色是进程级状态，由 main.ts 依 argv 设定
  * @author IsCibocaz
  * @since 1.0.0
@@ -42,15 +46,15 @@ const SEVERITY: Record<Level, number> = {
 
 const LABEL: Record<Level, string> = {
     Debug: "DEBUG",
-    Info: "INFO",
-    Warning: "WARN",
+    Info: "INFO ",
+    Warning: "WARN ",
     Error: "ERROR",
 };
 
-// ANSI 前景色：亮黑、青、黄、红
-const COLOR: Record<Level, number> = {
-    Debug: 90,
-    Info: 36,
+// 终端着色只管会打断用户的级别，正文本身保持原样
+const COLOR: Record<Level, number | undefined> = {
+    Debug: undefined,
+    Info: undefined,
     Warning: 33,
     Error: 31,
 };
@@ -63,26 +67,39 @@ export function setLevel(level: LogLevel): void {
     threshold = level === "Silent" ? Number.POSITIVE_INFINITY : SEVERITY[level];
 }
 
-export function out(level: Level, prefix: string, message: string, ...args: unknown[]): void {
+// 只输出到终端，不进日志文件
+export function out(level: Level, message: string, ...args: unknown[]): void {
     const severity = SEVERITY[level];
     if (severity < threshold) {
         return;
     }
 
-    const at = Date.now();
-    const text = format(message, ...args);
-    const plain = composeLine(at, level, prefix, text, false);
     // Warning 及以上走 stderr
     const target = severity >= SEVERITY.Warning ? STDERR : STDOUT;
-    writeLine(target, colored ? composeLine(at, level, prefix, text, true) : plain);
-
-    if (sinks.size > 0) {
-        const record: LogRecord = { level, prefix, message: text, line: plain, at };
-        queue = queue.then(() => deliver(record)).catch(reportSinkFailure);
-    }
+    writeLine(target, paint(level, format(message, ...args)));
 }
 
-// 人看的正文，不带时间戳与级别，不进落点
+// 只写日志文件，终端看不见
+export function log(level: Level, prefix: string, message: string, ...args: unknown[]): void {
+    const severity = SEVERITY[level];
+    if (severity < threshold || sinks.size === 0) {
+        return;
+    }
+
+    const at = Date.now();
+    const text = format(message, ...args);
+    const source = prefix === "" ? "" : `[${prefix}] `;
+    const record: LogRecord = {
+        level,
+        prefix,
+        message: text,
+        line: `${formatNow(at)} [${LABEL[level]}] ${source}${text}`,
+        at,
+    };
+    queue = queue.then(() => deliver(record)).catch(reportSinkFailure);
+}
+
+// 人看的正文，不带时间戳与级别，不受闸门与落点影响
 export function print(text: string): void {
     writeLine(STDOUT, text);
 }
@@ -182,29 +199,19 @@ export interface Logger {
     error(message: string, ...args: unknown[]): void;
 }
 
-// 一个模块一个 logger，前缀固定
+// 一个模块一个 logger，前缀固定。模块诊断只落文件，终端要出现的内容用 out()
 export function logger(prefix: string): Logger {
     return {
-        debug: (message: string, ...args: unknown[]) => out("Debug", prefix, message, ...args),
-        info: (message: string, ...args: unknown[]) => out("Info", prefix, message, ...args),
-        warn: (message: string, ...args: unknown[]) => out("Warning", prefix, message, ...args),
-        error: (message: string, ...args: unknown[]) => out("Error", prefix, message, ...args),
+        debug: (message: string, ...args: unknown[]) => log("Debug", prefix, message, ...args),
+        info: (message: string, ...args: unknown[]) => log("Info", prefix, message, ...args),
+        warn: (message: string, ...args: unknown[]) => log("Warning", prefix, message, ...args),
+        error: (message: string, ...args: unknown[]) => log("Error", prefix, message, ...args),
     };
 }
 
-function composeLine(
-    at: number,
-    level: Level,
-    prefix: string,
-    text: string,
-    color: boolean,
-): string {
-    return `${formatNow(at)} [${renderLabel(level, color)}][${prefix}] ${text}`;
-}
-
-function renderLabel(level: Level, color: boolean): string {
-    const label = LABEL[level].padEnd(5);
-    return color ? `\u001B[${COLOR[level]}m${label}\u001B[0m` : label;
+function paint(level: Level, text: string): string {
+    const code = COLOR[level];
+    return colored && code !== undefined ? `\u001B[${code}m${text}\u001B[0m` : text;
 }
 
 function formatNow(at: number): string {
