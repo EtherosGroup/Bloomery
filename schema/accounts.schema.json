@@ -1,0 +1,110 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/EtherosGroup/Bloomery/main/schema/accounts.schema.json",
+    "title": "Bloomery 账号",
+    "description": "账号与凭据。这个文件含长期凭据，权限应当是 0600；refreshToken 为 null 表示需要重新登录。",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion"],
+    "properties": {
+        "$schema": {
+            "title": "Schema 地址",
+            "description": "编辑器据此补全与校验，程序忽略这个键。",
+            "type": "string"
+        },
+        "schemaVersion": {
+            "title": "格式版本",
+            "description": "用于迁移。当前是 1。",
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+        },
+        "accounts": {
+            "title": "账号清单",
+            "type": "array",
+            "items": { "$ref": "#/$defs/account" },
+            "default": []
+        }
+    },
+    "$defs": {
+        "account": {
+            "title": "一个账号",
+            "oneOf": [{ "$ref": "#/$defs/offline" }, { "$ref": "#/$defs/microsoft" }]
+        },
+        "offline": {
+            "title": "离线账号",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "name"],
+            "properties": {
+                "id": {
+                    "title": "标识",
+                    "description": "<type>:<name>，供 setting.json 的 selectedAccount 引用。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "type": { "const": "offline" },
+                "name": {
+                    "title": "游戏名",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "uuid": {
+                    "title": "UUID",
+                    "description": "离线模式下由名字推导，通常留 null。",
+                    "type": ["string", "null"],
+                    "default": null
+                }
+            }
+        },
+        "microsoft": {
+            "title": "微软账号",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "name"],
+            "properties": {
+                "id": {
+                    "title": "标识",
+                    "description": "<type>:<name>，供 setting.json 的 selectedAccount 引用。",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "type": { "const": "microsoft" },
+                "name": {
+                    "title": "游戏名",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "uuid": {
+                    "title": "UUID",
+                    "description": "登录后由微软返回，带连字符的小写形式。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "xuid": {
+                    "title": "XUID",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "refreshToken": {
+                    "title": "刷新令牌",
+                    "description": "长期凭据。null 表示需要重新登录；将来改用系统钥匙串存储时这里也会是 null。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "accessToken": {
+                    "title": "访问令牌",
+                    "description": "短命缓存，几小时过期，过期后拿 refreshToken 换新的。",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "expiresAt": {
+                    "title": "访问令牌过期时间",
+                    "type": ["string", "null"],
+                    "format": "date-time",
+                    "default": null
+                }
+            }
+        }
+    }
+}

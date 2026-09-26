@@ -1,0 +1,101 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/EtherosGroup/Bloomery/main/schema/state.schema.json",
+    "title": "Bloomery 运行期状态",
+    "description": "每次使用都会变的东西。丢了不影响使用，只是少一点便利：上次的文件夹与实例、各实例的游玩统计、Java 探测缓存。",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion"],
+    "properties": {
+        "$schema": {
+            "title": "Schema 地址",
+            "description": "编辑器据此补全与校验，程序忽略这个键。",
+            "type": "string"
+        },
+        "schemaVersion": {
+            "title": "格式版本",
+            "description": "用于迁移。当前是 1。",
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+        },
+        "lastFolder": {
+            "title": "上次的文件夹",
+            "description": "文件夹 id，对应 setting.json 的 folders。",
+            "type": ["string", "null"],
+            "default": null
+        },
+        "lastInstance": {
+            "title": "上次的实例",
+            "description": "实例 id，只在 lastFolder 内唯一。",
+            "type": ["string", "null"],
+            "default": null
+        },
+        "instances": {
+            "title": "各实例统计",
+            "description": "键是 <文件夹 id>/<实例 id>。",
+            "type": "object",
+            "propertyNames": { "pattern": "^[^/]+/[^/]+$" },
+            "additionalProperties": { "$ref": "#/$defs/instanceStat" },
+            "default": {}
+        },
+        "javaProbe": {
+            "title": "Java 探测缓存",
+            "description": "键是 java 可执行文件路径。路径不在了或 probedAt 太旧就重探。",
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/javaProbe" },
+            "default": {}
+        }
+    },
+    "$defs": {
+        "instanceStat": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "lastPlayedAt": {
+                    "title": "上次游玩时间",
+                    "type": ["string", "null"],
+                    "format": "date-time",
+                    "default": null
+                },
+                "playTimeMinutes": {
+                    "title": "累计游玩分钟",
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                },
+                "launchCount": {
+                    "title": "启动次数",
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                }
+            }
+        },
+        "javaProbe": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "major": {
+                    "title": "主版本号",
+                    "type": ["integer", "null"],
+                    "default": null
+                },
+                "arch": {
+                    "title": "架构",
+                    "enum": ["x64", "x86", "arm64", "arm", null]
+                },
+                "vendor": {
+                    "title": "发行方",
+                    "type": ["string", "null"],
+                    "default": null
+                },
+                "probedAt": {
+                    "title": "探测时间",
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        }
+    }
+}
