@@ -5,6 +5,7 @@
  */
 export {
     out,
+    log,
     print,
     printError,
     type Level,
@@ -17,3 +18,4 @@ export {
     addSink,
     flush,
 } from "./output.ts";
+export { addFileSink, type FileSink, type FileSinkOptions } from "./file.ts";
