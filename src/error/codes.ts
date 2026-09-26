@@ -1,1 +1,6 @@
-export type ErrorCode = "UnknownError" | "UsageError" | "UnknownCommand" | "NotImplemented";
+export type ErrorCode =
+    | "UnknownError"
+    | "UsageError"
+    | "UnknownCommand"
+    | "NotImplemented"
+    | "ConfigTooNew";

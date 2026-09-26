@@ -19,6 +19,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     UsageError: "参数不合法",
     UnknownCommand: "未知命令",
     NotImplemented: "该功能尚未实现",
+    ConfigTooNew: "配置版本比程序新",
 };
 
 // 退出码约定：0 成功，1 内部错误，2 用法错误，3 未实现
@@ -27,11 +28,13 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     UsageError: 2,
     UnknownCommand: 2,
     NotImplemented: 3,
+    ConfigTooNew: 1,
 };
 
 const HINTS: Partial<Record<ErrorCode, string>> = {
     UsageError: "运行 bloomery --help 查看用法",
     UnknownCommand: "运行 bloomery --help 查看全部命令",
+    ConfigTooNew: "配置文件是更新版本的 Bloomery 写的，本次运行不会写回",
 };
 
 export function handleError(error: unknown, logPath?: string): number {

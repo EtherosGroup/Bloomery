@@ -21,3 +21,18 @@ export function configDirectory(): string {
 export function logDirectory(): string {
     return join(configDirectory(), "logs");
 }
+
+// 设置文件：<配置文件夹>/setting.json
+export function settingFile(): string {
+    return join(configDirectory(), "setting.json");
+}
+
+// 账号文件：<配置文件夹>/accounts.json，含凭据
+export function accountsFile(): string {
+    return join(configDirectory(), "accounts.json");
+}
+
+// 状态文件：<配置文件夹>/state.json
+export function stateFile(): string {
+    return join(configDirectory(), "state.json");
+}

@@ -6,4 +6,11 @@
  */
 
 export { type PlatformName, platform } from "./os.ts";
-export { configDirectory, homeDirectory, logDirectory } from "./path.ts";
+export {
+    accountsFile,
+    configDirectory,
+    homeDirectory,
+    logDirectory,
+    settingFile,
+    stateFile,
+} from "./path.ts";
