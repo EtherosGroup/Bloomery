@@ -1,4 +1,4 @@
-import { main } from "./main.ts"
+import { main } from "./main.ts";
 
-console.clear()
-await main()
+console.clear();
+await main();
