@@ -1,24 +1,170 @@
 /**
- * launch 命令：编排版本、依赖、账户、启动
+ * launch 命令：编排版本、Java、账户、依赖、参数与进程
  *
- * 目前只打印解析结果并报未实现，业务模块就位后替换函数体
+ * 启动一次就把 state 里的启动次数与上次游玩时间更新掉
+ * 非零退出码原样带出去，脚本里能直接判断游戏是不是正常结束
  * @author IsCibocaz
  * @since 1.0.0
  */
 
+import { loadAccounts, loadSetting, loadState, updateState } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
-import { logger } from "../../output/index.ts";
+import { planLaunch, spawnGame, type LaunchPlan } from "../../launch/index.ts";
+import { logger, print } from "../../output/index.ts";
+import { pickFolder, readFolder, type FolderView, type InstanceView } from "../../version/index.ts";
 import type { Context, LaunchCommand } from "../parse.ts";
 
 const log = logger("launch");
 
 export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<void> {
-    log.debug(
-        "version=%s account=%s json=%s home=%s",
-        command.version ?? "默认",
-        command.account ?? "默认",
-        String(ctx.json),
-        ctx.home ?? "默认",
+    const setting = await loadSetting();
+
+    const folder = pickFolder(setting.folders, setting.selectedFolder);
+    if (folder === undefined) {
+        throw new AppError("cli", "FolderNotFound", {
+            context: { detail: "配置里没有游戏文件夹" },
+        });
+    }
+
+    const state = await loadState();
+    const view = await readFolder(folder);
+    const instance = pickInstance(view, command.version, state.lastInstance);
+    if (instance === undefined) {
+        throw new AppError("cli", "VersionNotFound", {
+            context: {
+                detail: command.version ?? "没有可启动的版本",
+                folder: view.id,
+            },
+        });
+    }
+
+    const plan = await planLaunch(
+        {
+            setting,
+            folder,
+            config: folder.instances.find((item) => item.id === instance.id),
+            instance,
+            accounts: await loadAccounts(),
+            probes: state.javaProbe,
+            accountName: command.account,
+        },
+        { prepare: command.dryRun !== true },
     );
-    throw new AppError("cli", "NotImplemented", { context: { detail: "launch" } });
+
+    report(plan, ctx, command.dryRun === true);
+    if (command.dryRun === true) {
+        return;
+    }
+
+    const key = `${folder.id}/${instance.id}`;
+    await updateState((current) => ({
+        ...current,
+        lastFolder: folder.id,
+        lastInstance: instance.id,
+        instances: {
+            ...current.instances,
+            [key]: {
+                lastPlayedAt: new Date().toISOString(),
+                playTimeMinutes: current.instances[key]?.playTimeMinutes ?? 0,
+                launchCount: (current.instances[key]?.launchCount ?? 0) + 1,
+            },
+        },
+    }));
+
+    const game = spawnGame(plan.executable, plan.args, plan.directory);
+    log.info("游戏进程 pid=%s", game.pid);
+    if (!setting.launch.waitForExit) {
+        return;
+    }
+
+    const code = await game.done;
+    log.info("游戏退出 code=%d", code);
+    if (code !== 0) {
+        process.exitCode = code;
+    }
+}
+
+// 指定 id 或名字优先，其次上次启动的，再次第一个可用的
+function pickInstance(
+    view: FolderView,
+    wanted: string | undefined,
+    last: string | null | undefined,
+): InstanceView | undefined {
+    if (wanted !== undefined) {
+        return view.instances.find((item) => item.id === wanted || item.name === wanted);
+    }
+    if (last !== null && last !== undefined) {
+        const found = view.instances.find((item) => item.id === last);
+        if (found !== undefined) {
+            return found;
+        }
+    }
+    return view.instances.find((item) => item.state === "ready");
+}
+
+function report(plan: LaunchPlan, ctx: Context, dryRun: boolean): void {
+    if (ctx.json) {
+        print(JSON.stringify(summary(plan), null, 4));
+        return;
+    }
+
+    const lines = [
+        `启动 ${plan.versionName}${dryRun ? "（只预览）" : ""}`,
+        `  Java      ${plan.executable}（${describeJava(plan)}）`,
+        `  账户      ${plan.account.name}（${plan.account.kind === "offline" ? "离线" : "微软"}）`,
+        `  目录      ${plan.directory}`,
+        `  classpath ${plan.classpath.entries.length} 项${
+            plan.classpath.missing.length === 0
+                ? ""
+                : `（缺 ${plan.classpath.missing.length} 个：${plan.classpath.missing[0] ?? ""}）`
+        }`,
+        `  natives   ${plan.natives.jars} 个 jar 解出 ${plan.natives.files} 个文件`,
+        plan.assets === null
+            ? "  资源      索引不在，材质与声音可能缺失"
+            : `  资源      ${plan.assets.index}：${plan.assets.present}/${plan.assets.total}`,
+    ];
+    if (dryRun) {
+        lines.push("", command(plan));
+    }
+    for (const warning of plan.warnings) {
+        lines.push(`  警告      ${warning}`);
+    }
+    print(lines.join("\n"));
+}
+
+function summary(plan: LaunchPlan): unknown {
+    return {
+        version: plan.versionName,
+        executable: plan.executable,
+        java: {
+            major: plan.java.major,
+            arch: plan.java.arch,
+            kind: plan.java.kind,
+            vendor: plan.java.vendor,
+        },
+        account: {
+            name: plan.account.name,
+            uuid: plan.account.uuid,
+            kind: plan.account.kind,
+        },
+        directory: plan.directory,
+        classpath: plan.classpath.entries.length,
+        natives: plan.natives,
+        assets: plan.assets,
+        args: plan.args,
+    };
+}
+
+function describeJava(plan: LaunchPlan): string {
+    return [
+        plan.java.major === null ? "版本未知" : String(plan.java.major),
+        plan.java.kind,
+        plan.java.arch ?? "架构未知",
+    ].join(" · ");
+}
+
+// 参数里有空格时加引号，方便直接贴到终端里跑
+function command(plan: LaunchPlan): string {
+    const quote = (part: string): string => (/[\s"']/.test(part) ? JSON.stringify(part) : part);
+    return [plan.executable, ...plan.args].map(quote).join(" ");
 }

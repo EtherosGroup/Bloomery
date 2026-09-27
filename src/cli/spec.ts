@@ -36,15 +36,17 @@ export const GLOBAL_OPTIONS: OptionDecls = {
 export const COMMANDS: CommandTable = {
     launch: {
         summary: "启动游戏",
-        usage: "launch [version] [--account <name>]",
+        usage: "launch [version] [--account <name>] [--dry-run]",
         options: {
             account: { type: "string", value: "<name>", summary: "使用指定账户" },
+            "dry-run": { type: "boolean", summary: "只打印启动命令，不真的启动" },
         },
         positionals: { names: ["version"], required: 0 },
         toCommand: (values, positionals) => ({
             name: "launch",
             version: optionalPositional(positionals, 0, "version"),
             account: optionalString(values, "account"),
+            dryRun: values["dry-run"] === true,
         }),
         run: runLaunch,
     },

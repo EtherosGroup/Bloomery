@@ -377,6 +377,62 @@ export async function resolveJava(
     cached: Readonly<Record<string, JavaProbe>>,
     major?: number,
 ): Promise<JavaInfo | undefined> {
+    const candidates = await candidatesOf(setting, cached);
+    const matching =
+        major === undefined ? candidates : candidates.filter((info) => info.major === major);
+    if (matching.length === 0) {
+        return undefined;
+    }
+    matching.sort(byPreference);
+    return matching[0];
+}
+
+export interface JavaChoice {
+    readonly info: JavaInfo;
+    /** true 表示没有主版本相等的，退到了更新的版本 */
+    readonly fallback: boolean;
+}
+
+// 首选主版本相等；没有再退到不小于要求的最低版本，越接近要求越稳
+export async function resolveJavaFor(
+    setting: JavaSetting,
+    cached: Readonly<Record<string, JavaProbe>>,
+    major: number | undefined,
+): Promise<JavaChoice | undefined> {
+    const candidates = await candidatesOf(setting, cached);
+    if (candidates.length === 0) {
+        return undefined;
+    }
+
+    if (major === undefined) {
+        candidates.sort(byPreference);
+        const info = candidates[0];
+        return info === undefined ? undefined : { info, fallback: false };
+    }
+
+    const exact = candidates.filter((info) => info.major === major);
+    if (exact.length > 0) {
+        exact.sort(byPreference);
+        const info = exact[0];
+        return info === undefined ? undefined : { info, fallback: false };
+    }
+
+    const newer = candidates.filter((info) => (info.major ?? 0) > major);
+    if (newer.length === 0) {
+        return undefined;
+    }
+    newer.sort(
+        (a, b) => (a.major ?? 0) - (b.major ?? 0) || SOURCE_RANK[a.source] - SOURCE_RANK[b.source],
+    );
+    const info = newer[0];
+    return info === undefined ? undefined : { info, fallback: true };
+}
+
+// 清单里能跑起来的那些，缺信息的按缓存或重探
+async function candidatesOf(
+    setting: JavaSetting,
+    cached: Readonly<Record<string, JavaProbe>>,
+): Promise<JavaInfo[]> {
     const candidates: JavaInfo[] = [];
     for (const entry of setting.list) {
         const info = await probeCached(entry.path, entry.source, cached[entry.path]);
@@ -384,16 +440,11 @@ export async function resolveJava(
             candidates.push(info);
         }
     }
+    return candidates;
+}
 
-    const matching =
-        major === undefined ? candidates : candidates.filter((info) => info.major === major);
-    if (matching.length === 0) {
-        return undefined;
-    }
-    matching.sort(
-        (a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || (b.major ?? 0) - (a.major ?? 0),
-    );
-    return matching[0];
+function byPreference(a: JavaInfo, b: JavaInfo): number {
+    return SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || (b.major ?? 0) - (a.major ?? 0);
 }
 
 // 缓存新鲜且文件还在就不重探

@@ -16,4 +16,8 @@ export type ErrorCode =
     | "VersionBroken"
     | "JavaNotFound"
     | "JavaBroken"
-    | "JavaDuplicate";
+    | "JavaDuplicate"
+    | "DependencyMissing"
+    | "AccountNotFound"
+    | "AccountExpired"
+    | "LaunchFailed";

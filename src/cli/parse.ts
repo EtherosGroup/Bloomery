@@ -22,6 +22,8 @@ export interface LaunchCommand {
     /** 省略表示用默认实例 */
     readonly version?: string;
     readonly account?: string;
+    /** 只打印启动命令，不真的起进程 */
+    readonly dryRun?: boolean;
 }
 
 export interface InstallCommand {

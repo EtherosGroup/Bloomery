@@ -30,6 +30,10 @@ const MESSAGES: Record<ErrorCode, string> = {
     JavaNotFound: "找不到可用的 Java",
     JavaBroken: "Java 跑不起来",
     JavaDuplicate: "这个 Java 已经在清单里",
+    DependencyMissing: "依赖文件缺失",
+    AccountNotFound: "找不到可用的账户",
+    AccountExpired: "账户凭据需要刷新",
+    LaunchFailed: "游戏进程没起来",
 };
 
 // 退出码约定：0 成功，1 内部错误，2 用法错误，3 未实现
@@ -47,6 +51,10 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     JavaNotFound: 1,
     JavaBroken: 1,
     JavaDuplicate: 1,
+    DependencyMissing: 1,
+    AccountNotFound: 1,
+    AccountExpired: 1,
+    LaunchFailed: 1,
 };
 
 const HINTS: Partial<Record<ErrorCode, string>> = {
@@ -58,6 +66,8 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     VersionNotFound: "运行 bloomery version list 查看可用版本",
     JavaNotFound: "运行 bloomery java scan 扫描本机的 Java",
     JavaDuplicate: "运行 bloomery java list 查看已记录的 Java",
+    AccountNotFound: "运行 bloomery auth login 添加账户，或用 --account <名字> 指定",
+    AccountExpired: "运行 bloomery auth login 重新登录",
 };
 
 export function handleError(error: unknown, logPath?: string): number {

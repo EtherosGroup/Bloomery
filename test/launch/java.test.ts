@@ -20,6 +20,7 @@ import {
     probeJava,
     resolveJava,
     resolveJavaExecutable,
+    resolveJavaFor,
 } from "../../src/launch/java.ts";
 import { JAVA_EXECUTABLE } from "../../src/platform/index.ts";
 
@@ -134,4 +135,31 @@ test("按主版本挑选", async (t) => {
     assert.equal(await resolveJava(setting, {}, 999), undefined);
     // 不给主版本时清单里只有它
     assert.equal((await resolveJava(setting, {}))?.path, first);
+});
+
+test("主版本对不上时退到更新的", async (t) => {
+    const paths = await findJava(EMPTY);
+    const first = paths[0];
+    if (first === undefined) {
+        t.skip("本机没有 Java");
+        return;
+    }
+
+    const info = await probeJava(first, "manual");
+    assert.ok(info !== null);
+    assert.ok(info.major !== null);
+    const setting: JavaSetting = { ...EMPTY, list: [javaEntryOf(info)] };
+
+    // 主版本相等：不算退让
+    const exact = await resolveJavaFor(setting, {}, info.major);
+    assert.equal(exact?.fallback, false);
+    assert.equal(exact?.info.path, first);
+
+    // 要求更低的版本：退到手上这个
+    const lower = await resolveJavaFor(setting, {}, Math.max(1, info.major - 1));
+    assert.equal(lower?.fallback, true);
+    assert.equal(lower?.info.path, first);
+
+    // 要求更高的版本：没有更新的可用
+    assert.equal(await resolveJavaFor(setting, {}, info.major + 1), undefined);
 });

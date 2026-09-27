@@ -14,8 +14,28 @@ export {
     probeJava,
     resolveJava,
     resolveJavaExecutable,
+    resolveJavaFor,
     runtimeDirectory,
     scanJava,
+    type JavaChoice,
     type JavaInfo,
     type JavaScan,
 } from "./java.ts";
+export { accountFor, offlineUuid, type LaunchAccount } from "./account.ts";
+export {
+    buildGameArguments,
+    buildJvmArguments,
+    expandArguments,
+    substitute,
+    type ArgumentContext,
+} from "./arguments.ts";
+export { exitCodeOf } from "./exit.ts";
+export {
+    LAUNCHER_NAME,
+    planLaunch,
+    type LaunchPlan,
+    type PlanInput,
+    type PlanOptions,
+} from "./game.ts";
+export { launchOptionsOf, type LaunchOptions } from "./options.ts";
+export { spawnGame, type GameProcess } from "./process.ts";
