@@ -37,7 +37,7 @@ import {
 const log = logger("config");
 
 const LOADERS = ["vanilla", "fabric", "forge", "neoforge", "quilt"] as const;
-const SWITCHES = ["isolation", "java", "memory", "window", "jvmArgs", "gameArgs"] as const;
+const SWITCHES = ["java", "memory", "window", "jvmArgs", "gameArgs"] as const;
 
 let readOnly = false;
 
@@ -285,7 +285,6 @@ function readFolder(value: unknown, at: string, extras: string[]): Folder | unde
         id,
         name: r.string("name", id),
         path,
-        isolation: r.boolean("isolation", false),
         autoDiscover: r.boolean("autoDiscover", true),
         missingEntries: r.enumeration("missingEntries", ["keep", "drop"], "keep"),
         java: r.nullableString("java", null),
@@ -321,7 +320,6 @@ function readInstance(value: unknown, at: string, extras: string[]): Instance | 
         target,
         loader: readLoader(loader),
         useGlobalSettings: readSwitches(switches),
-        isolation: r.optionalBoolean("isolation") ?? null,
         java: r.nullableString("java", null),
         memory: memory === undefined ? null : readMemoryPatch(memory),
         jvmArgs: r.list<string>("jvmArgs", [], stringItem),

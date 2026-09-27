@@ -81,7 +81,6 @@ async function add(setting: Setting, path: string, ctx: Context): Promise<void> 
             setting.folders.map((item) => item.id),
         ),
         path: probe.path,
-        isolation: true,
         autoDiscover: true,
         missingEntries: "keep",
         java: null,

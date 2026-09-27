@@ -407,19 +407,12 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                        "isolation": { "title": "版本隔离", "type": "boolean", "default": false },
                         "java": { "title": "Java", "type": "boolean", "default": false },
                         "memory": { "title": "内存", "type": "boolean", "default": false },
                         "window": { "title": "窗口", "type": "boolean", "default": false },
                         "jvmArgs": { "title": "JVM 参数", "type": "boolean", "default": false },
                         "gameArgs": { "title": "游戏参数", "type": "boolean", "default": false }
                     }
-                },
-                "isolation": {
-                    "title": "版本隔离",
-                    "description": "null 表示跟随文件夹。开着的实例把 mods/saves/config/logs 收在自己目录下。",
-                    "type": ["boolean", "null"],
-                    "default": null
                 },
                 "java": {
                     "title": "Java 路径",
@@ -473,12 +466,6 @@
                     "description": "如 ~/.minecraft。启动前检查存在与可写。",
                     "type": "string",
                     "minLength": 1
-                },
-                "isolation": {
-                    "title": "版本隔离",
-                    "description": "默认值，实例可以各自覆盖。",
-                    "type": "boolean",
-                    "default": false
                 },
                 "autoDiscover": {
                     "title": "自动发现实例",

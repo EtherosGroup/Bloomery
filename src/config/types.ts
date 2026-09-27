@@ -132,7 +132,6 @@ export interface CleanupSetting {
 
 /** 按字段选择是否改用上层（文件夹 → 全局）的值 */
 export interface UseGlobalSettings {
-    readonly isolation?: boolean;
     readonly java?: boolean;
     readonly memory?: boolean;
     readonly window?: boolean;
@@ -148,7 +147,6 @@ export interface Instance {
     readonly target: string;
     readonly loader: Loader;
     readonly useGlobalSettings?: UseGlobalSettings;
-    readonly isolation?: boolean | null;
     readonly java?: string | null;
     readonly memory?: MemoryPatch | null;
     /** 追加到全局与文件夹的之后 */
@@ -162,7 +160,6 @@ export interface Folder {
     readonly id: string;
     readonly name?: string;
     readonly path: string;
-    readonly isolation: boolean;
     readonly autoDiscover: boolean;
     readonly missingEntries: "keep" | "drop";
     readonly java?: string | null;

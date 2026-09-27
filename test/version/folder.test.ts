@@ -30,7 +30,6 @@ function folderAt(path: string, overrides: Partial<Folder> = {}): Folder {
     return {
         id: overrides.id ?? "test",
         path,
-        isolation: overrides.isolation ?? true,
         autoDiscover: overrides.autoDiscover ?? true,
         missingEntries: overrides.missingEntries ?? "keep",
         java: overrides.java ?? null,
