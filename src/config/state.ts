@@ -1,7 +1,9 @@
-/*
+/**
  * 状态文件
  *
  * 内存里累计，退出前写一次；统计丢了无所谓，所以坏文件直接删掉重建
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { rm } from "node:fs/promises";

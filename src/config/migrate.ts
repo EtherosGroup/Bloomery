@@ -1,8 +1,10 @@
-/*
+/**
  * schemaVersion 迁移
  *
  * 从文件里的版本逐级升到 CURRENT_SCHEMA，缺哪一级就报错，不允许跳级
  * 比 CURRENT_SCHEMA 新的时候不在这里处理：调用方会进入只读模式
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { AppError } from "../error/index.ts";

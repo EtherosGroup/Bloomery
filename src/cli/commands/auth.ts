@@ -1,7 +1,9 @@
-/*
+/**
  * auth 命令：编排账户登录、登出、列表
  *
  * 目前只打印解析结果并报未实现，业务模块就位后替换函数体
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { AppError } from "../../error/index.ts";

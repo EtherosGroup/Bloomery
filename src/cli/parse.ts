@@ -1,10 +1,12 @@
-/*
+/**
  * 入参解析：argv → 命令对象
  *
  * 本文件拥有 CLI 的数据形状：Command、Context、命令表与选项声明的类型
  * 两级 strict 解析：第一级只吃全局旗标，第二级吃命令自己的选项
  * 边界用 tokens 里第一个位置参数的下标定位，Node 的 parseArgs 没有 stopAtPositional
  * 全局旗标必须写在命令名之前，写在后面会被命令层的 strict 解析当成未知选项
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { parseArgs } from "node:util";

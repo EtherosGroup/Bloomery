@@ -1,8 +1,10 @@
-/*
+/**
  * 设置文件
  *
  * 读入宽容：坏字段落默认值；坏文件与出现未知键时先把原文件留一份
  * schemaVersion 比程序新时不迁移、不写回，本次运行只读
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { AppError } from "../error/index.ts";

@@ -1,5 +1,7 @@
-/*
+/**
  * 帮助文案，全部从命令表生成
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { print } from "../output/index.ts";

@@ -1,9 +1,11 @@
-/*
+/**
  * 错误出口：把任意抛出的东西变成面向用户的信息与退出码
  *
  * context.detail 放面向用户的那句话，其余键作为补充信息拼在后面
  * 已知失败是给用户读的，走 printError 不加时间戳
  * 未知失败是 bug，先记一条带时间戳的日志再打栈，栈留给反馈用
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { format } from "node:util";

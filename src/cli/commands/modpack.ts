@@ -1,7 +1,9 @@
-/*
+/**
  * modpack 命令：编排整合包导入
  *
  * 目前只打印解析结果并报未实现，业务模块就位后替换函数体
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { AppError } from "../../error/index.ts";

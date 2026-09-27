@@ -1,8 +1,10 @@
-/*
+/**
  * 配置文件的类型
  *
  * 与 schema/*.schema.json 一一对应，两边的同步由 test 守住
  * 字段顺序按 schema 来：写出时 JSON.stringify 保留插入顺序，diff 才稳定
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import type { LogLevel } from "../output/index.ts";

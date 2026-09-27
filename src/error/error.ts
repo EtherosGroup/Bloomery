@@ -1,3 +1,8 @@
+/**
+ * 错误类型
+ * @author IsCibocaz
+ * @since 1.0.0
+ */
 import type { ErrorCode } from "./codes.ts";
 
 export type ErrorContext = Record<string, string | number | boolean | undefined>;

@@ -1,8 +1,10 @@
-/*
+/**
  * 账号文件
  *
  * 含长期凭据，权限收紧到 0600
  * 读不出来就用空列表并留一份备份，重新登录即可
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { AppError } from "../error/index.ts";

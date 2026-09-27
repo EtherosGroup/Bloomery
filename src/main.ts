@@ -1,5 +1,11 @@
 #!/usr/bin/env node
+/**
+ * 启动入口
+ * @author IsCibocaz
+ * @since 1.0.0
+ */
 import { run } from "./cli/index.ts";
+import { flushState } from "./config/index.ts";
 import { handleError } from "./error/index.ts";
 import { addFileSink, flush } from "./output/index.ts";
 
@@ -24,6 +30,8 @@ async function main(): Promise<void> {
             process.exitCode = handleError(failure, file.opened ? file.path : undefined);
         }
     } finally {
+        // 状态没改过时是空操作
+        await flushState();
         await file.close();
     }
 }

@@ -1,8 +1,10 @@
-/*
+/**
  * 默认值
  *
  * 这里是默认值的唯一来源；schema 里的 default 只是给编辑器的提示
  * 字段顺序与 schema 一致，写出的 JSON 才有稳定的键序
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { CURRENT_SCHEMA, type Accounts, type Setting, type State } from "./types.ts";

@@ -1,7 +1,9 @@
-/*
+/**
  * 命令表：命令名、选项、位置参数、帮助文案、处理器
  *
  * 唯一的命令清单，帮助文案与两级解析都从这里取
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { runAuth } from "./commands/auth.ts";

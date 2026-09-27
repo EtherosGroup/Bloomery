@@ -1,8 +1,10 @@
-/*
+/**
  * 宽容读取
  *
  * 配置是缓存：一个字段读错就用默认值，不让整个文件作废
  * reader 记录被读过的键，extra() 因此精确，不需要另写一份字段清单
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { logger } from "../output/index.ts";

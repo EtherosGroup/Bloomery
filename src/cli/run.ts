@@ -1,7 +1,9 @@
-/*
+/**
  * CLI 编排：解析 → 落全局状态 → 派发
  *
  * 命令表由映射类型保证处理器与命令一一对应，漏一个就编译不过
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { logger, setLevel } from "../output/index.ts";

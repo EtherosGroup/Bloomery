@@ -1,8 +1,10 @@
-/*
+/**
  * 文件系统原语
  *
  * 路径拼接不在这里，那属于 platform/path.ts
  * 只放跨模块复用的：原子写、宽松读、权限收紧、留备份
+ * @author IsCibocaz
+ * @since 1.0.0
  */
 
 import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
