@@ -40,6 +40,8 @@ jobs:
 
             - run: npm run fmt:check
 
+            - run: npm test
+
             # npm pack 会先跑 prepack（即构建），这里不必再单独 build
             - name: 打包并核对清单
               run: |

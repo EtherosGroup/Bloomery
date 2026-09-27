@@ -7,10 +7,12 @@
  */
 
 import { runAuth } from "./commands/auth.ts";
+import { runFolder } from "./commands/folder.ts";
 import { runInstall } from "./commands/install.ts";
 import { runLaunch } from "./commands/launch.ts";
 import { runMod } from "./commands/mod.ts";
 import { runModpack } from "./commands/modpack.ts";
+import { runVersion } from "./commands/version.ts";
 import {
     optionalPositional,
     optionalString,
@@ -103,6 +105,54 @@ export const COMMANDS: CommandTable = {
             file: requirePositional(positionals, 0, "file"),
         }),
         run: runModpack,
+    },
+
+    folder: {
+        summary: "游戏文件夹管理",
+        usage: "folder <add|remove|list|scan> [path|id]",
+        options: {},
+        positionals: { names: ["action", "target"], required: 1 },
+        toCommand: (_values, positionals) => {
+            const action = requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["add", "remove", "list", "scan"] as const,
+                "action",
+            );
+            if (action === "add") {
+                return {
+                    name: "folder",
+                    action,
+                    target: requirePositional(positionals, 1, "path"),
+                };
+            }
+            if (action === "remove") {
+                return { name: "folder", action, target: requirePositional(positionals, 1, "id") };
+            }
+            return { name: "folder", action, target: optionalPositional(positionals, 1, "id") };
+        },
+        run: runFolder,
+    },
+
+    version: {
+        summary: "列出与查看版本",
+        usage: "version <list|info> [id] [--folder <id>]",
+        options: {
+            folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
+        },
+        positionals: { names: ["action", "id"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["list", "info"] as const,
+                "action",
+            );
+            const id =
+                action === "info"
+                    ? requirePositional(positionals, 1, "id")
+                    : optionalPositional(positionals, 1, "id");
+            return { name: "version", action, id, folder: optionalString(values, "folder") };
+        },
+        run: runVersion,
     },
 };
 

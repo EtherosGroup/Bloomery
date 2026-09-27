@@ -22,6 +22,11 @@ const MESSAGES: Record<ErrorCode, string> = {
     UnknownCommand: "未知命令",
     NotImplemented: "该功能尚未实现",
     ConfigTooNew: "配置版本比程序新",
+    FolderNotFound: "游戏文件夹不存在",
+    FolderUnusable: "游戏文件夹不可用",
+    FolderDuplicate: "游戏文件夹已经添加过",
+    VersionNotFound: "版本不存在",
+    VersionBroken: "版本文件读不出来",
 };
 
 // 退出码约定：0 成功，1 内部错误，2 用法错误，3 未实现
@@ -31,12 +36,20 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     UnknownCommand: 2,
     NotImplemented: 3,
     ConfigTooNew: 1,
+    FolderNotFound: 1,
+    FolderUnusable: 1,
+    FolderDuplicate: 1,
+    VersionNotFound: 1,
+    VersionBroken: 1,
 };
 
 const HINTS: Partial<Record<ErrorCode, string>> = {
     UsageError: "运行 bloomery --help 查看用法",
     UnknownCommand: "运行 bloomery --help 查看全部命令",
     ConfigTooNew: "配置文件是更新版本的 Bloomery 写的，本次运行不会写回",
+    FolderNotFound: "运行 bloomery folder list 查看已添加的文件夹，folder add <目录> 添加",
+    FolderDuplicate: "运行 bloomery folder list 查看已添加的文件夹",
+    VersionNotFound: "运行 bloomery version list 查看可用版本",
 };
 
 export function handleError(error: unknown, logPath?: string): number {

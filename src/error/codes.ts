@@ -8,4 +8,9 @@ export type ErrorCode =
     | "UsageError"
     | "UnknownCommand"
     | "NotImplemented"
-    | "ConfigTooNew";
+    | "ConfigTooNew"
+    | "FolderNotFound"
+    | "FolderUnusable"
+    | "FolderDuplicate"
+    | "VersionNotFound"
+    | "VersionBroken";

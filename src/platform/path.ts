@@ -36,3 +36,14 @@ export function accountsFile(): string {
 export function stateFile(): string {
     return join(configDirectory(), "state.json");
 }
+
+// 展开开头的 ~，其余路径原样返回
+export function expandHome(path: string): string {
+    if (path === "~") {
+        return homeDirectory();
+    }
+    if (path.startsWith("~/") || path.startsWith("~\\")) {
+        return join(homeDirectory(), path.slice(2));
+    }
+    return path;
+}

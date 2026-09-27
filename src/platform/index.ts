@@ -9,6 +9,7 @@ export { type PlatformName, platform } from "./os.ts";
 export {
     accountsFile,
     configDirectory,
+    expandHome,
     homeDirectory,
     logDirectory,
     settingFile,

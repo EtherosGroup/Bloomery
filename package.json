@@ -29,6 +29,7 @@
         "build": "tsc -p tsconfig.build.json",
         "prepack": "npm run build",
         "check": "tsc --noEmit",
+        "test": "node --test",
         "fmt": "oxfmt",
         "fmt:check": "oxfmt --check"
     },

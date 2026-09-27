@@ -46,7 +46,30 @@ export interface ModpackCommand {
     readonly file: string;
 }
 
-export type Command = LaunchCommand | InstallCommand | AuthCommand | ModCommand | ModpackCommand;
+export interface FolderCommand {
+    readonly name: "folder";
+    readonly action: "add" | "remove" | "list" | "scan";
+    /** add 收路径，remove 收标识，scan 收标识且可省略 */
+    readonly target?: string;
+}
+
+export interface VersionCommand {
+    readonly name: "version";
+    readonly action: "list" | "info";
+    /** info 必给 */
+    readonly id?: string;
+    /** 省略时用当前文件夹 */
+    readonly folder?: string;
+}
+
+export type Command =
+    | LaunchCommand
+    | InstallCommand
+    | AuthCommand
+    | ModCommand
+    | ModpackCommand
+    | FolderCommand
+    | VersionCommand;
 
 export type CommandName = Command["name"];
 
