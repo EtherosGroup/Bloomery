@@ -62,6 +62,8 @@ async function read(): Promise<State> {
 
     const extras: string[] = [];
     const r = reader("state", parsed, extras);
+    // 状态文件没有迁移步骤，版本号只是标记成已读
+    r.integer("schemaVersion", CURRENT_SCHEMA, 1);
     const lastFolder = r.nullableString("lastFolder", null);
     const lastInstance = r.nullableString("lastInstance", null);
     const instances: Record<string, InstanceStat> = {

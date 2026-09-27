@@ -53,6 +53,8 @@ export async function loadAccounts(): Promise<Accounts> {
 
     const extras: string[] = [];
     const r = reader("accounts", migrate(parsed, version), extras);
+    // 版本号在上面已经处理过，这里只是标记成已读
+    r.integer("schemaVersion", CURRENT_SCHEMA, 1);
     const accounts = r.list<Account>("accounts", [], (value, at) => readAccount(value, at, extras));
     r.extra();
     readOnly = false;

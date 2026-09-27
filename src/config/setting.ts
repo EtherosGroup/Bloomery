@@ -97,6 +97,8 @@ export async function saveSetting(setting: Setting): Promise<void> {
 function readSetting(raw: Record<string, unknown>, extras: string[]): Setting {
     const base = defaultSetting();
     const r = reader("setting", raw, extras);
+    // 版本号在 loadSetting 里已经处理过，这里只是标记成已读
+    r.integer("schemaVersion", CURRENT_SCHEMA, 1);
 
     const appearance = r.object("appearance");
     const logSetting = r.object("log");
