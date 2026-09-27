@@ -11,7 +11,7 @@ import { addFileSink, flush } from "./output/index.ts";
 
 const file = addFileSink();
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
     let failed = false;
     let failure: unknown;
 

@@ -26,6 +26,7 @@
     "main": "dist/main.js",
     "scripts": {
         "start": "node ./src/main.ts",
+        "dev": "node ./src/main-dev.ts",
         "build": "tsc -p tsconfig.build.json",
         "prepack": "npm run build",
         "check": "tsc --noEmit",
