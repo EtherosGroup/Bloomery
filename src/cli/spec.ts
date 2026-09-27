@@ -9,11 +9,13 @@
 import { runAuth } from "./commands/auth.ts";
 import { runFolder } from "./commands/folder.ts";
 import { runInstall } from "./commands/install.ts";
+import { runJava } from "./commands/java.ts";
 import { runLaunch } from "./commands/launch.ts";
 import { runMod } from "./commands/mod.ts";
 import { runModpack } from "./commands/modpack.ts";
 import { runVersion } from "./commands/version.ts";
 import {
+    optionalInteger,
     optionalPositional,
     optionalString,
     requireChoice,
@@ -153,6 +155,28 @@ export const COMMANDS: CommandTable = {
             return { name: "version", action, id, folder: optionalString(values, "folder") };
         },
         run: runVersion,
+    },
+
+    java: {
+        summary: "Java 运行时管理",
+        usage: "java <list|scan|add|remove|which> [path] [--major <版本>]",
+        options: {
+            major: { type: "string", value: "<版本>", summary: "限定 Java 主版本" },
+        },
+        positionals: { names: ["action", "target"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["list", "scan", "add", "remove", "which"] as const,
+                "action",
+            );
+            const target =
+                action === "add" || action === "remove"
+                    ? requirePositional(positionals, 1, "path")
+                    : optionalPositional(positionals, 1, "target");
+            return { name: "java", action, target, major: optionalInteger(values, "major") };
+        },
+        run: runJava,
     },
 };
 

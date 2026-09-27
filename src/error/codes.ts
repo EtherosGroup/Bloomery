@@ -13,4 +13,7 @@ export type ErrorCode =
     | "FolderUnusable"
     | "FolderDuplicate"
     | "VersionNotFound"
-    | "VersionBroken";
+    | "VersionBroken"
+    | "JavaNotFound"
+    | "JavaBroken"
+    | "JavaDuplicate";

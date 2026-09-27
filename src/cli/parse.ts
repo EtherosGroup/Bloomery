@@ -62,6 +62,15 @@ export interface VersionCommand {
     readonly folder?: string;
 }
 
+export interface JavaCommand {
+    readonly name: "java";
+    readonly action: "list" | "scan" | "add" | "remove" | "which";
+    /** add 与 remove 收路径，其余可省略 */
+    readonly target?: string;
+    /** which 用，限定主版本 */
+    readonly major?: number;
+}
+
 export type Command =
     | LaunchCommand
     | InstallCommand
@@ -69,7 +78,8 @@ export type Command =
     | ModCommand
     | ModpackCommand
     | FolderCommand
-    | VersionCommand;
+    | VersionCommand
+    | JavaCommand;
 
 export type CommandName = Command["name"];
 
@@ -200,6 +210,17 @@ export function optionalString(values: ParsedValues, key: string): string | unde
         throw usage(`选项 --${key} 缺少取值`);
     }
     return value;
+}
+
+export function optionalInteger(values: ParsedValues, key: string): number | undefined {
+    const value = values[key];
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== "string" || !/^\d+$/.test(value)) {
+        throw usage(`选项 --${key} 需要一个非负整数`);
+    }
+    return Number.parseInt(value, 10);
 }
 
 export function requirePositional(

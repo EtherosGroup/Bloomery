@@ -6,6 +6,8 @@
  */
 
 export { type PlatformName, platform } from "./os.ts";
+export { JAVA_EXECUTABLE, JAVAC_EXECUTABLE, javaLayout, type JavaLayout } from "./java.ts";
+export { requiresShell } from "./process.ts";
 export {
     accountsFile,
     configDirectory,
