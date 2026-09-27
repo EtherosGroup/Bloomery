@@ -35,6 +35,13 @@ export async function readText(path: string): Promise<string | undefined> {
     }
 }
 
+export async function pathExists(path: string): Promise<boolean> {
+    return stat(path).then(
+        () => true,
+        () => false,
+    );
+}
+
 // 把权限收紧到 mode，已经够紧就不动；Windows 上 POSIX 位基本无效
 export async function restrictMode(path: string, mode: number): Promise<void> {
     const info = await stat(path).catch(() => undefined);
