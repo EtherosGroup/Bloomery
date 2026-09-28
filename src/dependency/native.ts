@@ -51,12 +51,7 @@ export async function nativeJars(input: NativeInput): Promise<NativeSelection> {
             continue;
         }
 
-        const mapped: string | undefined = library.natives[input.context.osName];
-        const classifier =
-            mapped ??
-            (coordinate.classifier?.startsWith("natives") === true
-                ? coordinate.classifier
-                : undefined);
+        const classifier = nativeClassifierOf(library, input.context);
         if (classifier === undefined) {
             continue;
         }
@@ -70,6 +65,19 @@ export async function nativeJars(input: NativeInput): Promise<NativeSelection> {
     }
 
     return { jars, missing };
+}
+
+// 当前平台要用的 natives 分类名：
+// 旧格式看库自带的 natives 映射，键是 os.name；新格式分类名就在库名第四段
+export function nativeClassifierOf(library: Library, context: RuleContext): string | undefined {
+    const mapped: string | undefined = library.natives[context.osName];
+    if (mapped !== undefined) {
+        return mapped;
+    }
+    const coordinate = parseCoordinate(library.name);
+    return coordinate?.classifier?.startsWith("natives") === true
+        ? coordinate.classifier
+        : undefined;
 }
 
 // 先清空目录再解压

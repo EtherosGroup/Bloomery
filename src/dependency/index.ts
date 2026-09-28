@@ -11,6 +11,7 @@ export {
     isClasspathLibrary,
     libraryFile,
     libraryPath,
+    libraryUrlPath,
     parseCoordinate,
     type Coordinate,
 } from "./library.ts";
@@ -23,4 +24,10 @@ export {
     type AssetObject,
     type AssetStat,
 } from "./asset.ts";
-export { extractNatives, nativeJars, type NativeJar, type NativeSelection } from "./native.ts";
+export {
+    extractNatives,
+    nativeClassifierOf,
+    nativeJars,
+    type NativeJar,
+    type NativeSelection,
+} from "./native.ts";

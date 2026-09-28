@@ -22,6 +22,9 @@ export interface AssetObject {
 export interface AssetIndex {
     readonly id: string;
     readonly objects: Readonly<Record<string, AssetObject>>;
+    /** 1.7 以前的索引：对象要另铺一份到 assets/virtual/<id>/ */
+    readonly virtual: boolean;
+    readonly mapToResources: boolean;
 }
 
 export interface AssetStat {
@@ -63,7 +66,12 @@ export async function readAssetIndex(assetsRoot: string, id: string): Promise<As
     }
 
     const id_ = raw["id"];
-    return { id: typeof id_ === "string" ? id_ : id, objects };
+    return {
+        id: typeof id_ === "string" ? id_ : id,
+        objects,
+        virtual: raw["virtual"] === true,
+        mapToResources: raw["map_to_resources"] === true,
+    };
 }
 
 // 按批并发，几万个 stat 不堆在一起

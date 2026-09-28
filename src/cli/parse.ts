@@ -29,7 +29,12 @@ export interface LaunchCommand {
 export interface InstallCommand {
     readonly name: "install";
     readonly version: string;
+    /** 本轮只有原版，给了加载器报未实现 */
     readonly loader?: string;
+    /** 省略时用当前文件夹 */
+    readonly folder?: string;
+    /** false 时跳过资源对象 */
+    readonly assets?: boolean;
 }
 
 export interface AuthCommand {

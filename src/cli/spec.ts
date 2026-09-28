@@ -53,15 +53,19 @@ export const COMMANDS: CommandTable = {
 
     install: {
         summary: "安装指定版本",
-        usage: "install <version> [--loader <name>]",
+        usage: "install <version> [--loader <name>] [--folder <id>] [--no-assets]",
         options: {
             loader: { type: "string", value: "<name>", summary: "同时安装模组加载器" },
+            folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
+            "no-assets": { type: "boolean", summary: "跳过资源对象，只装游戏本体" },
         },
         positionals: { names: ["version"], required: 1 },
         toCommand: (values, positionals) => ({
             name: "install",
             version: requirePositional(positionals, 0, "version"),
             loader: optionalString(values, "loader"),
+            folder: optionalString(values, "folder"),
+            assets: values["no-assets"] !== true,
         }),
         run: runInstall,
     },

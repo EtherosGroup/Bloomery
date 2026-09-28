@@ -41,3 +41,16 @@ export {
     type InstanceView,
 } from "./folder.ts";
 export { readVersion, scanVersions, type LocalVersion, type VersionScan } from "./store.ts";
+export {
+    installVersion,
+    type InstallInput,
+    type InstallProgress,
+    type InstallReport,
+} from "./installer.ts";
+export {
+    fetchManifest,
+    findVersion,
+    MANIFEST_URL,
+    type Manifest,
+    type ManifestVersion,
+} from "./manifest.ts";

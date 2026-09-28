@@ -7,7 +7,7 @@
  * @since 1.0.0
  */
 
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import { archMatches } from "../platform/index.ts";
 import type { Library } from "../version/descriptor.ts";
@@ -59,6 +59,11 @@ export function libraryPath(coordinate: Coordinate): string {
 
 export function libraryFile(librariesRoot: string, coordinate: Coordinate): string {
     return join(librariesRoot, libraryPath(coordinate));
+}
+
+// URL 里一律用正斜杠
+export function libraryUrlPath(coordinate: Coordinate): string {
+    return libraryPath(coordinate).split(sep).join("/");
 }
 
 // 进 classpath 的库：不是 natives，且有 artifact 或干脆没有 downloads

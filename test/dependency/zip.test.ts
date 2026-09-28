@@ -5,56 +5,13 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
 import { extractZip, listZip } from "../../src/infra/zip.ts";
-
-// 只用 store 方式拼一个 ZIP，读取端不看 CRC 所以留 0
-function zipOf(entries: ReadonlyArray<{ name: string; data: string }>): Buffer {
-    const parts: Buffer[] = [];
-    const centrals: Buffer[] = [];
-    let offset = 0;
-
-    for (const entry of entries) {
-        const name = Buffer.from(entry.name, "utf8");
-        const data = Buffer.from(entry.data, "utf8");
-
-        const local = Buffer.alloc(30 + name.length);
-        local.writeUInt32LE(0x04034b50, 0);
-        local.writeUInt16LE(20, 4);
-        local.writeUInt32LE(data.length, 18);
-        local.writeUInt32LE(data.length, 22);
-        local.writeUInt16LE(name.length, 26);
-        name.copy(local, 30);
-
-        const central = Buffer.alloc(46 + name.length);
-        central.writeUInt32LE(0x02014b50, 0);
-        central.writeUInt16LE(20, 4);
-        central.writeUInt16LE(20, 6);
-        central.writeUInt32LE(data.length, 20);
-        central.writeUInt32LE(data.length, 24);
-        central.writeUInt16LE(name.length, 28);
-        central.writeUInt32LE(offset, 42);
-        name.copy(central, 46);
-
-        parts.push(local, data);
-        centrals.push(central);
-        offset += local.length + data.length;
-    }
-
-    const directory = Buffer.concat(centrals);
-    const end = Buffer.alloc(22);
-    end.writeUInt32LE(0x06054b50, 0);
-    end.writeUInt16LE(entries.length, 8);
-    end.writeUInt16LE(entries.length, 10);
-    end.writeUInt32LE(directory.length, 12);
-    end.writeUInt32LE(offset, 16);
-
-    return Buffer.concat([...parts, directory, end]);
-}
+import { zipOf } from "../helpers/server.ts";
 
 async function inTemp(run: (root: string) => Promise<void>): Promise<void> {
     const root = await mkdtemp(join(tmpdir(), "bloomery-zip-"));
@@ -68,7 +25,6 @@ async function inTemp(run: (root: string) => Promise<void>): Promise<void> {
 test("列出条目", async () => {
     await inTemp(async (root) => {
         const path = join(root, "a.jar");
-        const { writeFile } = await import("node:fs/promises");
         await writeFile(path, zipOf([{ name: "x/y.txt", data: "hello" }]));
 
         const entries = await listZip(path);
@@ -82,7 +38,6 @@ test("列出条目", async () => {
 test("平铺解压并按目录跳过", async () => {
     await inTemp(async (root) => {
         const path = join(root, "natives.jar");
-        const { writeFile } = await import("node:fs/promises");
         await writeFile(
             path,
             zipOf([
@@ -107,7 +62,6 @@ test("平铺解压并按目录跳过", async () => {
 test("保留层级时按原路径落盘", async () => {
     await inTemp(async (root) => {
         const path = join(root, "a.jar");
-        const { writeFile } = await import("node:fs/promises");
         await writeFile(path, zipOf([{ name: "a/b/c.txt", data: "x" }]));
 
         const target = join(root, "out");
@@ -119,7 +73,6 @@ test("保留层级时按原路径落盘", async () => {
 test("目录穿越的条目被丢掉", async () => {
     await inTemp(async (root) => {
         const path = join(root, "a.jar");
-        const { writeFile } = await import("node:fs/promises");
         await writeFile(path, zipOf([{ name: "../逃出去.txt", data: "x" }]));
 
         const target = join(root, "out");
