@@ -174,6 +174,7 @@ async function installBody(
         join(versionDir, `${name}.jar`),
         options,
         warnings,
+        input.onProgress,
     );
 
     const { libraries: libraryTasks, natives: nativeTasks } = splitTasks(
@@ -290,6 +291,7 @@ async function installClientJar(
     clientJar: string,
     options: TransferOptions,
     warnings: string[],
+    onProgress: InstallProgress | undefined,
 ): Promise<boolean> {
     const entry = descriptor.downloads["client"];
     if (entry === undefined) {
@@ -305,6 +307,7 @@ async function installClientJar(
     const report = await downloadAll(
         [{ url: entry.url, target: clientJar, sha1: entry.sha1, size: entry.size }],
         options,
+        stage(onProgress, "客户端 jar"),
     );
     if (report.failures.length > 0) {
         throw new AppError("install", "DependencyMissing", {

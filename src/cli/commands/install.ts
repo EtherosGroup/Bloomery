@@ -9,22 +9,18 @@
 
 import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
-import { logger, print } from "../../output/index.ts";
+import { logger, print, progressReporter } from "../../output/index.ts";
 import {
     installVersion,
     parseLoaderSpec,
     pickFolder,
     resolveFolderPath,
-    type InstallProgress,
     type InstallReport,
     type LoaderSpec,
 } from "../../version/index.ts";
 import type { Context, InstallCommand } from "../parse.ts";
 
 const log = logger("install");
-
-// 每 256 个报一次，免得几万个资源刷屏
-const STEP = 256;
 
 export async function runInstall(command: InstallCommand, ctx: Context): Promise<void> {
     let loader: LoaderSpec | null = null;
@@ -47,6 +43,7 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         throw new AppError("cli", "FolderNotFound", { context: { detail } });
     }
 
+    const progress = progressReporter(ctx.json ? "off" : setting.appearance.progress);
     const report = await installVersion({
         folderPath: resolveFolderPath(folder),
         versionId: command.version,
@@ -55,8 +52,9 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         network: setting.network,
         download: setting.download,
         assets: command.assets !== false,
-        onProgress: ctx.json ? undefined : progress(),
+        onProgress: progress.update,
     });
+    progress.close();
     log.info("安装完成 %s", report.name);
 
     if (ctx.json) {
@@ -74,14 +72,6 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
             },
         });
     }
-}
-
-function progress(): InstallProgress {
-    return (stage, done, total) => {
-        if (done === total || done % STEP === 0) {
-            print(`  ${stage} ${done}/${total}`);
-        }
-    };
 }
 
 function render(report: InstallReport): string {

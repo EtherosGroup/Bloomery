@@ -8,6 +8,7 @@ export {
     log,
     print,
     printError,
+    quiet,
     type Level,
     type LogLevel,
     type LogRecord,
@@ -17,5 +18,16 @@ export {
     logger,
     addSink,
     flush,
+    writeOut,
 } from "./output.ts";
 export { addFileSink, type FileSink, type FileSinkOptions } from "./file.ts";
+export {
+    BAR_WIDTH,
+    displayWidth,
+    progressReporter,
+    renderBar,
+    terminalIo,
+    type ProgressIo,
+    type ProgressReporter,
+    type ProgressStyle,
+} from "./progress.ts";

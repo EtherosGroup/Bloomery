@@ -159,13 +159,26 @@ function reportSinkFailure(error: unknown): void {
 // 写不进去的 fd，后续写入丢弃
 const dead = new Set<number>();
 
-// 同步写，绕开两条流各自的缓冲
+// 同步写，绕开两条流各自的缓冲。不带换行，进度条原地刷新用
+export function writeOut(text: string): void {
+    write(STDOUT, text);
+}
+
+// 闸门挡掉了 Info 及以上就不再往终端刷进度
+export function quiet(): boolean {
+    return threshold >= SEVERITY.Warning;
+}
+
 function writeLine(fd: number, text: string): void {
+    write(fd, `${text}\n`);
+}
+
+function write(fd: number, text: string): void {
     if (dead.has(fd)) {
         return;
     }
 
-    const buffer = Buffer.from(`${text}\n`, "utf8");
+    const buffer = Buffer.from(text, "utf8");
     let offset = 0;
     while (offset < buffer.length) {
         try {
