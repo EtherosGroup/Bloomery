@@ -57,9 +57,10 @@ export interface DownloadReport {
     readonly failures: readonly DownloadFailure[];
 }
 
-// bytes 为 true 时 done 与 total 是字节数，否则是文件个数
+// bytes 为 true 时 done 与 total 是字节数
+// 该批全部已存在时 existing 收尾给 true，由上面决定怎么显示
 export interface Progress {
-    (done: number, total: number, bytes: boolean, target: string): void;
+    (done: number, total: number, bytes: boolean, target: string, existing: boolean): void;
 }
 
 export async function downloadOne(
@@ -103,8 +104,8 @@ export async function downloadAll(
 
     let doneBytes = 0;
     let doneCount = 0;
-    const report = (target: string): void => {
-        onProgress?.(byBytes ? doneBytes : doneCount, total, byBytes, target);
+    const report = (target: string, existing: boolean): void => {
+        onProgress?.(byBytes ? doneBytes : doneCount, total, byBytes, target, existing);
     };
 
     const workers = Math.max(1, Math.min(options.concurrency, queue.length));
@@ -129,7 +130,7 @@ export async function downloadAll(
                                   const step = Math.min(streamed + chunk, weight) - streamed;
                                   streamed += step;
                                   doneBytes += step;
-                                  report(task.target);
+                                  report(task.target, false);
                               }
                             : undefined,
                     );
@@ -149,7 +150,8 @@ export async function downloadAll(
                     doneBytes += weight - streamed;
                 }
                 doneCount++;
-                report(task.target);
+                // 收尾那一条报告里带上「全是已有的」这个事实
+                report(task.target, doneCount === tasks.length && downloaded === 0 && skipped > 0);
             }
         }),
     );

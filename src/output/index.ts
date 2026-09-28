@@ -22,8 +22,8 @@ export {
 } from "./output.ts";
 export { addFileSink, type FileSink, type FileSinkOptions } from "./file.ts";
 export {
-    BAR_WIDTH,
     displayWidth,
+    EXISTING_NOTE,
     progressReporter,
     renderBar,
     terminalIo,

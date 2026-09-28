@@ -38,17 +38,17 @@ test("条的宽度与填充", () => {
     assert.equal(displayWidth("资源"), 4);
     assert.equal(displayWidth("natives"), 7);
 
-    const half = renderBar("资源", 50, 100, 40);
-    assert.equal(displayWidth(half), 40);
-    assert.match(half, /^\[#{10} {10}\]  50% 资源/);
+    const half = renderBar("资源", 50, 100, 60);
+    assert.equal(displayWidth(half), 60);
+    assert.match(half, /^\[#{15} {15}\]  50% 资源/);
 
     // 百分比位数变化时条不伸缩，括号里始终一样宽
-    const empty = renderBar("库", 0, 10, 40);
-    const full = renderBar("库", 10, 10, 40);
-    assert.equal(displayWidth(empty), 40);
-    assert.equal(displayWidth(full), 40);
-    assert.match(empty, /^\[ {20}\]   0% 库/);
-    assert.match(full, /^\[#{20}\] 100% 库/);
+    const empty = renderBar("库", 0, 10, 60);
+    const full = renderBar("库", 10, 10, 60);
+    assert.equal(displayWidth(empty), 60);
+    assert.equal(displayWidth(full), 60);
+    assert.match(empty, /^\[ {30}\]   0% 库/);
+    assert.match(full, /^\[#{30}\] 100% 库/);
 });
 
 test("阶段名宽窄不影响条的长短", () => {
@@ -60,8 +60,44 @@ test("阶段名宽窄不影响条的长短", () => {
     assert.equal(displayWidth(short), displayWidth(long));
 });
 
+test("后缀预留了位置，带不带后缀一样宽", () => {
+    const plain = renderBar("库", 47, 47, 80, "");
+    const noted = renderBar("库", 47, 47, 80, "（已存在）");
+
+    assert.equal(displayWidth(plain), 80);
+    assert.equal(displayWidth(noted), 80);
+    assert.equal(plain.indexOf("]"), noted.indexOf("]"));
+    // 后缀占的宽度从条里扣，行宽不会超出去
+    assert.equal(displayWidth("（已存在）"), 10);
+});
+
 test("总数未知时按满算", () => {
-    assert.match(renderBar("库", 0, 0, 40), /100%/);
+    assert.match(renderBar("库", 0, 0, 60), /100%/);
+});
+
+test("一批文件全是已有的，后缀跟着收尾那一帧", () => {
+    const io = fakeIo();
+    const bar = progressReporter("bar", io);
+
+    bar.update("库", 47, 47, false, true);
+    assert.match(io.writes.at(-1) ?? "", /100% 库\s*（已存在）/);
+
+    // 中间帧不带
+    const mid = fakeIo();
+    const other = progressReporter("bar", mid);
+    other.update("库", 20, 47, false, false);
+    assert.doesNotMatch(mid.writes.at(-1) ?? "", /已存在/);
+});
+
+test("非交互时后缀也带上", () => {
+    const io = fakeIo({ interactive: false });
+    const bar = progressReporter("bar", io);
+
+    bar.update("库", 47, 47, false, true);
+    bar.update("natives", 8, 8, false, false);
+    bar.close();
+
+    assert.deepEqual(io.lines, ["库 47/47（已存在）", "natives 8/8"]);
 });
 
 test("换阶段时上一行留在屏幕上", () => {
