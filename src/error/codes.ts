@@ -14,10 +14,12 @@ export type ErrorCode =
     | "FolderDuplicate"
     | "VersionNotFound"
     | "VersionBroken"
+    | "VersionExists"
     | "JavaNotFound"
     | "JavaBroken"
     | "JavaDuplicate"
     | "DependencyMissing"
+    | "DownloadFailed"
     | "AccountNotFound"
     | "AccountExpired"
     | "LaunchFailed";

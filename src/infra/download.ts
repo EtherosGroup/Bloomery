@@ -16,8 +16,9 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { logger } from "../output/index.ts";
+import { AppError } from "../error/index.ts";
 import { pathExists } from "./fs.ts";
-import { httpGet, httpGetBuffer, type NetworkOptions } from "./http.ts";
+import { httpGet, httpGetBuffer, retryable, sleep, type NetworkOptions } from "./http.ts";
 import type { Source } from "./source.ts";
 
 const log = logger("download");
@@ -131,46 +132,74 @@ export async function fetchBuffer(url: string, options: FetchOptions): Promise<B
             log.debug("%s 从 %s 取失败：%s", url, source.provider, message(error));
         }
     }
-    throw last instanceof Error ? last : new Error(String(last));
+    throw new AppError("download", "DownloadFailed", {
+        cause: last,
+        context: { detail: url },
+    });
 }
 
-// 依次试每个源，边写边算 sha1
+// 依次试每个源，边写边算 sha1；单个源内部再按重试次数重来，卡在正文中间也算一次失败
 async function transfer(
     task: DownloadTask,
     options: TransferOptions,
     temp: string,
 ): Promise<number> {
     let last: unknown;
+    const attempts = Math.max(0, options.retries) + 1;
 
     for (const source of options.sources) {
         const url = source.rewrite(task.url);
-        try {
-            const response = await httpGet(url, options);
-            const hash = createHash("sha1");
-            let bytes = 0;
 
-            await pipeline(
-                response.stream,
-                new Transform({
-                    transform(chunk: Buffer, _encoding, callback) {
-                        hash.update(chunk);
-                        bytes += chunk.length;
-                        callback(null, chunk);
-                    },
-                }),
-                createWriteStream(temp),
-            );
-
-            check(task, hash.digest("hex"), options.verify);
-            return bytes;
-        } catch (error) {
-            last = error;
-            log.debug("%s 从 %s 取失败：%s", task.target, source.provider, message(error));
-            await rm(temp, { force: true }).catch(() => {});
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                return await once(task, url, options, temp);
+            } catch (error) {
+                last = error;
+                log.debug(
+                    "%s 从 %s 取失败（第 %d 次）：%s",
+                    task.target,
+                    source.provider,
+                    attempt,
+                    message(error),
+                );
+                await rm(temp, { force: true }).catch(() => {});
+                if (!retryable(error)) {
+                    break;
+                }
+                if (attempt < attempts) {
+                    await sleep(300 * attempt);
+                }
+            }
         }
     }
 
     throw last instanceof Error ? last : new Error(String(last));
+}
+
+async function once(
+    task: DownloadTask,
+    url: string,
+    options: TransferOptions,
+    temp: string,
+): Promise<number> {
+    const response = await httpGet(url, options);
+    const hash = createHash("sha1");
+    let bytes = 0;
+
+    await pipeline(
+        response.stream,
+        new Transform({
+            transform(chunk: Buffer, _encoding, callback) {
+                hash.update(chunk);
+                bytes += chunk.length;
+                callback(null, chunk);
+            },
+        }),
+        createWriteStream(temp),
+    );
+
+    check(task, hash.digest("hex"), options.verify);
+    return bytes;
 }
 
 function check(task: DownloadTask, digest: string, verify: TransferOptions["verify"]): void {

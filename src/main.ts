@@ -35,6 +35,8 @@ export async function main(): Promise<void> {
     } finally {
         // 状态没改过时是空操作
         await flushState();
+        // handleError 也会记日志，落盘要等它，否则最后几条被 close 掉
+        await flush();
         await file.close();
     }
 }

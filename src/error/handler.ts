@@ -27,10 +27,12 @@ const MESSAGES: Record<ErrorCode, string> = {
     FolderDuplicate: "游戏文件夹已经添加过",
     VersionNotFound: "版本不存在",
     VersionBroken: "版本文件读不出来",
+    VersionExists: "版本已经存在",
     JavaNotFound: "找不到可用的 Java",
     JavaBroken: "Java 跑不起来",
     JavaDuplicate: "这个 Java 已经在清单里",
     DependencyMissing: "依赖文件缺失",
+    DownloadFailed: "下载失败",
     AccountNotFound: "找不到可用的账户",
     AccountExpired: "账户凭据需要刷新",
     LaunchFailed: "游戏进程没起来",
@@ -48,10 +50,12 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     FolderDuplicate: 1,
     VersionNotFound: 1,
     VersionBroken: 1,
+    VersionExists: 1,
     JavaNotFound: 1,
     JavaBroken: 1,
     JavaDuplicate: 1,
     DependencyMissing: 1,
+    DownloadFailed: 1,
     AccountNotFound: 1,
     AccountExpired: 1,
     LaunchFailed: 1,
@@ -68,6 +72,8 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     JavaDuplicate: "运行 bloomery java list 查看已记录的 Java",
     AccountNotFound: "运行 bloomery auth login 添加账户，或用 --account <名字> 指定",
     AccountExpired: "运行 bloomery auth login 重新登录",
+    VersionExists: "换一个 --name，或先删掉已有的那份",
+    DownloadFailed: "检查网络，或设置里的下载源与代理",
 };
 
 export function handleError(error: unknown, logPath?: string): number {
@@ -79,7 +85,7 @@ export function handleError(error: unknown, logPath?: string): number {
         return EXIT_CODES.UnknownError;
     }
 
-    printError(`错误：${MESSAGES[error.code]}${detailOf(error)}`);
+    printError(`错误：${messageOf(error)}${detailOf(error)}`);
 
     const cause = error.cause;
     if (cause instanceof Error) {
@@ -101,9 +107,17 @@ function printLogPath(logPath: string | undefined, code?: ErrorCode): void {
     printError(`详细日志：${logPath}`);
 }
 
+// context.text 直接给出整句，文案里带数据时用它
+function messageOf(error: AppError): string {
+    const text = error.context["text"];
+    return text === undefined ? MESSAGES[error.code] : String(text);
+}
+
 // detail 是主细节，其余上下文键作为补充
 function detailOf(error: AppError): string {
-    const entries = Object.entries(error.context).filter(([, value]) => value !== undefined);
+    const entries = Object.entries(error.context).filter(
+        ([key, value]) => value !== undefined && key !== "text",
+    );
     const detail = entries.find(([key]) => key === "detail")?.[1];
     const rest = entries
         .filter(([key]) => key !== "detail")

@@ -57,6 +57,19 @@ test("5xx 会重试，4xx 不会", async () => {
     }
 });
 
+test("响应头与正文同一批到达时不丢字节", async () => {
+    // 正文常与响应头一起到达并被缓冲，若在 response 上挂 data 监听重置超时，这一批会被冲掉
+    const body = "x".repeat(5000);
+    const server = await serve(() => ({ status: 200, body }));
+    try {
+        const buffer = await httpGetBuffer(`${server.url}/big`, OPTIONS);
+        assert.equal(buffer.length, body.length);
+        assert.equal(buffer.toString("utf8"), body);
+    } finally {
+        await server.close();
+    }
+});
+
 test("空闲超时断开挂住的响应", async () => {
     const server = await serve(() => ({ status: 200, stall: true }));
     try {

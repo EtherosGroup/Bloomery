@@ -51,26 +51,33 @@ export class HttpStatusError extends Error {
     }
 }
 
+// 单次请求，跟随重定向。重试放在能看到完整正文的那一层，卡在正文中间也会重来
 export async function httpGet(url: string, options: NetworkOptions): Promise<HttpResponse> {
+    const response = await follow(url, options, 0);
+    if (response.status >= 400) {
+        // 不读掉的连接会一直占着
+        response.stream.resume();
+        throw new HttpStatusError(response.status, url);
+    }
+    return response;
+}
+
+// 4xx 是明确的拒绝，重试没有意义
+export function retryable(error: unknown): boolean {
+    return !(error instanceof HttpStatusError) || error.status >= 500;
+}
+
+export async function httpGetBuffer(url: string, options: NetworkOptions): Promise<Buffer> {
     const attempts = Math.max(0, options.retries) + 1;
     let last: unknown;
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
-            const response = await follow(url, options, 0);
-            if (response.status === 429 || response.status >= 500) {
-                // 不读掉的连接会一直占着
-                response.stream.resume();
-                throw new HttpStatusError(response.status, url);
-            }
-            if (response.status >= 400) {
-                response.stream.resume();
-                throw new HttpStatusError(response.status, url);
-            }
-            return response;
+            const response = await httpGet(url, options);
+            return await readAll(response.stream, MAX_BUFFER);
         } catch (error) {
             last = error;
-            if (error instanceof HttpStatusError && error.status < 500 && error.status !== 429) {
+            if (!retryable(error)) {
                 throw error;
             }
             if (attempt < attempts) {
@@ -81,11 +88,6 @@ export async function httpGet(url: string, options: NetworkOptions): Promise<Htt
     }
 
     throw last instanceof Error ? last : new Error(String(last));
-}
-
-export async function httpGetBuffer(url: string, options: NetworkOptions): Promise<Buffer> {
-    const response = await httpGet(url, options);
-    return readAll(response.stream, MAX_BUFFER);
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -132,11 +134,22 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
         };
 
         let request: ClientRequest;
-        const onResponse = (response: IncomingMessage): void => {
+        let response: IncomingMessage | undefined;
+        let connectTimer: NodeJS.Timeout | undefined;
+
+        const clearConnect = (): void => {
+            if (connectTimer !== undefined) {
+                clearTimeout(connectTimer);
+                connectTimer = undefined;
+            }
+        };
+
+        const onResponse = (incoming: IncomingMessage): void => {
+            response = incoming;
             resolve({
-                status: response.statusCode ?? 0,
-                headers: response.headers,
-                stream: response,
+                status: incoming.statusCode ?? 0,
+                headers: incoming.headers,
+                stream: incoming,
             });
         };
 
@@ -193,11 +206,33 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
             );
         }
 
-        // 空闲超时：socket 上有动静就重置，大文件不会被整次请求的时限砍掉
+        // 建连阶段自己计时：request.setTimeout 要等 socket 连上才武装，TCP 被黑洞时永远不触发
+        connectTimer = setTimeout(() => {
+            clearConnect();
+            request.destroy(new Error(`连接超时（${options.timeoutMs}ms）：${target.href}`));
+        }, options.timeoutMs);
+
+        // 连上之后交给 socket 的空闲超时，它有动静就自动重置。
+        // 不要在 response 上挂 data 监听来重置：那会把与响应头同批到达的正文冲掉
         request.setTimeout(options.timeoutMs, () => {
-            request.destroy(new Error(`请求空闲超过 ${options.timeoutMs}ms：${target.href}`));
+            const error = new Error(`请求空闲超过 ${options.timeoutMs}ms：${target.href}`);
+            if (response !== undefined) {
+                response.destroy(error);
+            } else {
+                request.destroy(error);
+            }
         });
-        request.on("error", reject);
+
+        request.on("socket", (socket) => {
+            socket.once("connect", clearConnect);
+            socket.once("secureConnect", clearConnect);
+            socket.once("close", clearConnect);
+        });
+        request.on("error", (error) => {
+            clearConnect();
+            reject(error);
+        });
+        request.on("close", clearConnect);
         request.end();
     });
 }
@@ -259,21 +294,51 @@ function tunnel(
     socket.on("data", onData);
 }
 
-// 代理只对该走的地址生效，noProxy 里的直连
+// 代理只对该走的地址生效：配置里没写就看环境变量，noProxy 里的直连
 function proxyFor(target: URL, options: NetworkOptions): URL | undefined {
+    if (bypassed(target, [...(options.noProxy ?? []), ...envNoProxy()])) {
+        return undefined;
+    }
+
     const configured = options.proxy;
-    if (configured === null || configured === undefined || configured === "") {
-        return undefined;
+    if (configured !== null && configured !== undefined && configured !== "") {
+        try {
+            return new URL(/^[a-z]+:\/\//i.test(configured) ? configured : `http://${configured}`);
+        } catch {
+            log.warn("代理地址解析不了：%s", configured);
+            return undefined;
+        }
     }
-    if (bypassed(target, options.noProxy ?? [])) {
-        return undefined;
+    return envProxy(target);
+}
+
+// 环境变量里的代理。ALL_PROXY 常是 socks，这里只认 http 代理
+function envProxy(target: URL): URL | undefined {
+    const names =
+        target.protocol === "https:"
+            ? ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
+            : ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"];
+
+    for (const name of names) {
+        const value = process.env[name]?.trim();
+        if (value === undefined || value === "" || !/^https?:\/\//i.test(value)) {
+            continue;
+        }
+        try {
+            return new URL(value);
+        } catch {
+            // 解析不了就试下一个
+        }
     }
-    try {
-        return new URL(/^[a-z]+:\/\//i.test(configured) ? configured : `http://${configured}`);
-    } catch {
-        log.warn("代理地址解析不了：%s", configured);
-        return undefined;
-    }
+    return undefined;
+}
+
+function envNoProxy(): readonly string[] {
+    const value = process.env["NO_PROXY"] ?? process.env["no_proxy"] ?? "";
+    return value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== "");
 }
 
 export function bypassed(target: URL, noProxy: readonly string[]): boolean {
