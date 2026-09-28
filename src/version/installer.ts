@@ -61,7 +61,7 @@ const ASSET_ROOT = "https://resources.download.minecraft.net";
 const EMPTY_REPORT: DownloadReport = { downloaded: 0, skipped: 0, bytes: 0, failures: [] };
 
 export interface InstallProgress {
-    (stage: string, done: number, total: number): void;
+    (stage: string, done: number, total: number, bytes: boolean): void;
 }
 
 export interface InstallInput {
@@ -507,5 +507,7 @@ async function layoutVirtual(assetsRoot: string, index: AssetIndex): Promise<num
 /* ---------- 小工具 ---------- */
 
 function stage(onProgress: InstallProgress | undefined, name: string): Progress | undefined {
-    return onProgress === undefined ? undefined : (done, total) => onProgress(name, done, total);
+    return onProgress === undefined
+        ? undefined
+        : (done, total, bytes) => onProgress(name, done, total, bytes);
 }

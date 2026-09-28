@@ -99,6 +99,23 @@ test("非交互退化成按阶段报数", () => {
     assert.deepEqual(io.lines, ["库 0/3", "库 3/3"]);
 });
 
+test("按字节报时用人看的单位", () => {
+    const io = fakeIo({ interactive: false });
+    const bar = progressReporter("bar", io);
+    const total = 100 * 1024 * 1024;
+
+    bar.update("客户端 jar", 0, total, true);
+    bar.update("客户端 jar", total * 0.51, total, true);
+    bar.update("客户端 jar", total, total, true);
+
+    // 每 5% 一行，0 与收尾必报
+    assert.deepEqual(io.lines, [
+        "客户端 jar 0KB/100.0MB",
+        "客户端 jar 51.0MB/100.0MB",
+        "客户端 jar 100.0MB/100.0MB",
+    ]);
+});
+
 test("plain 直接用报数", () => {
     const io = fakeIo({ interactive: true });
     const bar = progressReporter("plain", io);

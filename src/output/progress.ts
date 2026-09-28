@@ -12,8 +12,11 @@ import { print, quiet, writeOut } from "./output.ts";
 /** 整行宽度，与约定的样子一致；终端更窄时按终端收 */
 export const BAR_WIDTH = 107;
 
-/** 非交互时每多少个报一次 */
+/** 非交互时每多少个文件报一次 */
 const STEP = 256;
+
+/** 非交互且按字节报时，每百分之几报一次 */
+const PLAIN_STEP = 5;
 
 /** 条最少要留这么宽，标签太长也不会把条挤没 */
 const MIN_INNER = 10;
@@ -33,7 +36,8 @@ export interface ProgressIo {
 }
 
 export interface ProgressReporter {
-    update(stage: string, done: number, total: number): void;
+    /** bytes 为 true 时 done 与 total 是字节数 */
+    update(stage: string, done: number, total: number, bytes?: boolean): void;
     /** 收尾：让最后一条进度留在屏幕上 */
     close(): void;
 }
@@ -56,9 +60,10 @@ export function progressReporter(
     const bar = style === "bar" && io.interactive;
     let stage: string | undefined;
     let shown = -1;
+    let plainShown = -1;
 
     return {
-        update(next: string, done: number, total: number): void {
+        update(next: string, done: number, total: number, bytes = false): void {
             if (style === "off" || total <= 0) {
                 return;
             }
@@ -70,16 +75,28 @@ export function progressReporter(
                 }
                 stage = next;
                 shown = -1;
+                plainShown = -1;
             }
 
+            const percent = Math.floor((done * 100) / total);
+
             if (bar) {
-                const percent = Math.floor((done * 100) / total);
                 // 同一个百分比不重复刷，最后一步必刷
                 if (percent === shown && done !== total) {
                     return;
                 }
                 shown = percent;
                 io.write(`\r${renderBar(next, done, total, io.width)}`);
+                return;
+            }
+
+            // 按字节报时没法按个数数，改成每 5% 报一次，阶段第一帧必报
+            if (bytes) {
+                if (done !== total && plainShown >= 0 && percent - plainShown < PLAIN_STEP) {
+                    return;
+                }
+                plainShown = percent;
+                io.line(`${next} ${sizeText(done)}/${sizeText(total)}`);
                 return;
             }
 
@@ -94,6 +111,13 @@ export function progressReporter(
             }
         },
     };
+}
+
+// 字节数用人看的单位
+function sizeText(value: number): string {
+    return value >= 1024 * 1024
+        ? `${(value / 1024 / 1024).toFixed(1)}MB`
+        : `${Math.round(value / 1024)}KB`;
 }
 
 // [####      ] 42% 资源

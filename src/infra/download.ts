@@ -57,13 +57,15 @@ export interface DownloadReport {
     readonly failures: readonly DownloadFailure[];
 }
 
+// bytes 为 true 时 done 与 total 是字节数，否则是文件个数
 export interface Progress {
-    (done: number, total: number, target: string): void;
+    (done: number, total: number, bytes: boolean, target: string): void;
 }
 
 export async function downloadOne(
     task: DownloadTask,
     options: TransferOptions,
+    onChunk?: (bytes: number) => void,
 ): Promise<DownloadOutcome> {
     if (await pathExists(task.target)) {
         return { target: task.target, bytes: 0, status: "skipped" };
@@ -72,7 +74,7 @@ export async function downloadOne(
     await mkdir(dirname(task.target), { recursive: true });
     const temp = `${task.target}.part-${process.pid}`;
     try {
-        const bytes = await transfer(task, options, temp);
+        const bytes = await transfer(task, options, temp, onChunk);
         await rename(temp, task.target);
         return { target: task.target, bytes, status: "downloaded" };
     } catch (error) {
@@ -91,7 +93,19 @@ export async function downloadAll(
     let downloaded = 0;
     let skipped = 0;
     let bytes = 0;
-    let done = 0;
+
+    // 大小都已知就按字节报，单个大文件也能有中间态；否则退回按个数
+    const sized =
+        tasks.length > 0 && tasks.every((task) => typeof task.size === "number" && task.size > 0);
+    const totalBytes = tasks.reduce((sum, task) => sum + (task.size ?? 0), 0);
+    const byBytes = sized && totalBytes > 0;
+    const total = byBytes ? totalBytes : tasks.length;
+
+    let doneBytes = 0;
+    let doneCount = 0;
+    const report = (target: string): void => {
+        onProgress?.(byBytes ? doneBytes : doneCount, total, byBytes, target);
+    };
 
     const workers = Math.max(1, Math.min(options.concurrency, queue.length));
     await Promise.all(
@@ -101,8 +115,23 @@ export async function downloadAll(
                 if (task === undefined) {
                     return;
                 }
+
+                const weight = byBytes ? (task.size ?? 0) : 1;
+                let streamed = 0;
                 try {
-                    const outcome = await downloadOne(task, options);
+                    const outcome = await downloadOne(
+                        task,
+                        options,
+                        byBytes
+                            ? (chunk: number) => {
+                                  // 别让在途字节越过这个文件的份额
+                                  const step = Math.min(streamed + chunk, weight) - streamed;
+                                  streamed += step;
+                                  doneBytes += step;
+                                  report(task.target);
+                              }
+                            : undefined,
+                    );
                     if (outcome.status === "skipped") {
                         skipped++;
                     } else {
@@ -112,8 +141,11 @@ export async function downloadAll(
                 } catch (error) {
                     failures.push({ target: task.target, error: message(error) });
                 }
-                done++;
-                onProgress?.(done, tasks.length, task.target);
+
+                // 跳过的文件是整份，下载完的补上没报过的差额
+                doneBytes += weight - streamed;
+                doneCount++;
+                report(task.target);
             }
         }),
     );
@@ -143,6 +175,7 @@ async function transfer(
     task: DownloadTask,
     options: TransferOptions,
     temp: string,
+    onChunk?: (bytes: number) => void,
 ): Promise<number> {
     let last: unknown;
     const attempts = Math.max(0, options.retries) + 1;
@@ -152,7 +185,7 @@ async function transfer(
 
         for (let attempt = 1; attempt <= attempts; attempt++) {
             try {
-                return await once(task, url, options, temp);
+                return await once(task, url, options, temp, onChunk);
             } catch (error) {
                 last = error;
                 log.debug(
@@ -181,6 +214,7 @@ async function once(
     url: string,
     options: TransferOptions,
     temp: string,
+    onChunk?: (bytes: number) => void,
 ): Promise<number> {
     const response = await httpGet(url, options);
     const hash = createHash("sha1");
@@ -192,6 +226,7 @@ async function once(
             transform(chunk: Buffer, _encoding, callback) {
                 hash.update(chunk);
                 bytes += chunk.length;
+                onChunk?.(chunk.length);
                 callback(null, chunk);
             },
         }),
