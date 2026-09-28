@@ -4,6 +4,9 @@
  * @author IsCibocaz
  * @since 1.0.0
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { run } from "./cli/index.ts";
 import { flushState } from "./config/index.ts";
 import { handleError } from "./error/index.ts";
@@ -36,4 +39,20 @@ export async function main(): Promise<void> {
     }
 }
 
-await main();
+// 只有直接跑这个文件才执行：main-dev.ts 会导入它，导入时不能再跑一遍
+// 两侧都取 realpath，装成包后 bin 是软链
+function isEntry(): boolean {
+    const entry = process.argv[1];
+    if (entry === undefined) {
+        return false;
+    }
+    try {
+        return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        return false;
+    }
+}
+
+if (isEntry()) {
+    await main();
+}
