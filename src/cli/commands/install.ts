@@ -1,7 +1,7 @@
 /**
- * install 命令：编排版本与依赖的补齐
+ * install 命令：按版本号装一份新的版本目录
  *
- * 已存在的文件跳过，所以对别的启动器装好的目录来说这一步就是补缺
+ * 目录名就是版本名，重名直接拒绝；名字省略时按版本与加载器推导
  * 只要有一样没补齐，最后统一报出来并以非零码退出
  * @author IsCibocaz
  * @since 1.0.0
@@ -12,10 +12,12 @@ import { AppError } from "../../error/index.ts";
 import { logger, print } from "../../output/index.ts";
 import {
     installVersion,
+    parseLoaderSpec,
     pickFolder,
     resolveFolderPath,
-    type InstallReport,
     type InstallProgress,
+    type InstallReport,
+    type LoaderSpec,
 } from "../../version/index.ts";
 import type { Context, InstallCommand } from "../parse.ts";
 
@@ -25,10 +27,17 @@ const log = logger("install");
 const STEP = 256;
 
 export async function runInstall(command: InstallCommand, ctx: Context): Promise<void> {
+    let loader: LoaderSpec | null = null;
     if (command.loader !== undefined) {
-        throw new AppError("cli", "NotImplemented", {
-            context: { detail: `安装加载器 ${command.loader}` },
-        });
+        const spec = parseLoaderSpec(command.loader);
+        if (spec === undefined) {
+            throw new AppError("cli", "UsageError", {
+                context: {
+                    detail: `加载器写法是 <名字> 或 <名字>@<版本>，名字只能是 fabric / forge / neoforge / quilt：${command.loader}`,
+                },
+            });
+        }
+        loader = spec;
     }
 
     const setting = await loadSetting();
@@ -41,12 +50,14 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
     const report = await installVersion({
         folderPath: resolveFolderPath(folder),
         versionId: command.version,
+        name: command.displayName,
+        loader,
         network: setting.network,
         download: setting.download,
         assets: command.assets !== false,
         onProgress: ctx.json ? undefined : progress(),
     });
-    log.info("安装完成 %s", command.version);
+    log.info("安装完成 %s", report.name);
 
     if (ctx.json) {
         print(JSON.stringify(report, null, 4));
@@ -74,13 +85,17 @@ function progress(): InstallProgress {
 }
 
 function render(report: InstallReport): string {
-    const lines = [
-        `安装 ${report.versionId}`,
-        `  版本 json  ${report.json === "fetched" ? "新取" : "已有"}`,
-        `  客户端 jar ${report.clientJar ? "已有或已下" : "缺失"}`,
+    const lines = [`安装 ${report.name}`, `  游戏版本   ${report.versionId}`];
+
+    if (report.loader !== null) {
+        lines.push(`  加载器     ${report.loader.name} ${report.loader.version}`);
+        lines.push(`  基础版本   ${report.base === "installed" ? "这次顺带装的" : "本来就在"}`);
+    }
+    lines.push(
+        `  客户端 jar ${clientJarText(report)}`,
         `  ${describe("库", report.libraries)}`,
         `  natives    ${report.natives.jars} 个 jar 解出 ${report.natives.files} 个文件（${counts(report.natives.report)}）`,
-    ];
+    );
 
     if (report.assets === null) {
         lines.push("  资源       跳过");
@@ -94,6 +109,14 @@ function render(report: InstallReport): string {
         lines.push(`  警告       ${warning}`);
     }
     return lines.join("\n");
+}
+
+// 加载器版本自己没有客户端 jar，用的是基础版本那份
+function clientJarText(report: InstallReport): string {
+    if (report.clientJar) {
+        return "已有或已下";
+    }
+    return report.loader === null ? "缺失" : "用基础版本的";
 }
 
 function describe(name: string, report: InstallReport["libraries"]): string {

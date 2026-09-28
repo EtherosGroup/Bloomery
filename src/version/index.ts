@@ -54,3 +54,11 @@ export {
     type Manifest,
     type ManifestVersion,
 } from "./manifest.ts";
+export {
+    defaultVersionName,
+    fetchLoaderProfile,
+    parseLoaderSpec,
+    resolveLoaderVersion,
+    type LoaderName,
+    type LoaderSpec,
+} from "./loader.ts";

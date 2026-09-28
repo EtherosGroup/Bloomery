@@ -29,7 +29,9 @@ export interface LaunchCommand {
 export interface InstallCommand {
     readonly name: "install";
     readonly version: string;
-    /** 本轮只有原版，给了加载器报未实现 */
+    /** 版本显示名，省略时按版本与加载器推导 */
+    readonly displayName?: string;
+    /** <加载器>@<版本|latest>，目前只有 fabric */
     readonly loader?: string;
     /** 省略时用当前文件夹 */
     readonly folder?: string;

@@ -12,6 +12,7 @@
 import { copyFile, link, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { object, parseJson } from "../config/read.ts";
 import type { DownloadSetting, Network } from "../config/types.ts";
 import {
     allows,
@@ -44,6 +45,13 @@ import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
 import { logger } from "../output/index.ts";
 import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
+import {
+    defaultVersionName,
+    fetchLoaderProfile,
+    resolveLoaderVersion,
+    type LoaderName,
+    type LoaderSpec,
+} from "./loader.ts";
 import { fetchManifest, findVersion } from "./manifest.ts";
 
 const log = logger("install");
@@ -58,17 +66,24 @@ export interface InstallProgress {
 
 export interface InstallInput {
     readonly folderPath: string;
+    /** 要装的 Minecraft 版本，例如 1.20.6 */
     readonly versionId: string;
+    /** 版本目录名与显示名，省略时按版本与加载器推导 */
+    readonly name?: string | undefined;
+    readonly loader?: LoaderSpec | null | undefined;
     readonly network: Network;
     readonly download: DownloadSetting;
     /** false 时跳过资源对象，只装游戏本体 */
-    readonly assets?: boolean;
-    readonly onProgress?: InstallProgress;
+    readonly assets?: boolean | undefined;
+    readonly onProgress?: InstallProgress | undefined;
 }
 
 export interface InstallReport {
+    readonly name: string;
     readonly versionId: string;
-    readonly json: "present" | "fetched";
+    readonly loader: { readonly name: LoaderName; readonly version: string } | null;
+    /** 加载器版本要的基础版本是本来就在，还是这次顺带装的 */
+    readonly base: "none" | "present" | "installed";
     readonly clientJar: boolean;
     readonly libraries: DownloadReport;
     readonly natives: {
@@ -80,13 +95,16 @@ export interface InstallReport {
     readonly warnings: readonly string[];
 }
 
+interface BodyResult {
+    readonly clientJar: boolean;
+    readonly libraries: DownloadReport;
+    readonly natives: InstallReport["natives"];
+    readonly assets: InstallReport["assets"];
+}
+
 export async function installVersion(input: InstallInput): Promise<InstallReport> {
     const warnings: string[] = [];
-    const versionDir = join(input.folderPath, "versions", input.versionId);
-    const jsonPath = join(versionDir, `${input.versionId}.json`);
-    const librariesRoot = join(input.folderPath, "libraries");
-    const assetsRoot = join(input.folderPath, "assets");
-
+    const loader = input.loader ?? null;
     const options: TransferOptions = {
         timeoutMs: input.network.timeoutMs,
         retries: input.network.retries,
@@ -97,24 +115,66 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         sources: sourcesOf(input.download),
     };
 
-    let json: "present" | "fetched" = "present";
-    if (!(await pathExists(jsonPath))) {
-        await writeVersionJson(input.versionId, jsonPath, options);
-        json = "fetched";
-        log.info("取到版本 json %s", input.versionId);
+    // 加载器版本要先解出来：目录名里带的是具体版本号，不是 latest
+    const loaderVersion =
+        loader === null ? null : await resolveLoaderVersion(loader, input.versionId, options);
+    const name = input.name ?? defaultVersionName(input.versionId, loader, loaderVersion);
+    assertName(name);
+    await assertFree(input.folderPath, name);
+
+    let base: InstallReport["base"] = "none";
+    let json: Record<string, unknown>;
+    if (loader === null) {
+        json = await fetchVanillaJson(input.versionId, options);
+    } else {
+        base = await ensureBase(input, options, warnings);
+        json = await fetchLoaderProfile(loader, input.versionId, loaderVersion ?? "", options);
     }
 
-    const read = await readDescriptor(jsonPath, input.versionId);
+    const versionDir = join(input.folderPath, "versions", name);
+    const jsonPath = join(versionDir, `${name}.json`);
+    // 目录名、json 的 id、客户端 jar 名统一成 name，启动时按 id 找 jar 才对得上
+    await writeAtomic(jsonPath, `${JSON.stringify({ ...json, id: name }, null, 4)}\n`);
+
+    const read = await readDescriptor(jsonPath, name);
     if (read.descriptor === null) {
         throw new AppError("install", "VersionBroken", {
-            context: { detail: input.versionId, problem: read.problem ?? "" },
+            context: { detail: name, problem: read.problem ?? "" },
         });
     }
-    const descriptor = read.descriptor;
+
+    const body = await installBody(input, name, jsonPath, read.descriptor, options, warnings);
+    log.info("装好 %s", name);
+
+    return {
+        name,
+        versionId: input.versionId,
+        loader: loader === null ? null : { name: loader.name, version: loaderVersion ?? "" },
+        base,
+        ...body,
+        warnings,
+    };
+}
+
+// 装一份版本 json 描述的全部内容
+async function installBody(
+    input: InstallInput,
+    name: string,
+    jsonPath: string,
+    descriptor: Descriptor,
+    options: TransferOptions,
+    warnings: string[],
+): Promise<BodyResult> {
+    const versionDir = dirname(jsonPath);
+    const librariesRoot = join(input.folderPath, "libraries");
     const context = platformContext();
 
-    const clientJar = join(versionDir, `${input.versionId}.jar`);
-    const client = await installClientJar(descriptor, clientJar, options, warnings);
+    const clientJar = await installClientJar(
+        descriptor,
+        join(versionDir, `${name}.jar`),
+        options,
+        warnings,
+    );
 
     const { libraries: libraryTasks, natives: nativeTasks } = splitTasks(
         descriptor,
@@ -138,26 +198,73 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
     const assets =
         input.assets === false
             ? null
-            : await installAssets(descriptor, assetsRoot, options, warnings, input.onProgress);
+            : await installAssets(
+                  descriptor,
+                  join(input.folderPath, "assets"),
+                  options,
+                  warnings,
+                  input.onProgress,
+              );
 
     return {
-        versionId: input.versionId,
-        json,
-        clientJar: client,
+        clientJar,
         libraries,
         natives: { jars: selection.jars.length, files, report: nativeReport },
         assets,
-        warnings,
     };
+}
+
+// 加载器版本靠 inheritsFrom 指向基础版本，基础版本不在就先按原版装一份
+async function ensureBase(
+    input: InstallInput,
+    options: TransferOptions,
+    warnings: string[],
+): Promise<"present" | "installed"> {
+    const id = input.versionId;
+    const jsonPath = join(input.folderPath, "versions", id, `${id}.json`);
+    if (await pathExists(jsonPath)) {
+        return "present";
+    }
+
+    const json = await fetchVanillaJson(id, options);
+    await writeAtomic(jsonPath, `${JSON.stringify(json, null, 4)}\n`);
+
+    const read = await readDescriptor(jsonPath, id);
+    if (read.descriptor === null) {
+        throw new AppError("install", "VersionBroken", {
+            context: { detail: id, problem: read.problem ?? "" },
+        });
+    }
+    await installBody(input, id, jsonPath, read.descriptor, options, warnings);
+    log.info("顺带装好基础版本 %s", id);
+    return "installed";
+}
+
+// 目录名就是版本名，重名一律拒绝
+async function assertFree(folderPath: string, name: string): Promise<void> {
+    if (await pathExists(join(folderPath, "versions", name))) {
+        throw new AppError("install", "VersionExists", {
+            context: { text: `已经存在名为“${name}”的版本` },
+        });
+    }
+}
+
+const ILLEGAL_NAME = /[/\\:*?"<>|]/;
+
+function assertName(name: string): void {
+    if (name.trim() === "" || ILLEGAL_NAME.test(name)) {
+        throw new AppError("install", "UsageError", {
+            context: { detail: `版本名不能为空，也不能含 / \\ : * ? " < > |：${name}` },
+        });
+    }
 }
 
 /* ---------- 版本 json ---------- */
 
-async function writeVersionJson(
+async function fetchVanillaJson(
     id: string,
-    jsonPath: string,
     options: TransferOptions,
-): Promise<void> {
+): Promise<Record<string, unknown>> {
     const manifest = await fetchManifest(options);
     const version = findVersion(manifest, id);
     if (version === undefined) {
@@ -167,17 +274,13 @@ async function writeVersionJson(
     }
 
     const buffer = await fetchBuffer(version.url, options);
-    const text = buffer.toString("utf8");
-    let value: unknown;
-    try {
-        value = JSON.parse(text);
-    } catch (error) {
+    const raw = object(parseJson(buffer.toString("utf8"), version.url), version.url);
+    if (raw === undefined) {
         throw new AppError("install", "VersionBroken", {
-            cause: error,
-            context: { detail: `${id} 的 json 解析失败` },
+            context: { detail: `${id} 的 json 读不出来` },
         });
     }
-    await writeAtomic(jsonPath, `${JSON.stringify(value, null, 4)}\n`);
+    return raw;
 }
 
 /* ---------- 客户端 jar ---------- */
@@ -190,7 +293,10 @@ async function installClientJar(
 ): Promise<boolean> {
     const entry = descriptor.downloads["client"];
     if (entry === undefined) {
-        warnings.push("版本 json 里没有客户端 jar 的下载信息");
+        // 加载器版本靠 inheritsFrom 用基础版本的 jar，没有下载信息是正常的
+        if (descriptor.inheritsFrom === null) {
+            warnings.push("版本 json 里没有客户端 jar 的下载信息");
+        }
         return false;
     }
     if (await pathExists(clientJar)) {
@@ -301,7 +407,10 @@ async function installAssets(
 ): Promise<{ index: DownloadReport; objects: DownloadReport } | null> {
     const id = descriptor.assetIndex?.id ?? descriptor.assets;
     if (id === null || id === "") {
-        warnings.push("版本 json 里没有资源索引信息");
+        // 继承型版本用的是基础版本的资源，这里没有索引是正常的
+        if (descriptor.inheritsFrom === null) {
+            warnings.push("版本 json 里没有资源索引信息");
+        }
         return null;
     }
 
