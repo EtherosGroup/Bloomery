@@ -72,7 +72,7 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     JavaDuplicate: "运行 bloomery java list 查看已记录的 Java",
     AccountNotFound: "运行 bloomery auth login 添加账户，或用 --account <名字> 指定",
     AccountExpired: "运行 bloomery auth login 重新登录",
-    VersionExists: "换一个 --name，或先删掉已有的那份",
+    VersionExists: "使用 --name <name> 指定新的版本名称",
     DownloadFailed: "检查网络，或设置里的下载源与代理",
 };
 
