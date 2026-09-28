@@ -21,6 +21,9 @@ const PLAIN_STEP = 5;
 /** 条最少要留这么宽，标签太长也不会把条挤没 */
 const MIN_INNER = 10;
 
+/** 阶段名按显示宽度补齐到这个宽度，条的长短才不受阶段名影响 */
+const LABEL_WIDTH = 12;
+
 /** 非交互时用的保底宽度 */
 const MIN_WIDTH = 40;
 
@@ -123,12 +126,18 @@ function sizeText(value: number): string {
 // [####      ] 42% 资源
 export function renderBar(label: string, done: number, total: number, width: number): string {
     const percent = total <= 0 ? 100 : Math.min(100, Math.floor((done * 100) / total));
-    // 百分比补齐到三位，位数变化时条不跟着伸缩
-    const tail = `] ${String(percent).padStart(3)}% ${label}`;
+    // 百分比补齐到三位，位数变化时条不伸缩
+    // 标签也按显示宽度补齐，阶段名宽窄不同时条一样长
+    const tail = `] ${String(percent).padStart(3)}% ${padLabel(label)}`;
     const inner = Math.max(MIN_INNER, width - 1 - displayWidth(tail));
     const filled = Math.round((inner * percent) / 100);
 
     return `[${"#".repeat(filled)}${" ".repeat(inner - filled)}${tail}`;
+}
+
+function padLabel(label: string): string {
+    const pad = LABEL_WIDTH - displayWidth(label);
+    return pad > 0 ? `${label}${" ".repeat(pad)}` : label;
 }
 
 // 终端里的列宽：CJK 与全角占两格，其余一格

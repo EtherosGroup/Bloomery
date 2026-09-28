@@ -118,6 +118,7 @@ export async function downloadAll(
 
                 const weight = byBytes ? (task.size ?? 0) : 1;
                 let streamed = 0;
+                let counted = false;
                 try {
                     const outcome = await downloadOne(
                         task,
@@ -132,6 +133,7 @@ export async function downloadAll(
                               }
                             : undefined,
                     );
+                    counted = true;
                     if (outcome.status === "skipped") {
                         skipped++;
                     } else {
@@ -142,8 +144,10 @@ export async function downloadAll(
                     failures.push({ target: task.target, error: message(error) });
                 }
 
-                // 跳过的文件是整份，下载完的补上没报过的差额
-                doneBytes += weight - streamed;
+                // 跳过的文件是整份，下完的补上没报过的差额；失败的只留下真收过的那些
+                if (counted) {
+                    doneBytes += weight - streamed;
+                }
                 doneCount++;
                 report(task.target);
             }

@@ -40,15 +40,24 @@ test("条的宽度与填充", () => {
 
     const half = renderBar("资源", 50, 100, 40);
     assert.equal(displayWidth(half), 40);
-    assert.match(half, /^\[#{14} {14}\]  50% 资源$/);
+    assert.match(half, /^\[#{10} {10}\]  50% 资源/);
 
     // 百分比位数变化时条不伸缩，括号里始终一样宽
     const empty = renderBar("库", 0, 10, 40);
     const full = renderBar("库", 10, 10, 40);
     assert.equal(displayWidth(empty), 40);
     assert.equal(displayWidth(full), 40);
-    assert.match(empty, /^\[ {30}\]   0% 库$/);
-    assert.match(full, /^\[#{30}\] 100% 库$/);
+    assert.match(empty, /^\[ {20}\]   0% 库/);
+    assert.match(full, /^\[#{20}\] 100% 库/);
+});
+
+test("阶段名宽窄不影响条的长短", () => {
+    const short = renderBar("库", 30, 100, 60);
+    const long = renderBar("客户端 jar", 30, 100, 60);
+
+    // 右括号落在同一列，填充长度也一致
+    assert.equal(short.indexOf("]"), long.indexOf("]"));
+    assert.equal(displayWidth(short), displayWidth(long));
 });
 
 test("总数未知时按满算", () => {
@@ -67,7 +76,7 @@ test("换阶段时上一行留在屏幕上", () => {
     // 换阶段前后各补一个换行：库 那行收尾，natives 那行收尾
     assert.equal(io.writes.filter((text) => text === "\n").length, 2);
     assert.equal(io.writes.filter((text) => text.startsWith("\r[")).length, 3);
-    assert.match(io.writes.at(-2) ?? "", /0% natives$/);
+    assert.match(io.writes.at(-2) ?? "", /0% natives\s*$/);
     assert.equal(io.writes.at(-1), "\n");
 });
 
