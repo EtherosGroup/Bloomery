@@ -7,12 +7,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-    displayWidth,
-    progressReporter,
-    renderBar,
-    type ProgressIo,
-} from "../../src/output/progress.ts";
+import { progressReporter, renderBar, type ProgressIo } from "../../src/output/progress.ts";
+import { displayWidth } from "../../src/output/text.ts";
 
 interface Fake extends ProgressIo {
     readonly writes: string[];

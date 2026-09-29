@@ -21,7 +21,7 @@ import {
     resolveJavaExecutable,
     scanJava,
 } from "../../launch/index.ts";
-import { logger, print } from "../../output/index.ts";
+import { logger, print, renderTable } from "../../output/index.ts";
 import { expandHome } from "../../platform/index.ts";
 import type { Context, JavaCommand } from "../parse.ts";
 
@@ -192,12 +192,16 @@ async function rowsOf(entries: readonly JavaEntry[]): Promise<Row[]> {
 }
 
 function render(rows: readonly Row[]): string {
-    const lines: string[] = [];
-    for (const row of rows) {
-        lines.push(`  ${row.entry.path}${row.present ? "" : "  [文件不在]"}`);
-        lines.push(`    ${describe(row.entry)}`);
-    }
-    return lines.join("\n");
+    const table = rows.map((row) => [
+        row.entry.path,
+        row.entry.major === null || row.entry.major === undefined ? "-" : String(row.entry.major),
+        row.entry.kind,
+        row.entry.arch ?? "-",
+        SOURCE[row.entry.source],
+        row.entry.vendor ?? "-",
+        row.present ? "" : "[文件不在]",
+    ]);
+    return renderTable(table, { indent: "  ", right: [1] }).join("\n");
 }
 
 function jsonOf(row: Row): unknown {

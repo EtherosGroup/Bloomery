@@ -6,7 +6,7 @@
  * @since 1.0.0
  */
 
-import { print } from "../../output/index.ts";
+import { print, renderTable } from "../../output/index.ts";
 import type {
     FolderSummary,
     FolderView,
@@ -37,20 +37,23 @@ export function printFolderList(rows: readonly FolderListRow[], ctx: Context): v
         return;
     }
 
-    const lines = [`已保存 ${rows.length} 个游戏文件夹`];
-    for (const row of rows) {
-        lines.push(`  ${row.name}  ${row.path}`, `      ${folderDetail(row)}`);
-    }
-    print(lines.join("\n"));
+    const table = rows.map((row) => [
+        row.name,
+        row.path,
+        `${row.instances} 个实例`,
+        row.selected ? "当前" : "",
+        folderState(row),
+    ]);
+    print(
+        [
+            `已保存 ${rows.length} 个游戏文件夹`,
+            ...renderTable(table, { indent: "  ", right: [2] }),
+        ].join("\n"),
+    );
 }
 
-function folderDetail(row: FolderListRow): string {
-    const parts = [`${row.instances} 个实例`];
-    if (row.selected) {
-        parts.push("当前");
-    }
-    parts.push(row.exists ? (row.writable ? "可写" : "只读") : "目录不存在");
-    return parts.join(" · ");
+function folderState(row: FolderListRow): string {
+    return row.exists ? (row.writable ? "可写" : "只读") : "目录不存在";
 }
 
 export function printFolder(view: FolderView, ctx: Context): void {
@@ -68,9 +71,17 @@ export function folderText(view: FolderView): string {
     } else if (view.instances.length === 0) {
         lines.push("  没有扫到版本");
     }
-    for (const instance of view.instances) {
-        lines.push(instanceText(instance));
+
+    if (view.instances.length > 0) {
+        const rows = view.instances.map((instance) => [
+            instance.id,
+            loaderText(instance),
+            instance.type ?? "-",
+            marksOf(instance),
+        ]);
+        lines.push(...renderTable(rows, { indent: "  " }));
     }
+
     if (view.dropped.length > 0) {
         lines.push(`  清单里失效的：${view.dropped.join(", ")}`);
     }
@@ -106,8 +117,8 @@ export function instanceJson(instance: InstanceView): unknown {
     };
 }
 
-// 清单里的一行
-export function instanceText(instance: InstanceView): string {
+// 清单里的一行后面的标记
+function marksOf(instance: InstanceView): string {
     const marks: string[] = [];
     if (instance.discovered) {
         marks.push("磁盘发现");
@@ -115,13 +126,7 @@ export function instanceText(instance: InstanceView): string {
     if (instance.state !== "ready") {
         marks.push(STATE[instance.state]);
     }
-    const tail = marks.length === 0 ? "" : `  [${marks.join(" ")}]`;
-    return `  ${column(instance.id, 28)}${column(loaderText(instance), 18)}${instance.type ?? "-"}${tail}`;
-}
-
-// 超过列宽时留一个空格，两列不会粘在一起
-function column(text: string, width: number): string {
-    return text.length >= width ? `${text} ` : text.padEnd(width);
+    return marks.length === 0 ? "" : `[${marks.join(" ")}]`;
 }
 
 export function loaderText(instance: InstanceView): string {

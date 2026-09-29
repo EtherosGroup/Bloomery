@@ -22,7 +22,6 @@ export {
 } from "./output.ts";
 export { addFileSink, type FileSink, type FileSinkOptions } from "./file.ts";
 export {
-    displayWidth,
     EXISTING_NOTE,
     progressReporter,
     renderBar,
@@ -31,3 +30,5 @@ export {
     type ProgressReporter,
     type ProgressStyle,
 } from "./progress.ts";
+export { renderTable, type TableOptions } from "./table.ts";
+export { displayWidth } from "./text.ts";
