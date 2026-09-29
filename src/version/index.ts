@@ -28,6 +28,7 @@ export {
     type VersionType,
 } from "./descriptor.ts";
 export {
+    findFolder,
     findInstance,
     folderIdOf,
     pickFolder,

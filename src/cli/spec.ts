@@ -36,9 +36,10 @@ export const GLOBAL_OPTIONS: OptionDecls = {
 export const COMMANDS: CommandTable = {
     launch: {
         summary: "启动游戏",
-        usage: "launch [version] [--account <name>] [--dry-run]",
+        usage: "launch [version] [--account <name>] [--folder <id>] [--dry-run]",
         options: {
             account: { type: "string", value: "<name>", summary: "使用指定账户" },
+            folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
             "dry-run": { type: "boolean", summary: "只打印启动命令，不真的启动" },
         },
         positionals: { names: ["version"], required: 0 },
@@ -46,6 +47,7 @@ export const COMMANDS: CommandTable = {
             name: "launch",
             version: optionalPositional(positionals, 0, "version"),
             account: optionalString(values, "account"),
+            folder: optionalString(values, "folder"),
             dryRun: values["dry-run"] === true,
         }),
         run: runLaunch,
@@ -138,13 +140,13 @@ export const COMMANDS: CommandTable = {
 
     folder: {
         summary: "游戏文件夹管理",
-        usage: "folder <add|remove|list|scan> [path|id]",
+        usage: "folder <add|remove|list|scan|select> [path|id]",
         options: {},
         positionals: { names: ["action", "target"], required: 1 },
         toCommand: (_values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["add", "remove", "list", "scan"] as const,
+                ["add", "remove", "list", "scan", "select"] as const,
                 "action",
             );
             if (action === "add") {
@@ -154,7 +156,7 @@ export const COMMANDS: CommandTable = {
                     target: requirePositional(positionals, 1, "path"),
                 };
             }
-            if (action === "remove") {
+            if (action === "remove" || action === "select") {
                 return { name: "folder", action, target: requirePositional(positionals, 1, "id") };
             }
             return { name: "folder", action, target: optionalPositional(positionals, 1, "id") };

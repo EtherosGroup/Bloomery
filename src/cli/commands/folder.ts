@@ -11,6 +11,7 @@ import type { Folder, Instance, Setting } from "../../config/types.ts";
 import { AppError } from "../../error/index.ts";
 import { logger, print } from "../../output/index.ts";
 import {
+    findFolder,
     folderIdOf,
     probeFolder,
     readFolder,
@@ -34,6 +35,8 @@ export async function runFolder(command: FolderCommand, ctx: Context): Promise<v
             return remove(setting, command.target ?? "", ctx);
         case "scan":
             return scan(setting, command.target, ctx);
+        case "select":
+            return select(setting, command.target ?? "", ctx);
     }
 }
 
@@ -99,9 +102,7 @@ async function add(setting: Setting, path: string, ctx: Context): Promise<void> 
 }
 
 async function remove(setting: Setting, target: string, ctx: Context): Promise<void> {
-    const folder = setting.folders.find(
-        (item) => item.id === target || sameFolderPath(item.path, target),
-    );
+    const folder = findFolder(setting.folders, target);
     if (folder === undefined) {
         throw new AppError("cli", "FolderNotFound", { context: { detail: target } });
     }
@@ -117,6 +118,22 @@ async function remove(setting: Setting, target: string, ctx: Context): Promise<v
         return;
     }
     print(`已移除 ${folder.id}`);
+}
+
+// 选默认文件夹：launch / version / install 不带 --folder 时用它
+async function select(setting: Setting, target: string, ctx: Context): Promise<void> {
+    const folder = findFolder(setting.folders, target);
+    if (folder === undefined) {
+        throw new AppError("cli", "FolderNotFound", { context: { detail: target } });
+    }
+
+    await saveSetting({ ...setting, selectedFolder: folder.id });
+
+    if (ctx.json) {
+        print(JSON.stringify({ selected: folder.id, path: folder.path }, null, 4));
+        return;
+    }
+    print(`已选择 ${folder.id}  ${folder.path}`);
 }
 
 async function scan(setting: Setting, target: string | undefined, ctx: Context): Promise<void> {

@@ -12,6 +12,7 @@ import { test } from "node:test";
 
 import type { Folder, Instance } from "../../src/config/types.ts";
 import {
+    findFolder,
     folderIdOf,
     pickFolder,
     readFolder,
@@ -208,4 +209,17 @@ test("标识生成与路径比较", () => {
     assert.equal(folderIdOf("/games/.minecraft", ["minecraft", "minecraft-2"]), "minecraft-3");
     assert.equal(sameFolderPath("/games/./minecraft", "/games/minecraft/"), true);
     assert.equal(sameFolderPath("/games/.minecraft", "/games/minecraft"), false);
+});
+
+test("按标识或路径找文件夹", () => {
+    const folders = [
+        folderAt("/games/main", { id: "main" }),
+        folderAt("/games/second", { id: "second" }),
+    ];
+
+    assert.equal(findFolder(folders, "second")?.path, "/games/second");
+    // 路径也认：多余的 . 段与尾斜杠都能对上
+    assert.equal(findFolder(folders, "/games/./second/")?.id, "second");
+    assert.equal(findFolder(folders, "没有这个"), undefined);
+    assert.equal(findFolder([], "main"), undefined);
 });

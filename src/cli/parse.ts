@@ -22,6 +22,8 @@ export interface LaunchCommand {
     /** 省略表示用默认实例 */
     readonly version?: string;
     readonly account?: string;
+    /** 省略时用当前文件夹 */
+    readonly folder?: string;
     /** 只打印启动命令，不真的起进程 */
     readonly dryRun?: boolean;
 }
@@ -61,8 +63,8 @@ export interface ModpackCommand {
 
 export interface FolderCommand {
     readonly name: "folder";
-    readonly action: "add" | "remove" | "list" | "scan";
-    /** add 收路径，remove 收标识，scan 收标识且可省略 */
+    readonly action: "add" | "remove" | "list" | "scan" | "select";
+    /** add 收路径，remove 与 select 收标识，scan 收标识且可省略 */
     readonly target?: string;
 }
 

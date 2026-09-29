@@ -19,10 +19,10 @@ const log = logger("launch");
 export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<void> {
     const setting = await loadSetting();
 
-    const folder = pickFolder(setting.folders, setting.selectedFolder);
+    const folder = pickFolder(setting.folders, setting.selectedFolder, command.folder);
     if (folder === undefined) {
         throw new AppError("cli", "FolderNotFound", {
-            context: { detail: "配置里没有游戏文件夹" },
+            context: { detail: command.folder ?? "配置里没有游戏文件夹" },
         });
     }
 

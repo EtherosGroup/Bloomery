@@ -210,6 +210,11 @@ export function pickFolder(
     return folders[0];
 }
 
+// 按标识或路径找文件夹，remove 与 select 都走它
+export function findFolder(folders: readonly Folder[], target: string): Folder | undefined {
+    return folders.find((folder) => folder.id === target || sameFolderPath(folder.path, target));
+}
+
 // 展开 ~ 并定成绝对路径
 export function resolveGameFolder(path: string): string {
     return resolve(expandHome(path));
