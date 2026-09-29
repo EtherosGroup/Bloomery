@@ -6,7 +6,7 @@
  *   print() 只输出到终端的纯正文，不受级别闸门影响
  *
  * 终端只给正文；文件行带时间、级别与来源。两边互不影响，终端上出现过什么不进文件
- * 终端同步写，顺序等于调用顺序；异步落点走串行队列，退出前用 flush 等它
+ * 终端按调用顺序写，Windows 控制台经流交给系统转码；异步落点走串行队列，退出前用 flush 等它
  * 级别与颜色是进程级状态，由 main.ts 依 argv 设定
  * @author IsCibocaz
  * @since 1.0.0
@@ -169,12 +169,26 @@ export function quiet(): boolean {
     return threshold >= SEVERITY.Warning;
 }
 
+// 这个 fd 要不要绕开直写、交给流
+// Windows 的控制台按代码页解释写进去的字节，UTF-8 会变成乱码，换行还会被当成双字节字符吃掉
+// 流会把正文转成 UTF-16 走 WriteConsoleW；管道与 POSIX 直写更省事，也保住了 EPIPE 与 EAGAIN 的处理
+export function throughStream(platform: NodeJS.Platform, isTTY: boolean): boolean {
+    return platform === "win32" && isTTY;
+}
+
 function writeLine(fd: number, text: string): void {
     write(fd, `${text}\n`);
 }
 
 function write(fd: number, text: string): void {
     if (dead.has(fd)) {
+        return;
+    }
+
+    const stream = fd === STDOUT ? process.stdout : fd === STDERR ? process.stderr : null;
+    if (stream !== null && throughStream(process.platform, stream.isTTY === true)) {
+        // 控制台上不会 EPIPE，不必再兜一层
+        stream.write(text);
         return;
     }
 
