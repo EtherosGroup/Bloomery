@@ -10,8 +10,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 
+import { classpathOf } from "../../src/dependency/classpath.ts";
 import { classifierMatches, libraryFile, parseCoordinate } from "../../src/dependency/library.ts";
-import { nativeClassifierOf, nativeJars } from "../../src/dependency/native.ts";
+import { nativeClassifierOf, nativeJars, nativesLayout } from "../../src/dependency/native.ts";
 import type { RuleContext } from "../../src/dependency/rules.ts";
 import { parseDescriptor } from "../../src/version/descriptor.ts";
 
@@ -112,6 +113,83 @@ test("三个 Windows 变体都在时只选当前架构那份", async () => {
             ["natives-windows"],
         );
         assert.deepEqual(selection.missing, []);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test("natives 布局：老写法平铺，26.x 分目录", () => {
+    const directory = join("/games", "versions", "t", "natives");
+
+    // 1.20.6：四个属性都指向 natives 目录本身，dll 平铺一层
+    const old = nativesLayout(
+        [
+            "-Djava.library.path=${natives_directory}",
+            "-Djna.tmpdir=${natives_directory}",
+            "-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}",
+            "-Dio.netty.native.workdir=${natives_directory}",
+            "-cp",
+            "${classpath}",
+        ],
+        directory,
+    );
+    assert.equal(old.libraryPath, directory);
+    assert.deepEqual(old.extraDirectories, []);
+    assert.equal(old.classpath, false);
+
+    // 26.2：dll 要解到 java/，另三个目录给 JNA、LWJGL、netty 当解压目标，jar 还要进 classpath
+    const fresh = nativesLayout(
+        [
+            "--enable-native-access=ALL-UNNAMED",
+            "-Djava.library.path=${natives_directory}/java",
+            "-Djna.tmpdir=${natives_directory}/jna",
+            "-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}/lwjgl",
+            "-Dio.netty.native.workdir=${natives_directory}/netty",
+            "-cp",
+            "${classpath}",
+        ],
+        directory,
+    );
+    assert.equal(fresh.libraryPath, join(directory, "java"));
+    assert.deepEqual(fresh.extraDirectories, [
+        join(directory, "jna"),
+        join(directory, "lwjgl"),
+        join(directory, "netty"),
+    ]);
+    assert.equal(fresh.classpath, true);
+});
+
+test("natives 布局：指向 natives 目录之外就按老布局来", () => {
+    const directory = join("/games", "versions", "t", "natives");
+
+    // 属性缺失不算新版布局
+    const missing = nativesLayout(["-cp", "${classpath}"], directory);
+    assert.equal(missing.libraryPath, directory);
+    assert.equal(missing.classpath, false);
+
+    // 指到别处也不能把 dll 解到那里去
+    const outside = nativesLayout(["-Djava.library.path=/usr/lib/jni"], directory);
+    assert.equal(outside.libraryPath, directory);
+    assert.equal(outside.classpath, false);
+});
+
+test("natives jar 排在客户端 jar 前面", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bloomery-classpath-"));
+    try {
+        const natives = join(root, "natives.jar");
+        const client = join(root, "client.jar");
+        await writeFile(natives, "");
+        await writeFile(client, "");
+
+        const result = await classpathOf({
+            libraries: [],
+            context: WINDOWS_X64,
+            librariesRoot: root,
+            clientJar: client,
+            natives: [natives, join(root, "missing.jar")],
+        });
+        assert.deepEqual(result.entries, [natives, client]);
+        assert.deepEqual(result.missing, [join(root, "missing.jar")]);
     } finally {
         await rm(root, { recursive: true, force: true });
     }

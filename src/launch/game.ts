@@ -8,6 +8,7 @@
  * @since 1.0.0
  */
 
+import { mkdir, rm } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 
 import type { Accounts, Folder, Instance, JavaProbe, Setting } from "../config/types.ts";
@@ -16,6 +17,7 @@ import {
     countAssets,
     extractNatives,
     nativeJars,
+    nativesLayout,
     platformContext,
     readAssetIndex,
     type AssetStat,
@@ -112,11 +114,25 @@ export async function planLaunch(
         has_quick_plays_support: false,
     });
 
+    const natives = await nativeJars({
+        libraries: descriptor.libraries,
+        context: rules,
+        librariesRoot,
+    });
+    if (natives.missing.length > 0) {
+        warnings.push(`缺 ${natives.missing.length} 个 natives`);
+        log.warn("缺 %d 个 natives：%s", natives.missing.length, natives.missing.join(", "));
+    }
+    // 26.x 起 natives 分几个目录，dll 要解到 java.library.path 指向的那层；jar 也要进 classpath
+    const nativesDirectory = join(gameDirectory, "natives");
+    const layout = nativesLayout(descriptor.arguments.jvm, nativesDirectory);
+
     const classpath = await classpathOf({
         libraries: descriptor.libraries,
         context: rules,
         librariesRoot,
         clientJar,
+        natives: layout.classpath ? natives.jars.map((native) => native.jar) : [],
     });
     // 别的启动器装好的目录可能少几个可选库或 natives，先记下来
     if (!classpath.clientJarPresent) {
@@ -127,17 +143,6 @@ export async function planLaunch(
         log.warn("缺 %d 个库，已跳过：%s", classpath.missing.length, classpath.missing.join(", "));
     }
 
-    const natives = await nativeJars({
-        libraries: descriptor.libraries,
-        context: rules,
-        librariesRoot,
-    });
-    if (natives.missing.length > 0) {
-        warnings.push(`缺 ${natives.missing.length} 个 natives`);
-        log.warn("缺 %d 个 natives：%s", natives.missing.length, natives.missing.join(", "));
-    }
-
-    const nativesDirectory = join(gameDirectory, "natives");
     let files = 0;
     // 预览只算不落盘，缺件也不拦；真启动才补依赖检查与解压
     if (prepare) {
@@ -154,7 +159,14 @@ export async function planLaunch(
                 },
             });
         }
-        files = await extractNatives(natives.jars, nativesDirectory);
+        // 新版布局下整层清掉重建：上一轮可能按旧布局留下别的架构的 dll
+        if (layout.classpath) {
+            await rm(nativesDirectory, { recursive: true, force: true });
+            for (const directory of [layout.libraryPath, ...layout.extraDirectories]) {
+                await mkdir(directory, { recursive: true });
+            }
+        }
+        files = await extractNatives(natives.jars, layout.libraryPath);
     }
 
     const java = await resolveLaunchJava(input, options, descriptor, warnings);

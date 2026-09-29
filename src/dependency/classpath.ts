@@ -26,6 +26,8 @@ export interface ClasspathInput {
     readonly librariesRoot: string;
     /** 客户端 jar：原版在 versions/<id>/<id>.jar，加载器版本指向父版本 */
     readonly clientJar: string;
+    /** natives jar：26.x 起要挂进 classpath，LWJGL 自己从 jar 里解压到 SharedLibraryExtractPath */
+    readonly natives?: readonly string[];
 }
 
 export async function classpathOf(input: ClasspathInput): Promise<Classpath> {
@@ -47,6 +49,14 @@ export async function classpathOf(input: ClasspathInput): Promise<Classpath> {
             continue;
         }
         const file = libraryFile(input.librariesRoot, coordinate);
+        if (await pathExists(file)) {
+            entries.push(file);
+        } else {
+            missing.push(file);
+        }
+    }
+
+    for (const file of input.natives ?? []) {
         if (await pathExists(file)) {
             entries.push(file);
         } else {

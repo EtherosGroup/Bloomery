@@ -28,6 +28,8 @@ export {
     extractNatives,
     nativeClassifierOf,
     nativeJars,
+    nativesLayout,
     type NativeJar,
     type NativeSelection,
+    type NativesLayout,
 } from "./native.ts";
