@@ -67,6 +67,15 @@ export interface ModCommand {
     readonly limit?: number;
 }
 
+export interface ViewCommand {
+    readonly name: "view";
+    readonly action: "loader";
+    /** 加载器名字，省略就列出四种 */
+    readonly loader?: string;
+    /** 页码，从 1 开始 */
+    readonly page?: number;
+}
+
 export interface ModpackCommand {
     readonly name: "modpack";
     readonly file: string;
@@ -102,6 +111,7 @@ export type Command =
     | InstallCommand
     | AuthCommand
     | ModCommand
+    | ViewCommand
     | ModpackCommand
     | FolderCommand
     | VersionCommand

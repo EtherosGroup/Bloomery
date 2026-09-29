@@ -1,220 +1,135 @@
 /**
- * 文件夹视图的渲染
+ * view 命令：查看加载器可用的版本
  *
- * 终端给人看，--json 给脚本看，两种都从同一份视图出
+ * 不带名字就把四种加载器的现状列出来，带上名字按每页 20 条翻
+ * 目前只有 fabric 能装，另外三种只列版本，装的时候会报未实现
  * @author IsCibocaz
- * @since 1.0.0
+ * @since 1.1.6
  */
 
-import { print, renderTable } from "../../output/index.ts";
-import type {
-    FolderSummary,
-    FolderView,
-    InstanceState,
-    InstanceView,
-} from "../../version/index.ts";
-import type { Context } from "../parse.ts";
+import { loadSetting } from "../../config/index.ts";
+import type { DownloadSetting, Network } from "../../config/types.ts";
+import { AppError } from "../../error/index.ts";
+import type { TransferOptions } from "../../infra/download.ts";
+import { sourcesOf } from "../../infra/source.ts";
+import { logger, paginate, print, renderTable } from "../../output/index.ts";
+import { listLoaderVersions, type LoaderName } from "../../version/index.ts";
+import type { Context, ViewCommand } from "../parse.ts";
 
-const STATE: Record<InstanceState, string> = {
-    ready: "可用",
-    missing: "缺失",
-    broken: "读不出来",
-    incomplete: "继承不全",
-};
+const log = logger("view");
 
-export interface FolderListRow extends FolderSummary {
-    readonly selected: boolean;
+const PER_PAGE = 20;
+const NAMES: readonly LoaderName[] = ["fabric", "forge", "neoforge", "quilt"];
+const INSTALLABLE: readonly LoaderName[] = ["fabric"];
+
+export async function runView(command: ViewCommand, ctx: Context): Promise<void> {
+    const setting = await loadSetting();
+    const network = transferOf(setting.network, setting.download);
+
+    if (command.loader === undefined) {
+        return overview(network, ctx);
+    }
+    return versions(asLoader(command.loader), network, command, ctx);
 }
 
-// list 只列保存过的文件夹，不展开里面的版本
-export function printFolderList(rows: readonly FolderListRow[], ctx: Context): void {
+// 不带名字：四种加载器各自的最新版与规模
+async function overview(network: TransferOptions, ctx: Context): Promise<void> {
+    const rows: Array<{ name: LoaderName; latest: string | null; total: number }> = [];
+
+    for (const name of NAMES) {
+        const list = await listLoaderVersions(name, network);
+        const newest = list.find((item) => item.stable === true) ?? list[0];
+        rows.push({ name, latest: newest?.version ?? null, total: list.length });
+        log.debug("%s 共 %d 版", name, list.length);
+    }
+
     if (ctx.json) {
         print(JSON.stringify(rows, null, 4));
-        return;
-    }
-    if (rows.length === 0) {
-        print("还没有添加游戏文件夹，运行 bloomery folder add <路径>");
         return;
     }
 
     const table = rows.map((row) => [
         row.name,
-        row.path,
-        String(row.instances),
-        row.selected ? "是" : "",
-        folderState(row),
+        row.latest ?? "取不到",
+        String(row.total),
+        INSTALLABLE.includes(row.name) ? "已支持" : "未实现",
     ]);
     print(
-        [
-            `已保存 ${rows.length} 个游戏文件夹`,
-            ...renderTable(table, {
-                indent: "  ",
-                right: [2],
-                header: ["标识", "路径", "实例", "当前", "状态"],
-            }),
-        ].join("\n"),
+        renderTable(table, { indent: "  ", header: ["加载器", "最新版", "版本数", "安装"] }).join(
+            "\n",
+        ),
     );
+    print("");
+    print("看某个加载器的全部版本：bloomery view loader <加载器> [--page <n>]");
 }
 
-function folderState(row: FolderListRow): string {
-    return row.exists ? (row.writable ? "可写" : "只读") : "目录不存在";
-}
+async function versions(
+    name: LoaderName,
+    network: TransferOptions,
+    command: ViewCommand,
+    ctx: Context,
+): Promise<void> {
+    const list = await listLoaderVersions(name, network);
+    if (list.length === 0) {
+        throw new AppError("cli", "VersionNotFound", {
+            context: { detail: `${name} 的版本清单是空的` },
+        });
+    }
 
-export function printFolder(view: FolderView, ctx: Context): void {
+    const page = paginate(list, command.page ?? 1, PER_PAGE);
     if (ctx.json) {
-        print(JSON.stringify(folderJson(view), null, 4));
+        print(
+            JSON.stringify(
+                {
+                    loader: name,
+                    page: page.page,
+                    pages: page.pages,
+                    perPage: page.perPage,
+                    total: page.total,
+                    versions: page.items,
+                },
+                null,
+                4,
+            ),
+        );
         return;
     }
-    print(folderText(view));
+
+    const table = page.items.map((item) => [
+        item.version,
+        item.stable === null ? "未知" : item.stable ? "正式" : "测试",
+        item.gameVersion ?? "",
+    ]);
+    print(`${name} 可用版本：第 ${page.page}/${page.pages} 页，共 ${page.total} 条`);
+    print(renderTable(table, { indent: "  ", header: ["版本", "状态", "游戏版本"] }).join("\n"));
+    if (page.page < page.pages) {
+        print("");
+        print(`下一页：bloomery view loader ${name} --page ${page.page + 1}`);
+    }
+    if (!INSTALLABLE.includes(name)) {
+        print("");
+        print(`注意：安装目前只支持 ${INSTALLABLE.join(" / ")}，${name} 只列版本`);
+    }
 }
 
-export function folderText(view: FolderView): string {
-    const lines = [`${view.name}  ${view.path}`];
-    if (!view.exists) {
-        lines.push("  目录不存在");
-    } else if (view.instances.length === 0) {
-        lines.push("  没有扫到版本");
+function asLoader(text: string): LoaderName {
+    const name = text.trim().toLowerCase();
+    if (!(NAMES as readonly string[]).includes(name)) {
+        throw new AppError("cli", "UsageError", {
+            context: { detail: `加载器只能是 ${NAMES.join(" / ")}：${text}` },
+        });
     }
-
-    if (view.instances.length > 0) {
-        const rows = view.instances.map((instance) => [
-            instance.id,
-            instance.gameVersion ?? "-",
-            loaderText(instance),
-            instance.type ?? "-",
-            marksOf(instance),
-        ]);
-        lines.push(
-            ...renderTable(rows, {
-                indent: "  ",
-                header: ["版本", "游戏版本", "加载器", "类型", "备注"],
-            }),
-        );
-    }
-
-    if (view.dropped.length > 0) {
-        lines.push(`  清单里失效的：${view.dropped.join(", ")}`);
-    }
-    return lines.join("\n");
+    return name as LoaderName;
 }
 
-export function folderJson(view: FolderView): unknown {
+function transferOf(network: Network, download: DownloadSetting): TransferOptions {
     return {
-        id: view.id,
-        name: view.name,
-        path: view.path,
-        exists: view.exists,
-        writable: view.writable,
-        versionsDirectory: view.versionsDirectory,
-        dropped: view.dropped,
-        instances: view.instances.map(instanceJson),
-    };
-}
-
-export function instanceJson(instance: InstanceView): unknown {
-    return {
-        id: instance.id,
-        name: instance.name,
-        target: instance.target,
-        gameVersion: instance.gameVersion,
-        loader: instance.loader,
-        state: instance.state,
-        type: instance.type,
-        directory: instance.directory,
-        chain: instance.chain,
-        configured: instance.configured,
-        discovered: instance.discovered,
-        problem: instance.problem,
-    };
-}
-
-// 清单里的一行后面的标记
-function marksOf(instance: InstanceView): string {
-    const marks: string[] = [];
-    if (instance.discovered) {
-        marks.push("磁盘发现");
-    }
-    if (instance.state !== "ready") {
-        marks.push(STATE[instance.state]);
-    }
-    return marks.length === 0 ? "" : `[${marks.join(" ")}]`;
-}
-
-export function loaderText(instance: InstanceView): string {
-    const { type, version } = instance.loader;
-    if (type === "vanilla") {
-        return "原版";
-    }
-    return version === null || version === undefined ? type : `${type} ${version}`;
-}
-
-export function printInstance(folderPath: string, instance: InstanceView, ctx: Context): void {
-    if (ctx.json) {
-        print(JSON.stringify(instanceDetail(folderPath, instance), null, 4));
-        return;
-    }
-    print(instanceDetailText(folderPath, instance));
-}
-
-export function instanceDetail(folderPath: string, instance: InstanceView): unknown {
-    return {
-        folder: folderPath,
-        ...(instanceJson(instance) as object),
-        descriptor: descriptorSummary(instance),
-    };
-}
-
-export function instanceDetailText(folderPath: string, instance: InstanceView): string {
-    const descriptor = instance.descriptor;
-    const lines = [
-        `${instance.id}${instance.name === instance.id ? "" : `  (${instance.name})`}`,
-        `  文件夹     ${folderPath}`,
-        `  目录       ${instance.directory}`,
-        `  状态       ${STATE[instance.state]}`,
-        `  继承       ${instance.chain.length > 0 ? instance.chain.join(" → ") : "-"}`,
-        `  加载器     ${loaderText(instance)}`,
-        `  类型       ${instance.type ?? "-"}`,
-    ];
-    if (instance.problem !== null) {
-        lines.push(`  问题       ${instance.problem}`);
-    }
-    if (descriptor !== null) {
-        lines.push(
-            `  主类       ${descriptor.mainClass ?? "-"}`,
-            `  客户端 jar ${descriptor.jar ?? "-"}`,
-            `  资源索引   ${descriptor.assetIndex?.id ?? descriptor.assets ?? "-"}`,
-            `  Java       ${descriptor.javaVersion?.majorVersion ?? "-"}`,
-            `  库         ${descriptor.libraries.length}`,
-            `  参数       game ${descriptor.arguments.game.length} / jvm ${descriptor.arguments.jvm.length}`,
-            `  版本 json  ${descriptor.json}`,
-        );
-    }
-    return lines.join("\n");
-}
-
-// 合并后的摘要，原始 json 太长不直接给
-function descriptorSummary(instance: InstanceView): unknown {
-    const descriptor = instance.descriptor;
-    if (descriptor === null) {
-        return null;
-    }
-    return {
-        id: descriptor.id,
-        type: descriptor.type,
-        mainClass: descriptor.mainClass,
-        jar: descriptor.jar,
-        assets: descriptor.assets,
-        assetIndex: descriptor.assetIndex?.id ?? null,
-        javaVersion: descriptor.javaVersion?.majorVersion ?? null,
-        libraries: descriptor.libraries.length,
-        natives: descriptor.libraries.filter((library) => Object.keys(library.natives).length > 0)
-            .length,
-        downloads: Object.keys(descriptor.downloads),
-        arguments: {
-            game: descriptor.arguments.game.length,
-            jvm: descriptor.arguments.jvm.length,
-        },
-        minecraftArguments: descriptor.minecraftArguments !== null,
-        json: descriptor.json,
+        timeoutMs: network.timeoutMs,
+        retries: network.retries,
+        proxy: network.proxy ?? null,
+        noProxy: network.noProxy,
+        verify: download.verify,
+        concurrency: network.concurrency,
+        sources: sourcesOf(download),
     };
 }

@@ -62,8 +62,11 @@ export {
 export {
     defaultVersionName,
     fetchLoaderProfile,
+    listLoaderVersions,
     parseLoaderSpec,
     resolveLoaderVersion,
     type LoaderName,
     type LoaderSpec,
+    type LoaderVersion,
+    type Transport,
 } from "./loader.ts";

@@ -10,7 +10,7 @@ import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
 import { pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, VersionCommand } from "../parse.ts";
-import { printFolder, printInstance } from "./view.ts";
+import { printFolder, printInstance } from "./render.ts";
 
 export async function runVersion(command: VersionCommand, ctx: Context): Promise<void> {
     const setting = await loadSetting();

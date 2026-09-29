@@ -17,9 +17,27 @@ const log = logger("loader");
 
 const FABRIC_META = "https://meta.fabricmc.net/v2/versions/loader";
 
+// 各家加载器的版本清单，形状各不相同，见下面的解析
+const LOADER_LISTS: Record<LoaderName, string> = {
+    fabric: "https://meta.fabricmc.net/v2/versions/loader",
+    quilt: "https://meta.quiltmc.org/v3/versions/loader",
+    forge: "https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json",
+    neoforge: "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge",
+};
+
+const UNSTABLE = /(alpha|beta|rc|snapshot)/i;
+
 export type LoaderName = "fabric" | "forge" | "neoforge" | "quilt";
 
 const NAMES: readonly LoaderName[] = ["fabric", "forge", "neoforge", "quilt"];
+
+export interface LoaderVersion {
+    readonly version: string;
+    /** forge 的清单按游戏版本分组，其余为 null */
+    readonly gameVersion: string | null;
+    /** 认不出就为 null：fabric 直接给，其余按版本号里的 beta/rc 猜 */
+    readonly stable: boolean | null;
+}
 
 export interface LoaderSpec {
     readonly name: LoaderName;
@@ -39,6 +57,110 @@ export function parseLoaderSpec(text: string): LoaderSpec | undefined {
     return version === "" || version.toLowerCase() === "latest"
         ? { name: name as LoaderName, version: null }
         : { name: name as LoaderName, version };
+}
+
+export type Transport = (url: string, options: FetchOptions) => Promise<Buffer>;
+
+// 各加载器的可用版本，新到旧；forge 与 neoforge 的清单是升序，翻过来
+export async function listLoaderVersions(
+    name: LoaderName,
+    options: FetchOptions,
+    transport?: Transport,
+): Promise<readonly LoaderVersion[]> {
+    const raw = await fetchJson(LOADER_LISTS[name], options, transport);
+    switch (name) {
+        case "fabric":
+        case "quilt":
+            return plainList(raw);
+        case "forge":
+            return byGame(raw);
+        case "neoforge":
+            return tagged(raw);
+    }
+}
+
+// fabric 与 quilt：[{ version, stable? }]，接口已按新到旧排
+function plainList(raw: unknown): LoaderVersion[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const out: LoaderVersion[] = [];
+    for (const item of raw) {
+        const entry = object(item, "loader[]");
+        const version = entry?.["version"];
+        if (typeof version !== "string") {
+            continue;
+        }
+        const stable = entry?.["stable"];
+        out.push({
+            version,
+            gameVersion: null,
+            stable: typeof stable === "boolean" ? stable : !UNSTABLE.test(version),
+        });
+    }
+    return out;
+}
+
+// forge：{ "1.20.6": ["1.20.6-56.0.1", ...] }，值是完整版本号
+function byGame(raw: unknown): LoaderVersion[] {
+    const grouped = object(raw, "forge.maven-metadata");
+    if (grouped === undefined) {
+        return [];
+    }
+    const out: LoaderVersion[] = [];
+    for (const [game, value] of Object.entries(grouped)) {
+        if (!Array.isArray(value)) {
+            continue;
+        }
+        for (const item of value) {
+            if (typeof item === "string") {
+                out.push({ version: item, gameVersion: game, stable: !UNSTABLE.test(item) });
+            }
+        }
+    }
+    return out.sort((left, right) => compare(right.version, left.version));
+}
+
+// neoforge：{ versions: ["20.2.3-beta", ...] }
+function tagged(raw: unknown): LoaderVersion[] {
+    const container = object(raw, "neoforge.versions");
+    const list = container?.["versions"];
+    if (!Array.isArray(list)) {
+        return [];
+    }
+    return list
+        .filter((item): item is string => typeof item === "string")
+        .map((version) => ({ version, gameVersion: null, stable: !UNSTABLE.test(version) }))
+        .sort((left, right) => compare(right.version, left.version));
+}
+
+// 版本号按数字段比大小，纯字典序会把 1.9 排到 1.10 后面
+function compare(left: string, right: string): number {
+    const a = left.split(/[.+-]/);
+    const b = right.split(/[.+-]/);
+    for (let index = 0; index < Math.max(a.length, b.length); index++) {
+        const x = a[index];
+        const y = b[index];
+        if (x === undefined) {
+            return -1;
+        }
+        if (y === undefined) {
+            return 1;
+        }
+        const nx = Number.parseInt(x, 10);
+        const ny = Number.parseInt(y, 10);
+        if (Number.isFinite(nx) && Number.isFinite(ny)) {
+            if (nx !== ny) {
+                return nx - ny;
+            }
+            continue;
+        }
+        const order = x.localeCompare(y);
+        if (order !== 0) {
+            return order;
+        }
+    }
+    return 0;
 }
 
 // 版本目录与显示名：不带加载器就是版本号本身，带加载器接在后面
@@ -117,7 +239,11 @@ async function latestFabric(game: string, options: FetchOptions): Promise<string
     return picked.version;
 }
 
-async function fetchJson(url: string, options: FetchOptions): Promise<unknown> {
-    const buffer = await fetchBuffer(url, options);
+async function fetchJson(
+    url: string,
+    options: FetchOptions,
+    transport?: Transport,
+): Promise<unknown> {
+    const buffer = await (transport ?? fetchBuffer)(url, options);
     return parseJson(buffer.toString("utf8"), url);
 }

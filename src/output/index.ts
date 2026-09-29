@@ -32,3 +32,4 @@ export {
 } from "./progress.ts";
 export { renderTable, type TableOptions } from "./table.ts";
 export { displayWidth } from "./text.ts";
+export { paginate, type Page } from "./page.ts";

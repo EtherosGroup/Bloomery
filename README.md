@@ -52,6 +52,16 @@ bloomery mod install sodium-extra --deps            # 连必需依赖一起装
 
 装到哪个实例按 `--version` 定，省略就用上次启动的那个。文件落在该实例自己的 `mods/` 下，同名文件已存在会跳过，`--dry-run` 只算不装。目前只接了 Modrinth（`setting.json` 里的 `mod.provider`）。
 
+### 看加载器版本
+
+```bash
+bloomery view loader                  # 四种加载器的最新版与版本数
+bloomery view loader fabric           # 某个加载器的全部版本，每页 20 条
+bloomery view loader fabric --page 2  # 翻页
+```
+
+版本清单直接取自各加载器的官方接口（Fabric / Quilt 的 meta、Forge 与 NeoForge 的 maven）。安装目前只支持 fabric，另外三种的版本号可以查，装的时候会提示未实现。
+
 `bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
 ## 微软登录

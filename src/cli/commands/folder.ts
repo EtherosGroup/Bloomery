@@ -20,7 +20,7 @@ import {
     type FolderView,
 } from "../../version/index.ts";
 import type { Context, FolderCommand } from "../parse.ts";
-import { folderJson, folderText, printFolderList, type FolderListRow } from "./view.ts";
+import { folderJson, folderText, printFolderList, type FolderListRow } from "./render.ts";
 
 const log = logger("folder");
 

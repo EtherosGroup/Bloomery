@@ -14,6 +14,7 @@ import { runLaunch } from "./commands/launch.ts";
 import { runMod } from "./commands/mod.ts";
 import { runModpack } from "./commands/modpack.ts";
 import { runVersion } from "./commands/version.ts";
+import { runView } from "./commands/view.ts";
 import {
     optionalInteger,
     optionalPositional,
@@ -152,6 +153,26 @@ export const COMMANDS: CommandTable = {
             limit: optionalInteger(values, "limit"),
         }),
         run: runMod,
+    },
+
+    view: {
+        summary: "查看加载器可用的版本",
+        usage: "view loader [name] [--page <n>]",
+        options: {
+            page: { type: "string", value: "<n>", summary: "页码，从 1 开始，每页 20 条" },
+        },
+        positionals: { names: ["action", "loader"], required: 1 },
+        toCommand: (values, positionals) => ({
+            name: "view",
+            action: requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["loader"] as const,
+                "action",
+            ),
+            loader: optionalPositional(positionals, 1, "loader"),
+            page: optionalInteger(values, "page"),
+        }),
+        run: runView,
     },
 
     modpack: {
