@@ -133,8 +133,9 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
 
     const versionDir = join(input.folderPath, "versions", name);
     const jsonPath = join(versionDir, `${name}.json`);
-    // 目录名、json 的 id、客户端 jar 名统一成 name，启动时按 id 找 jar 才对得上
-    await writeAtomic(jsonPath, `${JSON.stringify({ ...json, id: name }, null, 4)}\n`);
+    // json 的 id 保持原样：那是游戏版本号，改写掉就再也认不出这份是 1.20.6 了
+    // 目录名才是显示名，客户端 jar 也跟着目录名放
+    await writeAtomic(jsonPath, `${JSON.stringify(json, null, 4)}\n`);
 
     const read = await readDescriptor(jsonPath, name);
     if (read.descriptor === null) {

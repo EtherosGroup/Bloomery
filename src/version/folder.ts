@@ -294,7 +294,9 @@ function discoveredView(
         };
     }
 
-    const target = own.inheritsFrom ?? version.id;
+    // 游戏版本：有 inheritsFrom 就是它，否则取 json 自己的 id
+    // 目录名可能与 id 不同（install --name），那时 id 才是游戏版本
+    const target = own.inheritsFrom ?? own.id;
     const resolved = resolveDescriptor(byId, version.id);
     if (resolved === undefined) {
         return {

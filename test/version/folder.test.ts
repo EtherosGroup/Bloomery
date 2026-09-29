@@ -126,6 +126,21 @@ test("关掉自动发现", async () => {
     });
 });
 
+test("目录名与 json 的 id 不同时，游戏版本取 id", async () => {
+    await inTemp(async (root) => {
+        // install --name test6 装出来的样子：目录叫 test6，json 里还是 1.20.6
+        await mkdir(join(root, "versions", "test6"), { recursive: true });
+        await writeFile(
+            join(root, "versions", "test6", "test6.json"),
+            JSON.stringify({ id: "1.20.6", type: "release", mainClass: "x.Y" }),
+        );
+
+        const view = await readFolder(folderAt(root));
+        assert.equal(view.instances[0]?.id, "test6");
+        assert.equal(view.instances[0]?.target, "1.20.6");
+    });
+});
+
 test("目录不存在", async () => {
     await inTemp(async (root) => {
         const view = await readFolder(

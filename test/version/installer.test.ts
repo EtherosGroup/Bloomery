@@ -231,8 +231,9 @@ test("--name 决定目录名与显示名", async () => {
         const json = JSON.parse(
             await readFile(join(fixture.root, "versions", "我的整合", "我的整合.json"), "utf8"),
         ) as { id: string };
-        // json 的 id 跟着目录名走，启动时按 id 找 jar 才对得上
-        assert.equal(json.id, "我的整合");
+        // json 的 id 保持游戏版本号，改写掉就再也认不出这是哪一版
+        assert.equal(json.id, "t");
+        // 客户端 jar 跟着目录名放
         assert.equal(
             await pathExists(join(fixture.root, "versions", "我的整合", "我的整合.jar")),
             true,
