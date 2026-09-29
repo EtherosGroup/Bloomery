@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Privacy policy — Bloomery</title>
+        <meta
+            name="description"
+            content="Bloomery's privacy policy: everything runs on your computer, there is no Bloomery server, no telemetry and no analytics."
+        />
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <header>
+            <div class="wrap nav">
+                <a class="brand" href="index.html">
+                    <svg viewBox="0 0 32 32" aria-hidden="true">
+                        <path
+                            d="M6 26V11l10-5 10 5v15H6z"
+                            fill="none"
+                            stroke="#e2703a"
+                            stroke-width="2.4"
+                            stroke-linejoin="round"
+                        />
+                        <path
+                            d="M16 12c2.6 2.2 3.9 4.1 3.9 6.1a3.9 3.9 0 1 1-7.8 0c0-2 1.3-3.9 3.9-6.1z"
+                            fill="#e2703a"
+                        />
+                    </svg>
+                    Bloomery
+                </a>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#sign-in">Sign-in</a>
+                <a href="index.html#install">Install</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="terms.html">Terms</a>
+                <a href="https://github.com/EtherosGroup/Bloomery">GitHub</a>
+            </div>
+        </header>
+
+        <main class="wrap doc">
+            <h1>Privacy policy</h1>
+            <p class="updated">Last updated: 2026-09-29</p>
+
+            <p>
+                Bloomery is a launcher that runs on your own computer. There is no Bloomery account,
+                no Bloomery server, and no analytics. We do not collect, receive or store your data.
+                This page describes exactly what the application keeps on your machine and which
+                third-party services it talks to when you use it.
+            </p>
+
+            <h2>1. What Bloomery stores on your computer</h2>
+            <p>
+                Everything Bloomery keeps is written to your local configuration directory (<code
+                    >~/.config/bloomery</code
+                >
+                on Linux and macOS, <code>%USERPROFILE%\.config\bloomery</code> on Windows) and to
+                the game folder you choose.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Location</th>
+                        <th>Contents and purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>setting.json</code></td>
+                        <td>configuration directory</td>
+                        <td>
+                            Your game folders, the selected account, the Java list, download source,
+                            proxy and window/memory preferences.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>accounts.json</code></td>
+                        <td>configuration directory</td>
+                        <td>
+                            Account list. Offline accounts store a name and an optional UUID. A
+                            Microsoft account stores the game name, UUID and XUID returned by
+                            Minecraft services, an OAuth refresh token, and a short-lived Minecraft
+                            access token with its expiry. The file is created with owner-only
+                            permissions (<code>0600</code>).
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>logs/latest.log</code></td>
+                        <td>configuration directory</td>
+                        <td>
+                            Diagnostics for troubleshooting: the command that ran, library and asset
+                            counts, download summaries. Tokens and passwords are never written to
+                            the log.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <code>versions/</code>, <code>libraries/</code>, <code>assets/</code>
+                        </td>
+                        <td>your game folder</td>
+                        <td>
+                            The game itself: version manifests, the client jar, libraries, native
+                            libraries, assets and your worlds.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>2. What leaves your computer, and to whom</h2>
+            <p>
+                Bloomery contacts only the services needed to install and start the game. No data is
+                sent to the authors of Bloomery.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Why</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>login.microsoftonline.com</code></td>
+                        <td>
+                            Sign-in with the OAuth 2.0 device authorization grant, and refreshing
+                            the sign-in later. Your credentials are entered on Microsoft's page,
+                            never in Bloomery.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <code>user.auth.xboxlive.com</code>,
+                            <code>xsts.auth.xboxlive.com</code>
+                        </td>
+                        <td>
+                            Exchange the Microsoft sign-in for an Xbox Live token and an XSTS token.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>api.minecraftservices.com</code></td>
+                        <td>
+                            Obtain a Minecraft access token and read your profile (game name, UUID)
+                            and game ownership.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <code>piston-meta.mojang.com</code>,
+                            <code>piston-data.mojang.com</code>,
+                            <code>libraries.minecraft.net</code>,
+                            <code>resources.download.minecraft.net</code>
+                        </td>
+                        <td>
+                            Version list, client jar, libraries, native libraries and game assets.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>BMCLAPI mirror (optional)</td>
+                        <td>
+                            Only if you switch the download source to the mirror in your settings.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Your own HTTP proxy (optional)</td>
+                        <td>
+                            Only if you configure one; Bloomery sends the same requests through it.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>3. What Bloomery never does</h2>
+            <ul>
+                <li>It never asks for, sees or stores your Microsoft password.</li>
+                <li>It never writes access tokens, refresh tokens or device codes to log files.</li>
+                <li>It collects no telemetry, no usage statistics and no crash reports.</li>
+                <li>It contains no advertising and no third-party tracking code.</li>
+                <li>
+                    It sells, rents or shares your data with anyone — there is no data on our side
+                    to share.
+                </li>
+                <li>This website loads no external fonts, scripts, images or analytics.</li>
+            </ul>
+
+            <h2>4. Deleting your data</h2>
+            <ul>
+                <li>
+                    <code>bloomery auth logout &lt;name&gt; --type microsoft</code> removes the
+                    stored account, including its tokens.
+                </li>
+                <li>
+                    Deleting the configuration directory removes every setting, account and log.
+                </li>
+                <li>
+                    You can also revoke Bloomery's access to your Microsoft account at
+                    <a href="https://account.live.com/consent/Manage"
+                        >account.live.com/consent/Manage</a
+                    >.
+                </li>
+                <li>
+                    <code>npm uninstall -g bloomery</code> removes the application; deleting your
+                    game folder removes the installed game data.
+                </li>
+            </ul>
+
+            <h2>5. Children</h2>
+            <p>
+                Bloomery is not directed at children under the age of digital consent in their
+                country. Minecraft accounts and their use are governed by Microsoft's and Mojang's
+                own terms.
+            </p>
+
+            <h2>6. Changes to this policy</h2>
+            <p>
+                This policy is versioned with the source code in the
+                <a href="https://github.com/EtherosGroup/Bloomery">Bloomery repository</a>; the date
+                at the top changes when it does. Material changes are noted in the release notes.
+            </p>
+
+            <h2>7. Contact</h2>
+            <!-- 想加邮箱就替换下面这句，评审一般更希望看到可直接联系的地址 -->
+            <p>
+                Questions about this policy:
+                <a href="https://github.com/EtherosGroup/Bloomery/issues">open an issue</a> in the
+                project repository.
+            </p>
+        </main>
+
+        <footer>
+            <div class="wrap">
+                <p>
+                    Bloomery is free and open source software, licensed under the Apache License
+                    2.0.
+                </p>
+                <p>
+                    Not an official Minecraft product. Not approved by or associated with Mojang
+                    Studios or Microsoft.
+                </p>
+                <div class="links">
+                    <a href="index.html">Home</a>
+                    <a href="terms.html">Terms of use</a>
+                    <a href="https://github.com/EtherosGroup/Bloomery">GitHub</a>
+                </div>
+            </div>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Bloomery — open-source Minecraft: Java Edition launcher for the command line</title>
+        <meta
+            name="description"
+            content="Bloomery is a free, open-source Minecraft: Java Edition launcher that runs in your terminal. Isolated versions, vanilla and modded installs, Microsoft account sign-in via OAuth 2.0 device code, zero runtime dependencies."
+        />
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <header>
+            <div class="wrap nav">
+                <a class="brand" href="index.html">
+                    <svg viewBox="0 0 32 32" aria-hidden="true">
+                        <path
+                            d="M6 26V11l10-5 10 5v15H6z"
+                            fill="none"
+                            stroke="#e2703a"
+                            stroke-width="2.4"
+                            stroke-linejoin="round"
+                        />
+                        <path
+                            d="M16 12c2.6 2.2 3.9 4.1 3.9 6.1a3.9 3.9 0 1 1-7.8 0c0-2 1.3-3.9 3.9-6.1z"
+                            fill="#e2703a"
+                        />
+                    </svg>
+                    Bloomery
+                </a>
+                <a href="#features">Features</a>
+                <a href="#sign-in">Sign-in</a>
+                <a href="#install">Install</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="terms.html">Terms</a>
+                <a href="https://github.com/EtherosGroup/Bloomery">GitHub</a>
+            </div>
+        </header>
+
+        <main>
+            <div class="wrap hero">
+                <h1>Minecraft: Java Edition, launched from your terminal.</h1>
+                <p class="lead">
+                    Bloomery is a free, open-source launcher for Minecraft: Java Edition. It
+                    installs versions and mod loaders, signs in with your own Microsoft account, and
+                    starts the game — with no runtime dependencies beyond Node.js.
+                </p>
+                <div class="actions">
+                    <a class="button primary" href="#install">Install</a>
+                    <a class="button" href="https://github.com/EtherosGroup/Bloomery"
+                        >Source code</a
+                    >
+                    <a class="button" href="https://www.npmjs.com/package/bloomery">npm package</a>
+                </div>
+
+                <div class="terminal">
+                    <div class="bar">
+                        <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+                        <span>bloomery — sample session</span>
+                    </div>
+                    <pre><span class="dim">$</span> bloomery folder add ~/Game/Minecraft
+<span class="dim">$</span> bloomery auth login --type microsoft
+<span class="dim">$</span> bloomery install 1.20.6 --loader fabric@latest
+<span class="dim">$</span> bloomery launch 1.20.6
+
+<span class="dim">启动 1.20.6</span>
+<span class="accent">  Java</span>      /usr/lib/jvm/default-java/bin/java（21 · jdk · x64）
+<span class="accent">  账户</span>      cibocaz（微软）
+<span class="accent">  目录</span>      ~/Game/Minecraft/versions/1.20.6
+<span class="accent">  classpath</span> 48 项
+<span class="accent">  natives</span>   12 个 jar 解出 13 个文件
+<span class="accent">  资源</span>      16：3862/3862</pre>
+                </div>
+                <p class="sub" style="font-size: 0.88rem; margin-top: 0.75rem">
+                    Sample session, abbreviated. CLI messages are currently in Chinese.
+                </p>
+            </div>
+
+            <section id="features">
+                <div class="wrap">
+                    <h2>What it does</h2>
+                    <p class="sub">
+                        Bloomery keeps the standard <code>.minecraft</code> layout used by other
+                        launchers, so the same game folder can be shared between them.
+                    </p>
+                    <div class="grid">
+                        <div class="card">
+                            <h3>Isolated versions</h3>
+                            <p>
+                                Every version lives in its own directory under
+                                <code>versions/&lt;id&gt;/</code>, with its own mods, saves and
+                                config.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Vanilla and mod loaders</h3>
+                            <p>
+                                Installs vanilla releases plus Fabric, Quilt, Forge and NeoForge, at
+                                a pinned loader version or the latest.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Microsoft and offline accounts</h3>
+                            <p>
+                                Sign in with the Microsoft account that owns the game, or play
+                                offline on LAN and private servers.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Java you already have</h3>
+                            <p>
+                                Scans installed JDKs and JREs, then picks one that satisfies the
+                                version's requirement.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>No runtime dependencies</h3>
+                            <p>
+                                Plain Node.js and the standard library. Nothing bundled, nothing
+                                downloaded behind your back.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Scriptable</h3>
+                            <p>
+                                Every command takes <code>--json</code>, and <code>--dry-run</code>
+                                shows the exact command line before anything starts.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Mirror and proxy aware</h3>
+                            <p>
+                                Downloads from official Mojang sources, with an optional BMCLAPI
+                                mirror and HTTP proxy support.
+                            </p>
+                        </div>
+                        <div class="card">
+                            <h3>Open source</h3>
+                            <p>
+                                Apache-2.0, developed in the open at
+                                <a href="https://github.com/EtherosGroup/Bloomery"
+                                    >EtherosGroup/Bloomery</a
+                                >.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="sign-in">
+                <div class="wrap">
+                    <h2>How Microsoft sign-in works</h2>
+                    <p class="sub">
+                        Bloomery uses the OAuth 2.0 device authorization grant, the flow designed
+                        for apps without a browser — like a command-line tool.
+                    </p>
+                    <ol class="steps">
+                        <li>
+                            <strong>Start the sign-in</strong>
+                            <p>
+                                <code>bloomery auth login --type microsoft</code> prints a short
+                                code and a link to Microsoft's sign-in page.
+                            </p>
+                        </li>
+                        <li>
+                            <strong>Approve it on Microsoft's own page</strong>
+                            <p>
+                                You open the link and enter the code yourself. Your password and any
+                                multi-factor prompt are handled entirely by Microsoft.
+                            </p>
+                        </li>
+                        <li>
+                            <strong>The launcher gets tokens, not credentials</strong>
+                            <p>
+                                Bloomery exchanges the approved sign-in for an Xbox Live token, an
+                                XSTS token and a Minecraft access token, all of which stay on your
+                                machine.
+                            </p>
+                        </li>
+                    </ol>
+                    <p class="note">
+                        <strong>Bloomery never sees your password.</strong> Sign-in happens on
+                        Microsoft's page; the launcher only receives the resulting tokens, stored
+                        locally in your own configuration directory with owner-only permissions. See
+                        the <a href="privacy.html">privacy policy</a> for the details.
+                    </p>
+                </div>
+            </section>
+
+            <section id="install">
+                <div class="wrap">
+                    <h2>Install</h2>
+                    <p class="sub">
+                        Requires Node.js 20 or newer, and a Minecraft: Java Edition account you own
+                        if you want to play online.
+                    </p>
+                    <pre class="inline">npm install -g bloomery</pre>
+                    <p class="sub">Or build from source:</p>
+                    <pre class="inline">npm install -g github:EtherosGroup/Bloomery</pre>
+                    <p class="sub">
+                        Then check what is available with <code>bloomery --help</code>, add your
+                        game folder with <code>bloomery folder add &lt;dir&gt;</code>, and start a
+                        version with <code>bloomery launch &lt;version&gt;</code>.
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="wrap">
+                <p>
+                    Bloomery is free and open source software, licensed under the Apache License
+                    2.0.
+                </p>
+                <p>
+                    Not an official Minecraft product. Not approved by or associated with Mojang
+                    Studios or Microsoft.
+                </p>
+                <div class="links">
+                    <a href="https://github.com/EtherosGroup/Bloomery">GitHub</a>
+                    <a href="https://github.com/EtherosGroup/Bloomery/issues"
+                        >Issues &amp; contact</a
+                    >
+                    <a href="https://www.npmjs.com/package/bloomery">npm</a>
+                    <a href="privacy.html">Privacy policy</a>
+                    <a href="terms.html">Terms of use</a>
+                </div>
+            </div>
+        </footer>
+    </body>
+</html>
