@@ -26,8 +26,11 @@ function overview(): string {
         "",
         "命令",
     ];
-    for (const spec of Object.values(CLI_SPEC.commands)) {
-        lines.push(`  ${spec.usage.padEnd(42)}${spec.summary}`);
+    // 列宽按最长的用法串取，命令写长了也不会跟说明粘在一起
+    const specs = Object.values(CLI_SPEC.commands);
+    const width = Math.max(...specs.map((spec) => spec.usage.length)) + 2;
+    for (const spec of specs) {
+        lines.push(`  ${spec.usage.padEnd(width)}${spec.summary}`);
     }
     lines.push("", `运行 ${NAME} <命令> --help 查看命令选项`);
     return lines.join("\n");
