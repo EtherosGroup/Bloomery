@@ -74,4 +74,4 @@ Apache-2.0，见 [LICENSE](LICENSE)。
 
 ## 联系
 
-官网 <https://bloomery.xyit.net>，邮箱 xiangyuanhulian@outlook.com，或在 [Issues](https://github.com/EtherosGroup/Bloomery/issues) 里提。
+官网 <https://bloomery.skilfully.cn>，邮箱 xiangyuanhulian@outlook.com，或在 [Issues](https://github.com/EtherosGroup/Bloomery/issues) 里提。
