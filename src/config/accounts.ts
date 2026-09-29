@@ -14,7 +14,13 @@ import { accountsFile } from "../platform/index.ts";
 import { defaultAccounts } from "./defaults.ts";
 import { migrate, versionOf } from "./migrate.ts";
 import { object, parseJson, reader } from "./read.ts";
-import { CURRENT_SCHEMA, type Account, type Accounts } from "./types.ts";
+import {
+    CURRENT_SCHEMA,
+    type Account,
+    type Accounts,
+    type MicrosoftAccount,
+    type OfflineAccount,
+} from "./types.ts";
 
 const log = logger("config");
 const MODE = 0o600;
@@ -106,4 +112,31 @@ function readAccount(value: unknown, at: string, extras: string[]): Account | un
     };
     r.extra();
     return account;
+}
+
+/* ---------- 构造 ---------- */
+
+export type AccountType = Account["type"];
+
+// 账号 id 是 <游戏名>@<类型>：与显示名分开，同一个游戏名可以同时有离线与微软两条
+export function accountId(name: string, type: AccountType): string {
+    return `${name}@${type}`;
+}
+
+export function offlineAccount(name: string, uuid: string | null = null): OfflineAccount {
+    return { id: accountId(name, "offline"), type: "offline", name, uuid };
+}
+
+// 微软登录还没做：先记一条凭据为空的，启动时会提示需要重新登录
+export function microsoftAccount(name: string): MicrosoftAccount {
+    return {
+        id: accountId(name, "microsoft"),
+        type: "microsoft",
+        name,
+        uuid: null,
+        xuid: null,
+        refreshToken: null,
+        accessToken: null,
+        expiresAt: null,
+    };
 }

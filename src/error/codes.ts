@@ -21,5 +21,6 @@ export type ErrorCode =
     | "DependencyMissing"
     | "DownloadFailed"
     | "AccountNotFound"
+    | "AccountExists"
     | "AccountExpired"
     | "LaunchFailed";

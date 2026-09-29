@@ -34,6 +34,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     DependencyMissing: "依赖文件缺失",
     DownloadFailed: "下载失败",
     AccountNotFound: "找不到可用的账户",
+    AccountExists: "这个账号已经在清单里",
     AccountExpired: "账户凭据需要刷新",
     LaunchFailed: "游戏进程没起来",
 };
@@ -57,6 +58,7 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     DependencyMissing: 1,
     DownloadFailed: 1,
     AccountNotFound: 1,
+    AccountExists: 1,
     AccountExpired: 1,
     LaunchFailed: 1,
 };
@@ -71,6 +73,7 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     JavaNotFound: "运行 bloomery java scan 扫描本机的 Java",
     JavaDuplicate: "运行 bloomery java list 查看已记录的 Java",
     AccountNotFound: "运行 bloomery auth login 添加账户，或用 --account <名字> 指定",
+    AccountExists: "运行 bloomery auth list 查看已有账号，换一个游戏名或类型",
     AccountExpired: "运行 bloomery auth login 重新登录",
     VersionExists: "使用 --name <name> 指定新的版本名称",
     DownloadFailed: "检查网络，或设置里的下载源与代理",

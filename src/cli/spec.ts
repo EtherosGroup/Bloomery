@@ -82,17 +82,28 @@ export const COMMANDS: CommandTable = {
 
     auth: {
         summary: "账户管理",
-        usage: "auth <login|logout|list>",
-        options: {},
-        positionals: { names: ["action"], required: 1 },
-        toCommand: (_values, positionals) => ({
-            name: "auth",
-            action: requireChoice(
+        usage: "auth <login|logout|list> [username] [--type <name>]",
+        options: {
+            type: {
+                type: "string",
+                value: "<name>",
+                summary: "账号类型：offline（默认）/ microsoft",
+            },
+        },
+        positionals: { names: ["action", "username"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
                 ["login", "logout", "list"] as const,
                 "action",
-            ),
-        }),
+            );
+            // list 不用游戏名，login 与 logout 必给
+            const username =
+                action === "list"
+                    ? optionalPositional(positionals, 1, "username")
+                    : requirePositional(positionals, 1, "username");
+            return { name: "auth", action, username, type: optionalString(values, "type") };
+        },
         run: runAuth,
     },
 

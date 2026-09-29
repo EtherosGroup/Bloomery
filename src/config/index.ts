@@ -3,7 +3,15 @@
  * @author IsCibocaz
  * @since 1.0.0
  */
-export { accountsReadOnly, loadAccounts, saveAccounts } from "./accounts.ts";
+export {
+    accountId,
+    accountsReadOnly,
+    loadAccounts,
+    microsoftAccount,
+    offlineAccount,
+    saveAccounts,
+    type AccountType,
+} from "./accounts.ts";
 export { defaultAccounts, defaultSetting, defaultState } from "./defaults.ts";
 export { loadSetting, saveSetting, settingReadOnly } from "./setting.ts";
 export { flushState, loadState, updateState } from "./state.ts";
@@ -16,6 +24,8 @@ export type {
     InstanceStat,
     JavaEntry,
     JavaProbe,
+    MicrosoftAccount,
+    OfflineAccount,
     Setting,
     State,
 } from "./types.ts";

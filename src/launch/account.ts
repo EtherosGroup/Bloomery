@@ -67,7 +67,12 @@ function pick(
     selected: string | null | undefined,
 ): Account | undefined {
     if (wanted !== undefined) {
-        return list.find((account) => account.name === wanted || account.id === wanted);
+        // 先按 id 精确匹配（<游戏名>@<类型>），再退回游戏名：
+        // 同一个游戏名可以同时有离线与微软两条，只给名字会挑到先来的那条
+        return (
+            list.find((account) => account.id === wanted) ??
+            list.find((account) => account.name === wanted)
+        );
     }
     if (selected !== null && selected !== undefined) {
         const found = list.find((account) => account.id === selected);
