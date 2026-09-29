@@ -56,6 +56,15 @@ export interface ModCommand {
     readonly name: "mod";
     readonly action: "search" | "install";
     readonly query: string;
+    /** install 用：装到哪个实例，省略按上次启动的 */
+    readonly version?: string;
+    readonly folder?: string;
+    /** install 用：只算不落盘 */
+    readonly dryRun?: boolean;
+    /** install 用：是否连必需依赖一起装，省略按设置 */
+    readonly deps?: boolean;
+    /** search 用：返回条数 */
+    readonly limit?: number;
 }
 
 export interface ModpackCommand {

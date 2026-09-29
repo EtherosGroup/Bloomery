@@ -39,6 +39,8 @@ const MESSAGES: Record<ErrorCode, string> = {
     MicrosoftClientIdMissing: "微软登录缺少 client id",
     MicrosoftLoginFailed: "微软登录失败",
     MicrosoftNotOwned: "这个微软账户没有 Minecraft: Java Edition",
+    ModNotFound: "没找到这个 MOD",
+    ModUnsupported: "这个实例装不了这个 MOD",
     LaunchFailed: "游戏进程没起来",
 };
 
@@ -66,6 +68,8 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     MicrosoftClientIdMissing: 2,
     MicrosoftLoginFailed: 1,
     MicrosoftNotOwned: 1,
+    ModNotFound: 1,
+    ModUnsupported: 1,
     LaunchFailed: 1,
 };
 
@@ -85,6 +89,8 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
         "登录时加 --client-id <id>，或设 BLOOMERY_CLIENT_ID；见 README 的微软登录一节",
     MicrosoftLoginFailed: "确认网络与代理设置；client id 未被 Minecraft 服务认下时会在这里报出来",
     MicrosoftNotOwned: "换一个已购买 Minecraft: Java Edition 的微软账户",
+    ModNotFound: "换个关键词，或到 modrinth.com 上确认拼写",
+    ModUnsupported: "用 bloomery install <版本> --loader fabric 装一个加载器版本再试",
     VersionExists: "使用 --name <name> 指定新的版本名称",
     DownloadFailed: "检查网络，或设置里的下载源与代理",
 };

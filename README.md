@@ -42,6 +42,16 @@ bloomery folder select Minecraft
 bloomery launch 1.20.6 --folder Minecraft
 ```
 
+### 装 MOD
+
+```bash
+bloomery mod search sodium                          # 从 Modrinth 检索
+bloomery mod install sodium --version 1.20.6-fabric # 装到指定实例
+bloomery mod install sodium-extra --deps            # 连必需依赖一起装
+```
+
+装到哪个实例按 `--version` 定，省略就用上次启动的那个。文件落在该实例自己的 `mods/` 下，同名文件已存在会跳过，`--dry-run` 只算不装。目前只接了 Modrinth（`setting.json` 里的 `mod.provider`）。
+
 `bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
 ## 微软登录

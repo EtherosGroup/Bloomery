@@ -26,4 +26,6 @@ export type ErrorCode =
     | "MicrosoftClientIdMissing"
     | "MicrosoftLoginFailed"
     | "MicrosoftNotOwned"
+    | "ModNotFound"
+    | "ModUnsupported"
     | "LaunchFailed";

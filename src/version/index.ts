@@ -32,6 +32,7 @@ export {
     findInstance,
     folderIdOf,
     pickFolder,
+    pickInstance,
     probeFolder,
     readFolder,
     resolveFolderPath,

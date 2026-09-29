@@ -123,10 +123,21 @@ export const COMMANDS: CommandTable = {
 
     mod: {
         summary: "MOD 检索与安装",
-        usage: "mod <search|install> <query>",
-        options: {},
+        usage: "mod <search|install> <query> [--version <id>] [--folder <id>] [--dry-run] [--deps|--no-deps] [--limit <n>]",
+        options: {
+            version: {
+                type: "string",
+                value: "<id>",
+                summary: "装到哪个实例，省略按上次启动的",
+            },
+            folder: { type: "string", value: "<id>", summary: "游戏文件夹" },
+            "dry-run": { type: "boolean", summary: "只算不装" },
+            deps: { type: "boolean", summary: "连必需依赖一起装" },
+            "no-deps": { type: "boolean", summary: "只装这一个，不动依赖" },
+            limit: { type: "string", value: "<n>", summary: "搜索结果条数，默认 10" },
+        },
         positionals: { names: ["action", "query"], required: 2 },
-        toCommand: (_values, positionals) => ({
+        toCommand: (values, positionals) => ({
             name: "mod",
             action: requireChoice(
                 requirePositional(positionals, 0, "action"),
@@ -134,6 +145,11 @@ export const COMMANDS: CommandTable = {
                 "action",
             ),
             query: requirePositional(positionals, 1, "query"),
+            version: optionalString(values, "version"),
+            folder: optionalString(values, "folder"),
+            dryRun: values["dry-run"] === true,
+            deps: values["deps"] === true ? true : values["no-deps"] === true ? false : undefined,
+            limit: optionalInteger(values, "limit"),
         }),
         run: runMod,
     },

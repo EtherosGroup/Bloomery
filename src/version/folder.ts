@@ -380,3 +380,21 @@ async function canWrite(path: string): Promise<boolean> {
         () => false,
     );
 }
+
+// 指定 id 或名字优先，其次上次启动的，再次第一个可用的
+export function pickInstance(
+    view: FolderView,
+    wanted: string | undefined,
+    last: string | null | undefined,
+): InstanceView | undefined {
+    if (wanted !== undefined) {
+        return view.instances.find((item) => item.id === wanted || item.name === wanted);
+    }
+    if (last !== null && last !== undefined) {
+        const found = view.instances.find((item) => item.id === last);
+        if (found !== undefined) {
+            return found;
+        }
+    }
+    return view.instances.find((item) => item.state === "ready");
+}
