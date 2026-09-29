@@ -79,7 +79,7 @@ export function folderText(view: FolderView): string {
     if (view.instances.length > 0) {
         const rows = view.instances.map((instance) => [
             instance.id,
-            instance.target,
+            instance.gameVersion ?? "-",
             loaderText(instance),
             instance.type ?? "-",
             marksOf(instance),
@@ -116,6 +116,7 @@ export function instanceJson(instance: InstanceView): unknown {
         id: instance.id,
         name: instance.name,
         target: instance.target,
+        gameVersion: instance.gameVersion,
         loader: instance.loader,
         state: instance.state,
         type: instance.type,

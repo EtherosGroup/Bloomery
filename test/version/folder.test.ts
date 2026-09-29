@@ -126,6 +126,24 @@ test("关掉自动发现", async () => {
     });
 });
 
+test("认不出游戏版本时用客户端 jar 的 sha1 对上号", async () => {
+    await inTemp(async (root) => {
+        const client = { client: { sha1: "同一个 sha1", size: 1, url: "u" } };
+        const write = async (dir: string, json: unknown): Promise<void> => {
+            await mkdir(join(root, "versions", dir), { recursive: true });
+            await writeFile(join(root, "versions", dir, `${dir}.json`), JSON.stringify(json));
+        };
+        await write("1.20.6", { id: "1.20.6", downloads: client });
+        // 改名装出来的：id 认不出游戏版本，但声明的是同一份客户端 jar
+        await write("test6", { id: "test6", downloads: client });
+
+        const view = await readFolder(folderAt(root));
+        const byId = new Map(view.instances.map((one) => [one.id, one]));
+        assert.equal(byId.get("1.20.6")?.gameVersion, "1.20.6");
+        assert.equal(byId.get("test6")?.gameVersion, "1.20.6");
+    });
+});
+
 test("目录名与 json 的 id 不同时，游戏版本取 id", async () => {
     await inTemp(async (root) => {
         // install --name test6 装出来的样子：目录叫 test6，json 里还是 1.20.6

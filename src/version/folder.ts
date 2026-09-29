@@ -14,7 +14,14 @@ import { basename, join, resolve } from "node:path";
 import type { Folder, Instance, Loader } from "../config/types.ts";
 import { logger } from "../output/index.ts";
 import { expandHome, platform } from "../platform/index.ts";
-import { loaderOf, resolveDescriptor, type Descriptor, type VersionType } from "./descriptor.ts";
+import {
+    gameVersionOf,
+    loaderOf,
+    resolveDescriptor,
+    type Descriptor,
+    type DownloadEntry,
+    type VersionType,
+} from "./descriptor.ts";
 import { scanVersions, type LocalVersion } from "./store.ts";
 
 const log = logger("version");
@@ -27,6 +34,8 @@ export interface InstanceView {
     readonly id: string;
     readonly name: string;
     readonly target: string;
+    /** 哪一版游戏：inheritsFrom、加载器库坐标、id 里依次找；认不出为 null */
+    readonly gameVersion: string | null;
     readonly loader: Loader;
     /** 隔离后的游戏目录 */
     readonly directory: string;
@@ -119,9 +128,35 @@ export async function readFolder(folder: Folder): Promise<FolderView> {
         exists: info?.isDirectory() === true,
         writable,
         versionsDirectory: scan.directory,
-        instances,
+        instances: inferGameVersions(instances),
         dropped,
     };
+}
+
+// 认不出游戏版本的，拿客户端 jar 的 sha1 跟同目录里认得出的比：
+// 同一份客户端 jar 就是同一版游戏。改过名的老版本靠这条救回来
+function inferGameVersions(views: readonly InstanceView[]): InstanceView[] {
+    const known = new Map<string, string>();
+    for (const view of views) {
+        const sha1 = clientSha1(view);
+        if (sha1 !== null && view.gameVersion !== null) {
+            known.set(sha1, view.gameVersion);
+        }
+    }
+
+    return views.map((view) => {
+        if (view.gameVersion !== null) {
+            return view;
+        }
+        const sha1 = clientSha1(view);
+        const found = sha1 === null ? undefined : known.get(sha1);
+        return found === undefined ? view : { ...view, gameVersion: found };
+    });
+}
+
+function clientSha1(view: InstanceView): string | null {
+    const entry: DownloadEntry | undefined = view.descriptor?.downloads["client"];
+    return entry === undefined || entry.sha1 === "" ? null : entry.sha1;
 }
 
 export async function findInstance(folder: Folder, id: string): Promise<InstanceView | undefined> {
@@ -219,6 +254,10 @@ function configuredView(
         id: instance.id,
         name: instance.name ?? instance.id,
         target: instance.target,
+        gameVersion:
+            local?.descriptor === undefined || local.descriptor === null
+                ? null
+                : gameVersionOf(local.descriptor),
         loader: instance.loader,
         directory: local?.directory ?? join(versionsDirectory, instance.id),
         configured: true,
@@ -267,7 +306,7 @@ function configuredView(
     };
 }
 
-// 磁盘上的版本，target 取 inheritsFrom，没有则取自身
+// 磁盘上的版本，target 取 inheritsFrom，没有则取 json 自己的 id
 function discoveredView(
     version: LocalVersion,
     byId: ReadonlyMap<string, Descriptor>,
@@ -285,6 +324,7 @@ function discoveredView(
         return {
             ...base,
             target: version.id,
+            gameVersion: null,
             loader: VANILLA,
             state: "broken",
             type: null,
@@ -294,14 +334,15 @@ function discoveredView(
         };
     }
 
-    // 游戏版本：有 inheritsFrom 就是它，否则取 json 自己的 id
     // 目录名可能与 id 不同（install --name），那时 id 才是游戏版本
     const target = own.inheritsFrom ?? own.id;
+    const gameVersion = gameVersionOf(own);
     const resolved = resolveDescriptor(byId, version.id);
     if (resolved === undefined) {
         return {
             ...base,
             target,
+            gameVersion,
             loader: loaderOf(own),
             state: "broken",
             type: null,
@@ -313,6 +354,7 @@ function discoveredView(
     return {
         ...base,
         target,
+        gameVersion,
         loader: loaderOf(resolved.descriptor),
         state: resolved.problem === null ? "ready" : "incomplete",
         type: resolved.descriptor.type,

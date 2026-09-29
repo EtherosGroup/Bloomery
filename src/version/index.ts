@@ -4,6 +4,7 @@
  * @since 1.0.0
  */
 export {
+    gameVersionOf,
     loaderOf,
     mergeDescriptors,
     parseDescriptor,

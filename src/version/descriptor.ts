@@ -452,6 +452,39 @@ function coordinateVersion(name: string): string | null {
     return parts.length >= 3 ? (parts[2] ?? null) : null;
 }
 
+/* ---------- 游戏版本 ---------- */
+
+// 这些库的坐标里带着游戏版本；forge 系是 <游戏版本>-<加载器版本>，只取前半
+const VERSION_LIBRARIES: ReadonlyArray<{ pattern: RegExp; prefix: boolean }> = [
+    { pattern: /^net\.fabricmc:intermediary:(.+)$/, prefix: false },
+    { pattern: /^org\.quiltmc:hashed:(.+)$/, prefix: false },
+    { pattern: /^net\.minecraftforge:(?:forge|fmlloader):(.+)$/, prefix: true },
+    { pattern: /^net\.neoforged:(?:neoforge|fmlloader|neoform):(.+)$/, prefix: true },
+];
+
+// 版本号的样子：正式版、预览、以及远古的 a / b / c / rd 系
+const VERSION_TOKEN =
+    /(?:rd-\d+|inf-\d+|[abc]\d+\.\d+(?:\.\d+)?[a-z]?|\d+\.\d+(?:\.\d+)?(?:-(?:pre|rc)\d+)?)/;
+
+// 判断这份版本是哪一版游戏：inheritsFrom 最准，其次看加载器库的坐标，
+// 再次从 id 里找版本样的片段；都认不出返回 null（比如被改过名的原版）
+export function gameVersionOf(descriptor: Descriptor): string | null {
+    if (descriptor.inheritsFrom !== null) {
+        return descriptor.inheritsFrom;
+    }
+
+    for (const library of descriptor.libraries) {
+        for (const { pattern, prefix } of VERSION_LIBRARIES) {
+            const value = pattern.exec(library.name)?.[1];
+            if (value !== undefined) {
+                return prefix ? (value.split("-")[0] ?? value) : value;
+            }
+        }
+    }
+
+    return VERSION_TOKEN.exec(descriptor.id)?.[0] ?? null;
+}
+
 /* ---------- 小工具 ---------- */
 
 function versionTypeOf(value: unknown): VersionType | null {

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+    gameVersionOf,
     loaderOf,
     parseDescriptor,
     resolveDescriptor,
@@ -173,4 +174,52 @@ test("继承链成环", () => {
 
 test("未知 id 返回 undefined", () => {
     assert.equal(resolveDescriptor(new Map(), "没有这个版本"), undefined);
+});
+
+test("判断是哪一版游戏", () => {
+    const cases: ReadonlyArray<readonly [unknown, string | null]> = [
+        // 原版按 id
+        [{ id: "1.20.6" }, "1.20.6"],
+        // 继承型最准
+        [{ id: "x", inheritsFrom: "1.20.6" }, "1.20.6"],
+        // PCL 那类已合并的 profile：加载器库的坐标里带着游戏版本
+        [
+            {
+                id: "1.20.1-Forge_47.4.16",
+                libraries: [{ name: "net.minecraftforge:fmlloader:1.20.1-47.4.16" }],
+            },
+            "1.20.1",
+        ],
+        [{ id: "x", libraries: [{ name: "net.minecraftforge:forge:1.16.5-36.2.42" }] }, "1.16.5"],
+        [
+            {
+                id: "1.20.6-Fabric 0.17.2",
+                libraries: [
+                    { name: "net.fabricmc:intermediary:1.20.6" },
+                    { name: "net.fabricmc:fabric-loader:0.17.2" },
+                ],
+            },
+            "1.20.6",
+        ],
+        // 没有 intermediary 时退回 id 里的版本片段
+        [
+            {
+                id: "26.2-Fabric 0.19.3",
+                libraries: [{ name: "net.fabricmc:fabric-loader:0.19.3" }],
+            },
+            "26.2",
+        ],
+        [{ id: "Create 1.21.1" }, "1.21.1"],
+        [{ id: "c0.30_生存测试" }, "c0.30"],
+        [{ id: "rd-132211" }, "rd-132211"],
+        [{ id: "a1.0.4" }, "a1.0.4"],
+        // 认不出就是认不出
+        [{ id: "test6" }, null],
+    ];
+
+    for (const [json, wanted] of cases) {
+        const descriptor = parseDescriptor(json, "t", "t", "/tmp/t/t.json");
+        assert.ok(descriptor !== undefined, JSON.stringify(json));
+        assert.equal(gameVersionOf(descriptor), wanted, JSON.stringify(json));
+    }
 });
