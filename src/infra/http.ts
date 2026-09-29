@@ -21,7 +21,7 @@ const log = logger("http");
 
 const MAX_REDIRECTS = 5;
 const MAX_BUFFER = 64 * 1024 * 1024;
-const USER_AGENT = "bloomery/1.0.1";
+const USER_AGENT = "bloomery/1.1.0";
 
 export interface NetworkOptions {
     readonly timeoutMs: number;
