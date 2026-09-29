@@ -8,10 +8,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { FetchOptions } from "../../src/infra/download.ts";
+import { AppError } from "../../src/error/index.ts";
 import {
     channelOf,
     filterChannel,
+    listLoaderGames,
     listLoaderVersions,
+    listLoaderVersionsFor,
     type LoaderVersion,
     type Transport,
 } from "../../src/version/index.ts";
@@ -131,4 +134,78 @@ test("形状不对时给空清单而不是崩", async () => {
         const list = await listLoaderVersions(name, NETWORK, transport({ unexpected: true }));
         assert.deepEqual(list, [], name);
     }
+});
+
+test("按游戏版本查：fabric 取 game 作用域，4xx 当作不支持", async () => {
+    const scoped = await listLoaderVersionsFor(
+        "fabric",
+        "1.20.6",
+        NETWORK,
+        transport([
+            { loader: { version: "0.19.5", stable: true } },
+            { loader: { version: "0.20.0-beta.1" } },
+        ]),
+    );
+    assert.deepEqual(
+        scoped.map((item) => [item.version, item.channel]),
+        [
+            ["0.19.5", "release"],
+            ["0.20.0-beta.1", "beta"],
+        ],
+    );
+
+    // 1.7.10 这种 fabric 不支持的游戏版本，接口回 400
+    const unsupported = await listLoaderVersionsFor("fabric", "1.7.10", NETWORK, async () => {
+        const inner = Object.assign(new Error("HTTP 400"), { status: 400 });
+        throw new AppError("download", "DownloadFailed", {
+            cause: inner,
+            context: { detail: "u" },
+        });
+    });
+    assert.deepEqual(unsupported, []);
+});
+
+test("按游戏版本查：forge 取分组键，neoforge 按版本号前两段映射", async () => {
+    const forge = await listLoaderVersionsFor(
+        "forge",
+        "1.20.6",
+        NETWORK,
+        transport({ "1.20.6": ["1.20.6-56.0.0", "1.20.6-56.0.1"] }),
+    );
+    assert.deepEqual(
+        forge.map((item) => item.version),
+        ["1.20.6-56.0.1", "1.20.6-56.0.0"],
+    );
+    assert.equal(forge[0]?.gameVersion, "1.20.6");
+
+    // 20.6.x 属于 1.20.6，26.2.x 属于 26.2，1.21 的不能被算进来
+    const neo = await listLoaderVersionsFor(
+        "neoforge",
+        "1.20.6",
+        NETWORK,
+        transport({ isSnapshot: false, versions: ["20.6.141", "21.0.1", "26.2.0.88"] }),
+    );
+    assert.deepEqual(
+        neo.map((item) => item.version),
+        ["20.6.141"],
+    );
+});
+
+test("列出加载器支持的游戏版本", async () => {
+    const fabric = await listLoaderGames(
+        "fabric",
+        NETWORK,
+        transport([{ version: "1.20.6" }, { version: "1.21" }]),
+    );
+    assert.deepEqual(fabric, ["1.20.6", "1.21"]);
+
+    const forge = await listLoaderGames("forge", NETWORK, transport({ "1.9": [], "1.20.10": [] }));
+    assert.deepEqual(forge, ["1.20.10", "1.9"]);
+
+    const neo = await listLoaderGames(
+        "neoforge",
+        NETWORK,
+        transport({ versions: ["20.6.1", "26.2.0.88", "21.1.2"] }),
+    );
+    assert.deepEqual(neo, ["26.2", "1.21.1", "1.20.6"]);
 });

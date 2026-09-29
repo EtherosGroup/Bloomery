@@ -59,6 +59,10 @@ bloomery view loader                  # 四种加载器的最新版与版本数
 bloomery view loader fabric           # 某个加载器的全部版本，每页 20 条
 bloomery view loader fabric --page 2  # 翻页
 bloomery view loader neoforge --type release   # 只看正式版，可选 release / beta / alpha
+
+bloomery view loader fabric --game 1.20.6      # 这个游戏版本上可用的加载器版本
+bloomery view loader fabric --games            # 这个加载器支持哪些游戏版本
+bloomery view game 1.20.6                      # 这个游戏版本上四种加载器各有哪些版本
 ```
 
 版本清单直接取自各加载器的官方接口（Fabric / Quilt 的 meta、Forge 与 NeoForge 的 maven）。安装目前只支持 fabric，另外三种的版本号可以查，装的时候会提示未实现。

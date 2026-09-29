@@ -157,7 +157,7 @@ export const COMMANDS: CommandTable = {
 
     view: {
         summary: "查看加载器可用的版本",
-        usage: "view loader [name] [--page <n>] [--type <release|beta|alpha>]",
+        usage: "view <loader|game> [name] [--game <version>] [--games] [--page <n>] [--type <release|beta|alpha>]",
         options: {
             page: { type: "string", value: "<n>", summary: "页码，从 1 开始，每页 20 条" },
             type: {
@@ -165,19 +165,32 @@ export const COMMANDS: CommandTable = {
                 value: "<name>",
                 summary: "只看某个发布通道：release / beta / alpha",
             },
+            game: {
+                type: "string",
+                value: "<version>",
+                summary: "只看这个游戏版本上可用的加载器版本",
+            },
+            games: { type: "boolean", summary: "改列这个加载器支持的游戏版本" },
         },
-        positionals: { names: ["action", "loader"], required: 1 },
-        toCommand: (values, positionals) => ({
-            name: "view",
-            action: requireChoice(
+        positionals: { names: ["action", "name"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["loader"] as const,
+                ["loader", "game"] as const,
                 "action",
-            ),
-            loader: optionalPositional(positionals, 1, "loader"),
-            page: optionalInteger(values, "page"),
-            type: optionalString(values, "type"),
-        }),
+            );
+            // 第二个位置参数按 action 解读：loader 是加载器名，game 是游戏版本
+            const target = optionalPositional(positionals, 1, "name");
+            return {
+                name: "view",
+                action,
+                loader: action === "loader" ? target : undefined,
+                game: action === "game" ? target : optionalString(values, "game"),
+                games: values["games"] === true,
+                page: optionalInteger(values, "page"),
+                type: optionalString(values, "type"),
+            };
+        },
         run: runView,
     },
 

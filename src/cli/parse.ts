@@ -69,9 +69,13 @@ export interface ModCommand {
 
 export interface ViewCommand {
     readonly name: "view";
-    readonly action: "loader";
-    /** 加载器名字，省略就列出四种 */
+    readonly action: "loader" | "game";
+    /** view loader 用：加载器名字，省略就列出四种 */
     readonly loader?: string;
+    /** 游戏版本：view game <版本> 或 view loader <名字> --game <版本> */
+    readonly game?: string;
+    /** view loader 用：改列这个加载器支持的游戏版本 */
+    readonly games?: boolean;
     /** 页码，从 1 开始 */
     readonly page?: number;
     /** 只看某个发布通道：release / beta / alpha，省略为全部 */

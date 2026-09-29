@@ -82,6 +82,7 @@ function render(report: InstallReport): string {
         lines.push(`  基础版本   ${report.base === "installed" ? "这次顺带装的" : "本来就在"}`);
     }
     lines.push(
+        `  启动       bloomery launch ${report.name}`,
         `  客户端 jar ${clientJarText(report)}`,
         `  ${describe("库", report.libraries)}`,
         `  natives    ${report.natives.jars} 个 jar 解出 ${report.natives.files} 个文件（${counts(report.natives.report)}）`,

@@ -15,14 +15,19 @@ import { logger } from "../output/index.ts";
 
 const log = logger("loader");
 
-const FABRIC_META = "https://meta.fabricmc.net/v2/versions/loader";
+// fabric 与 quilt 的 meta 是同一套结构：<base>/versions/loader 与 <base>/versions/game
+const FABRIC_BASE = "https://meta.fabricmc.net/v2";
+const QUILT_BASE = "https://meta.quiltmc.org/v3";
+const FORGE_META = "https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json";
+const NEOFORGE_META =
+    "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge";
 
 // 各家加载器的版本清单，形状各不相同，见下面的解析
 const LOADER_LISTS: Record<LoaderName, string> = {
-    fabric: "https://meta.fabricmc.net/v2/versions/loader",
-    quilt: "https://meta.quiltmc.org/v3/versions/loader",
-    forge: "https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json",
-    neoforge: "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge",
+    fabric: `${FABRIC_BASE}/versions/loader`,
+    quilt: `${QUILT_BASE}/versions/loader`,
+    forge: FORGE_META,
+    neoforge: NEOFORGE_META,
 };
 
 // 发布通道从版本号本身判断：fabric 的 stable 只标最新那版，不能当通道用
@@ -79,6 +84,108 @@ export function parseLoaderSpec(text: string): LoaderSpec | undefined {
 
 export type Transport = (url: string, options: FetchOptions) => Promise<Buffer>;
 
+// 某个游戏版本上可用的加载器版本
+export async function listLoaderVersionsFor(
+    name: LoaderName,
+    game: string,
+    options: FetchOptions,
+    transport?: Transport,
+): Promise<readonly LoaderVersion[]> {
+    switch (name) {
+        case "fabric":
+        case "quilt": {
+            const base = name === "fabric" ? FABRIC_BASE : QUILT_BASE;
+            const url = `${base}/versions/loader/${encodeURIComponent(game)}`;
+            try {
+                return gameScoped(await fetchJson(url, options, transport));
+            } catch (error) {
+                // 不支持的游戏版本会回 4xx，按"没有"处理；网络问题继续抛
+                const status = statusOf(error);
+                if (status !== undefined && status >= 400 && status < 500) {
+                    log.debug("%s 不支持 %s（HTTP %d）", name, game, status);
+                    return [];
+                }
+                throw error;
+            }
+        }
+        case "forge": {
+            const grouped = object(await fetchJson(FORGE_META, options, transport), "forge");
+            const list = grouped?.[game];
+            if (!Array.isArray(list)) {
+                return [];
+            }
+            return list
+                .filter((item): item is string => typeof item === "string")
+                .map((version) => ({ version, gameVersion: game, channel: channelOf(version) }))
+                .sort((left, right) => compare(right.version, left.version));
+        }
+        case "neoforge": {
+            const all = await listLoaderVersions("neoforge", options, transport);
+            return all.filter((item) => gameOfNeoForge(item.version) === game);
+        }
+    }
+}
+
+// 这个加载器支持哪些游戏版本
+export async function listLoaderGames(
+    name: LoaderName,
+    options: FetchOptions,
+    transport?: Transport,
+): Promise<readonly string[]> {
+    switch (name) {
+        case "fabric":
+        case "quilt": {
+            const base = name === "fabric" ? FABRIC_BASE : QUILT_BASE;
+            const raw = await fetchJson(`${base}/versions/game`, options, transport);
+            return entries(raw)
+                .map((entry) => entry["version"])
+                .filter((version): version is string => typeof version === "string");
+        }
+        case "forge": {
+            const grouped = object(await fetchJson(FORGE_META, options, transport), "forge");
+            return Object.keys(grouped ?? {}).sort((left, right) => compare(right, left));
+        }
+        case "neoforge": {
+            const all = await listLoaderVersions("neoforge", options, transport);
+            const games = new Set<string>();
+            for (const item of all) {
+                const game = gameOfNeoForge(item.version);
+                if (game !== null) {
+                    games.add(game);
+                }
+            }
+            return [...games].sort((left, right) => compare(right, left));
+        }
+    }
+}
+
+// 按游戏版本查的 meta 把加载器包在 loader 字段里
+function gameScoped(raw: unknown): LoaderVersion[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const out: LoaderVersion[] = [];
+    for (const item of raw) {
+        const entry = object(item, "loader[]");
+        const version = object(entry?.["loader"], "loader[].loader")?.["version"];
+        if (typeof version === "string") {
+            out.push({ version, gameVersion: null, channel: channelOf(version) });
+        }
+    }
+    return out;
+}
+
+// neo 的版本号前两段对应游戏版本：20.6.119 -> 1.20.6，26.2.0.88 -> 26.2
+function gameOfNeoForge(version: string): string | null {
+    const parts = version.split(".");
+    const major = Number.parseInt(parts[0] ?? "", 10);
+    const minor = Number.parseInt(parts[1] ?? "", 10);
+    if (!Number.isFinite(major) || !Number.isFinite(minor)) {
+        return null;
+    }
+    return major >= 26 ? `${major}.${minor}` : `1.${major}.${minor}`;
+}
+
 // 各加载器的可用版本，新到旧；forge 与 neoforge 的清单是升序，翻过来
 export async function listLoaderVersions(
     name: LoaderName,
@@ -112,6 +219,25 @@ function plainList(raw: unknown): LoaderVersion[] {
         out.push({ version, gameVersion: null, channel: channelOf(version) });
     }
     return out;
+}
+
+// fetchBuffer 把 HttpStatusError 包在 cause 里，状态码要顺着链找
+function statusOf(error: unknown): number | undefined {
+    let current: unknown = error;
+    for (let depth = 0; depth < 5 && current !== null && current !== undefined; depth++) {
+        const status = (current as { status?: unknown }).status;
+        if (typeof status === "number") {
+            return status;
+        }
+        current = (current as { cause?: unknown }).cause;
+    }
+    return undefined;
+}
+
+function entries(value: unknown): Record<string, unknown>[] {
+    return Array.isArray(value)
+        ? value.map((item) => object(item, "[]") ?? {}).filter((item) => item !== undefined)
+        : [];
 }
 
 // forge：{ "1.20.6": ["1.20.6-56.0.1", ...] }，值是完整版本号
@@ -210,7 +336,7 @@ export async function fetchLoaderProfile(
         });
     }
 
-    const url = `${FABRIC_META}/${encodeURIComponent(game)}/${encodeURIComponent(version)}/profile/json`;
+    const url = `${FABRIC_BASE}/versions/loader/${encodeURIComponent(game)}/${encodeURIComponent(version)}/profile/json`;
     const raw = object(await fetchJson(url, options), url);
     if (raw === undefined) {
         throw new AppError("loader", "VersionBroken", {
@@ -222,7 +348,7 @@ export async function fetchLoaderProfile(
 
 // 列表按新到旧排，优先取 stable
 async function latestFabric(game: string, options: FetchOptions): Promise<string> {
-    const url = `${FABRIC_META}/${encodeURIComponent(game)}`;
+    const url = `${FABRIC_BASE}/versions/loader/${encodeURIComponent(game)}`;
     const list = await fetchJson(url, options);
     if (!Array.isArray(list)) {
         throw new AppError("loader", "VersionNotFound", {
