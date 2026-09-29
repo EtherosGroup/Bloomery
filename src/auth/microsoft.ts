@@ -145,7 +145,8 @@ async function requestDeviceCode(
     const body = record(response.body);
 
     if (response.status >= 400) {
-        const detail = field(body, "error_description") ?? field(body, "error") ?? "";
+        const detail =
+            field(body, "error_description") ?? field(body, "error") ?? bodyText(response.body);
         log.warn("设备码申请失败：HTTP %d %s", response.status, detail);
         throw new AppError("auth", "MicrosoftLoginFailed", {
             context: { detail: "申请设备码被拒", status: response.status, reason: detail },
@@ -278,7 +279,11 @@ async function xboxLive(
     const userHash = claimsUserHash(body);
     if (response.status >= 400 || token === undefined || userHash === undefined) {
         throw new AppError("auth", "MicrosoftLoginFailed", {
-            context: { detail: "Xbox Live 认证失败", status: response.status },
+            context: {
+                detail: "Xbox Live 认证失败",
+                status: response.status,
+                reason: bodyText(response.body).slice(0, 200),
+            },
         });
     }
     return { token, userHash };
@@ -341,15 +346,16 @@ async function loginWithXbox(
     const body = record(response.body);
     const accessToken = field(body, "access_token");
     if (response.status >= 400 || accessToken === undefined) {
-        const text = typeof response.body === "string" ? response.body : "";
-        const rejected = response.status === 403 && text.includes("Invalid app registration");
+        const text = bodyText(response.body);
+        // 这条拒绝是 JSON，关键字大小写不定，拉平成字符串再找
+        const rejected = /invalid.?app.?registration/i.test(text);
         throw new AppError("auth", "MicrosoftLoginFailed", {
             context: {
                 detail: rejected
-                    ? "Minecraft 服务不认这个 client id（Invalid app registration）"
+                    ? "Minecraft 服务不认这个 client id（Invalid app registration），OAuth 与 Xbox 那几步都过了"
                     : "Minecraft 登录失败",
                 status: response.status,
-                reason: field(body, "error") ?? text.slice(0, 120),
+                reason: text.slice(0, 200),
             },
         });
     }
@@ -381,7 +387,11 @@ async function profileOf(
     const name = field(body, "name");
     if (response.status >= 400 || id === undefined || name === undefined) {
         throw new AppError("auth", "MicrosoftLoginFailed", {
-            context: { detail: "拉取游戏档案失败", status: response.status },
+            context: {
+                detail: "拉取游戏档案失败",
+                status: response.status,
+                reason: bodyText(response.body).slice(0, 200),
+            },
         });
     }
     return { uuid: id, name };
@@ -426,6 +436,14 @@ function field(container: Record<string, unknown>, key: string): string | undefi
 function number(container: Record<string, unknown>, key: string): number | undefined {
     const value = container[key];
     return typeof value === "number" ? value : undefined;
+}
+
+// 正文可能是对象也可能是字符串，找关键字与报错前先拉平
+function bodyText(value: unknown): string {
+    if (typeof value === "string") {
+        return value;
+    }
+    return value === undefined ? "" : JSON.stringify(value);
 }
 
 // Xbox 的 DisplayClaims.xui 是数组，取第一项的 uhs

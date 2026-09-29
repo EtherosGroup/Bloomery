@@ -204,7 +204,11 @@ test("client id 被拒时把 Invalid app registration 说出来", async () => {
                     ...HAPPY,
                     [LOGIN_URL]: {
                         status: 403,
-                        body: "Invalid app registration, see https://aka.ms/AppRegInfo",
+                        body: {
+                            path: "/authentication/login_with_xbox",
+                            errorType: "UNAUTHORIZED",
+                            error: "INVALID_APP_REGISTRATION",
+                        },
                     },
                 },
                 calls,
@@ -215,6 +219,8 @@ test("client id 被拒时把 Invalid app registration 说出来", async () => {
         (thrown: unknown) => {
             assert.ok(thrown instanceof AppError);
             assert.match(String(thrown.context["detail"]), /client id/);
+            // 拒绝正文是 JSON，原因要原样带出来
+            assert.match(String(thrown.context["reason"]), /INVALID_APP_REGISTRATION/);
             return true;
         },
     );
