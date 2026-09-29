@@ -9,7 +9,7 @@
 
 import { join, sep } from "node:path";
 
-import { archMatches } from "../platform/index.ts";
+import { archMatches, isArchToken } from "../platform/index.ts";
 import type { Library } from "../version/descriptor.ts";
 import type { RuleContext } from "./rules.ts";
 
@@ -89,18 +89,33 @@ const CLASSIFIER_OS: Readonly<Record<string, string>> = {
     macos: "osx",
 };
 
-// 分类名形如 linux-x86_64 或 osx-aarch_64
-// 这类库在版本 json 里的 rules 只写 os.name，架构差异藏在分类名里，要按当前平台再筛一次
+// 分类名的两段：natives-windows-arm64 与 linux-x86_64 都拆成 os + arch
+function classifierParts(classifier: string): {
+    natives: boolean;
+    os: string | undefined;
+    arch: string | undefined;
+} {
+    const natives = classifier.startsWith("natives-");
+    const parts = (natives ? classifier.slice("natives-".length) : classifier).split("-");
+    return { natives, os: parts[0]?.toLowerCase(), arch: parts[1] };
+}
+
+// 分类名形如 linux-x86_64、osx-aarch_64，或 natives-windows、natives-windows-arm64
+// 这类库在版本 json 里的 rules 只写 os.name，架构差异全在分类名里，要按当前平台再筛一次
+// natives-<平台> 不带架构段时指 64 位；natives-macos-patch 的第二段不是架构，不参与筛选
 export function classifierMatches(classifier: string, context: RuleContext): boolean {
-    const parts = classifier.split("-");
-    const first = parts[0];
-    const target = first === undefined ? undefined : CLASSIFIER_OS[first.toLowerCase()];
+    const { natives, os, arch } = classifierParts(classifier);
+    const target = os === undefined ? undefined : CLASSIFIER_OS[os];
     if (target === undefined) {
         return true;
     }
     if (target !== context.osName) {
         return false;
     }
-    const arch = parts[1];
-    return arch === undefined || archMatches(arch, context.osArch);
+    // natives 的第二段认不出是架构时（macos-patch），按不带架构段处理
+    const token = natives && arch !== undefined && !isArchToken(arch) ? undefined : arch;
+    if (token === undefined) {
+        return natives ? context.osArch === null || context.osArch === "x64" : true;
+    }
+    return archMatches(token, context.osArch);
 }

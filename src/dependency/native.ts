@@ -14,8 +14,9 @@ import { mkdir, rm } from "node:fs/promises";
 import { pathExists } from "../infra/fs.ts";
 import { extractZip } from "../infra/zip.ts";
 import { logger } from "../output/index.ts";
+import { archBitness } from "../platform/index.ts";
 import type { Library } from "../version/descriptor.ts";
-import { libraryFile, parseCoordinate } from "./library.ts";
+import { classifierMatches, libraryFile, parseCoordinate } from "./library.ts";
 import { allows, type RuleContext } from "./rules.ts";
 
 const log = logger("dependency");
@@ -68,16 +69,19 @@ export async function nativeJars(input: NativeInput): Promise<NativeSelection> {
 }
 
 // 当前平台要用的 natives 分类名：
-// 旧格式看库自带的 natives 映射，键是 os.name；新格式分类名就在库名第四段
+// 旧格式看库自带的 natives 映射，键是 os.name，值里可能有 ${arch}；新格式分类名就在库名第四段
+// 分类名只在平台对得上、架构也对得上时才用：json 里 natives-windows 与 natives-windows-arm64 的 rules 完全一样
 export function nativeClassifierOf(library: Library, context: RuleContext): string | undefined {
     const mapped: string | undefined = library.natives[context.osName];
     if (mapped !== undefined) {
-        return mapped;
+        const classifier = mapped.replace("${arch}", archBitness(context.osArch));
+        return classifierMatches(classifier, context) ? classifier : undefined;
     }
-    const coordinate = parseCoordinate(library.name);
-    return coordinate?.classifier?.startsWith("natives") === true
-        ? coordinate.classifier
-        : undefined;
+    const classifier = parseCoordinate(library.name)?.classifier;
+    if (classifier?.startsWith("natives-") !== true) {
+        return undefined;
+    }
+    return classifierMatches(classifier, context) ? classifier : undefined;
 }
 
 // 先清空目录再解压

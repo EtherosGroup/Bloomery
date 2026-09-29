@@ -6,7 +6,15 @@
  */
 
 export { type PlatformName, platform } from "./os.ts";
-export { archMatches, osArch, osName, osVersion, type OsArch } from "./arch.ts";
+export {
+    archBitness,
+    archMatches,
+    isArchToken,
+    osArch,
+    osName,
+    osVersion,
+    type OsArch,
+} from "./arch.ts";
 export { JAVA_EXECUTABLE, JAVAC_EXECUTABLE, javaLayout, type JavaLayout } from "./java.ts";
 export { requiresShell } from "./process.ts";
 export {

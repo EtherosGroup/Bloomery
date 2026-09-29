@@ -45,11 +45,22 @@ export function osArch(): OsArch | null {
 }
 
 const ALIASES: Record<OsArch, readonly string[]> = {
-    x64: ["amd64", "x8664", "x64"],
-    x86: ["x86", "i386", "i486", "i586", "i686"],
+    x64: ["amd64", "x8664", "x64", "64"],
+    x86: ["x86", "i386", "i486", "i586", "i686", "32"],
     arm64: ["aarch64", "arm64", "arm64e"],
     arm: ["arm", "armv6l", "armv7l"],
 };
+
+// 这个 token 是不是架构：认得出的才按架构筛，patch 这类不是架构的段要放行
+export function isArchToken(value: string): boolean {
+    const wanted = normalizeArch(value);
+    return Object.values(ALIASES).some((aliases) => aliases.includes(wanted));
+}
+
+// 旧版 natives 映射里的 ${arch}：官方启动器填 JVM 位数，认不出架构时按 64 位算
+export function archBitness(arch: OsArch | null): "32" | "64" {
+    return arch === "x86" || arch === "arm" ? "32" : "64";
+}
 
 // rules 里的 os.arch 用 JVM 属性写法，同一个架构有多个别名
 // netty 的分类名把 x86_64 写成 x86_64、aarch64 写成 aarch_64，下划线先去掉再比
