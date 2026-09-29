@@ -79,12 +79,16 @@ export function folderText(view: FolderView): string {
     if (view.instances.length > 0) {
         const rows = view.instances.map((instance) => [
             instance.id,
+            instance.target,
             loaderText(instance),
             instance.type ?? "-",
             marksOf(instance),
         ]);
         lines.push(
-            ...renderTable(rows, { indent: "  ", header: ["版本", "加载器", "类型", "备注"] }),
+            ...renderTable(rows, {
+                indent: "  ",
+                header: ["版本", "游戏版本", "加载器", "类型", "备注"],
+            }),
         );
     }
 
