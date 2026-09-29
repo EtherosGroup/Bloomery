@@ -26,7 +26,7 @@ const RULES = platformContext({ is_demo_user: false, has_custom_resolution: true
 
 const CONTEXT: ArgumentContext = {
     versionName: "1.20.6",
-    versionType: "release",
+    versionType: "Bloomery",
     gameDirectory: "/games/versions/1.20.6",
     assetsRoot: "/games/assets",
     assetIndex: "16",
@@ -39,7 +39,7 @@ const CONTEXT: ArgumentContext = {
     xuid: "",
     clientId: "",
     userType: "legacy",
-    launcherName: "bloomery",
+    launcherName: "Bloomery",
     launcherVersion: "1.0.1",
     width: 854,
     height: 480,
@@ -129,7 +129,14 @@ test("JVM 参数：内存在前，老版本自己补 classpath", () => {
     const modern = parseDescriptor(
         {
             id: "t",
-            arguments: { jvm: ["-Djava.library.path=${natives_directory}", "-cp", "${classpath}"] },
+            arguments: {
+                jvm: [
+                    "-Djava.library.path=${natives_directory}",
+                    "-Dminecraft.launcher.brand=${launcher_name}",
+                    "-cp",
+                    "${classpath}",
+                ],
+            },
         },
         "test",
         "t",
@@ -142,7 +149,10 @@ test("JVM 参数：内存在前，老版本自己补 classpath", () => {
     assert.deepEqual(modernArgs, [
         "-Xms512M",
         "-Xmx4096M",
+        // json 已经写了 brand，只补 version
+        "-Dminecraft.launcher.version=1.0.1",
         "-Djava.library.path=/games/versions/1.20.6/natives",
+        "-Dminecraft.launcher.brand=Bloomery",
         "-cp",
         "/a.jar:/b.jar",
         "-XX:+UseG1GC",
@@ -153,10 +163,17 @@ test("JVM 参数：内存在前，老版本自己补 classpath", () => {
     assert.deepEqual(buildJvmArguments(old, CONTEXT, { minMb: 1024, maxMb: 2048 }, []), [
         "-Xms1024M",
         "-Xmx2048M",
+        "-Dminecraft.launcher.brand=Bloomery",
+        "-Dminecraft.launcher.version=1.0.1",
         "-Djava.library.path=/games/versions/1.20.6/natives",
         "-cp",
         "/a.jar:/b.jar",
     ]);
+});
+
+test("借 --versionType 把启动器名挂到主界面左下角", () => {
+    // 游戏拼成 Minecraft <版本>/<这个值>，斜杠由游戏加
+    assert.equal(substitute("--versionType ${version_type}", CONTEXT), "--versionType Bloomery");
 });
 
 test("内存与窗口按三层取值", () => {

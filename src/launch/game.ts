@@ -32,7 +32,8 @@ import { launchOptionsOf, type LaunchOptions } from "./options.ts";
 
 const log = logger("launch");
 
-export const LAUNCHER_NAME = "bloomery";
+// 写进游戏界面的名字，大小写按显示效果来
+export const LAUNCHER_NAME = "Bloomery";
 
 export interface LaunchPlan {
     readonly executable: string;
@@ -169,7 +170,8 @@ export async function planLaunch(
 
     const context: ArgumentContext = {
         versionName: descriptor.id,
-        versionType: descriptor.type ?? "release",
+        // --versionType 只用于展示，借它把启动器名挂到主界面左下角
+        versionType: LAUNCHER_NAME,
         gameDirectory,
         assetsRoot,
         assetIndex,

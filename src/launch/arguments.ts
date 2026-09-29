@@ -43,17 +43,34 @@ export function buildJvmArguments(
     memory: Memory,
     extra: readonly string[],
 ): string[] {
-    const args = [`-Xms${memory.minMb}M`, `-Xmx${memory.maxMb}M`];
+    const declared =
+        descriptor.arguments.jvm.length > 0
+            ? expandArguments(descriptor.arguments.jvm, context)
+            : // 1.12.2 及以前没有 arguments，classpath 与 natives 得自己补
+              [`-Djava.library.path=${context.nativesDirectory}`, "-cp", context.classpath];
 
-    if (descriptor.arguments.jvm.length > 0) {
-        args.push(...expandArguments(descriptor.arguments.jvm, context));
-    } else {
-        // 1.12.2 及以前没有 arguments，classpath 与 natives 得自己补
-        args.push(`-Djava.library.path=${context.nativesDirectory}`, "-cp", context.classpath);
-    }
+    return [
+        `-Xms${memory.minMb}M`,
+        `-Xmx${memory.maxMb}M`,
+        ...launcherBrand(declared, extra, context),
+        ...declared,
+        ...extra,
+    ];
+}
 
-    args.push(...extra);
-    return args;
+// 游戏用这两个属性在 F3 调试界面显示启动器名，1.12.2 及以前的 json 不写，自己补
+function launcherBrand(
+    declared: readonly string[],
+    extra: readonly string[],
+    context: ArgumentContext,
+): string[] {
+    const wanted: Array<[string, string]> = [
+        ["-Dminecraft.launcher.brand=", context.launcherName],
+        ["-Dminecraft.launcher.version=", context.launcherVersion],
+    ];
+    return wanted
+        .filter(([key]) => ![...declared, ...extra].some((arg) => arg.startsWith(key)))
+        .map(([key, value]) => `${key}${value}`);
 }
 
 export function buildGameArguments(
