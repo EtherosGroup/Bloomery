@@ -122,18 +122,26 @@ function versionJson(base: string): unknown {
                     },
                 },
             },
-            {
-                name: "d.e:f:1.0:natives-linux",
+            // 三种平台、两种架构的变体全给上：json 里这些的 rules 一样，只该下中当前平台的那一份
+            ...[
+                "natives-linux",
+                "natives-linux-arm64",
+                "natives-windows",
+                "natives-windows-arm64",
+                "natives-macos",
+                "natives-macos-arm64",
+            ].map((classifier) => ({
+                name: `d.e:f:1.0:${classifier}`,
                 downloads: {
                     classifiers: {
-                        "natives-linux": {
+                        [classifier]: {
                             sha1: sha1(NATIVES_JAR),
                             size: NATIVES_JAR.length,
                             url: `${base}/natives.jar`,
                         },
                     },
                 },
-            },
+            })),
         ],
     };
 }
