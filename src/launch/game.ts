@@ -8,7 +8,6 @@
  * @since 1.0.0
  */
 
-import { readFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 
 import type { Accounts, Folder, Instance, JavaProbe, Setting } from "../config/types.ts";
@@ -23,6 +22,7 @@ import {
     type Classpath,
 } from "../dependency/index.ts";
 import { AppError } from "../error/index.ts";
+import { packageVersion } from "../infra/package.ts";
 import { logger } from "../output/index.ts";
 import type { InstanceView } from "../version/index.ts";
 import { accountFor, type LaunchAccount } from "./account.ts";
@@ -185,7 +185,7 @@ export async function planLaunch(
         clientId: "",
         userType: account.userType,
         launcherName: LAUNCHER_NAME,
-        launcherVersion: await launcherVersion(),
+        launcherVersion: packageVersion(),
         width: options.window.width,
         height: options.window.height,
         rules,
@@ -250,14 +250,4 @@ async function resolveLaunchJava(
         log.warn("%s", message);
     }
     return choice.info;
-}
-
-// 读自己的 package.json，读不到就不写版本
-async function launcherVersion(): Promise<string> {
-    try {
-        const text = await readFile(new URL("../../package.json", import.meta.url), "utf8");
-        return (JSON.parse(text) as { version?: string }).version ?? "unknown";
-    } catch {
-        return "unknown";
-    }
 }

@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 
+import { packageVersion } from "../infra/package.ts";
 import { logDirectory } from "../platform/index.ts";
 import { addSink, type Sink } from "./output.ts";
 
@@ -230,22 +231,12 @@ function stampOf(at: number): string {
 // 会话头，出问题时这几行省掉一半来回；argv 里不要放密码或 token
 async function sessionHeader(): Promise<string> {
     return [
-        `# bloomery ${await version()}`,
+        `# bloomery ${packageVersion()}`,
         `# node ${process.version} ${process.platform} ${process.arch}`,
         `# cwd ${process.cwd()}`,
         `# argv ${process.argv.slice(2).join(" ")}`,
         "",
     ].join("\n");
-}
-
-// 读自己的 package.json，读不到就不写版本
-async function version(): Promise<string> {
-    try {
-        const text = await readFile(new URL("../../package.json", import.meta.url), "utf8");
-        return (JSON.parse(text) as { version?: string }).version ?? "unknown";
-    } catch {
-        return "unknown";
-    }
 }
 
 // 只数归档，latest.log 与兜底文件都不参与，负数表示不限制

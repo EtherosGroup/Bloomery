@@ -16,12 +16,13 @@ import { connect as tlsConnect } from "node:tls";
 import type { Readable } from "node:stream";
 
 import { logger } from "../output/index.ts";
+import { packageVersion } from "./package.ts";
 
 const log = logger("http");
 
 const MAX_REDIRECTS = 5;
 const MAX_BUFFER = 64 * 1024 * 1024;
-const USER_AGENT = "bloomery/1.1.2";
+const USER_AGENT = `bloomery/${packageVersion()}`;
 
 export interface NetworkOptions {
     readonly timeoutMs: number;
