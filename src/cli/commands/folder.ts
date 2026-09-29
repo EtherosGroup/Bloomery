@@ -15,10 +15,11 @@ import {
     probeFolder,
     readFolder,
     sameFolderPath,
+    summarizeFolder,
     type FolderView,
 } from "../../version/index.ts";
 import type { Context, FolderCommand } from "../parse.ts";
-import { folderJson, folderText } from "./view.ts";
+import { folderJson, folderText, printFolderList, type FolderListRow } from "./view.ts";
 
 const log = logger("folder");
 
@@ -36,21 +37,16 @@ export async function runFolder(command: FolderCommand, ctx: Context): Promise<v
     }
 }
 
+// 只看保存过的那些，不扫版本
 async function list(setting: Setting, ctx: Context): Promise<void> {
-    const views: FolderView[] = [];
+    const rows: FolderListRow[] = [];
     for (const folder of setting.folders) {
-        views.push(await readFolder(folder));
+        rows.push({
+            ...(await summarizeFolder(folder)),
+            selected: folder.id === setting.selectedFolder,
+        });
     }
-
-    if (ctx.json) {
-        print(JSON.stringify(views.map(folderJson), null, 4));
-        return;
-    }
-    if (views.length === 0) {
-        print("还没有添加游戏文件夹，运行 bloomery folder add <路径>");
-        return;
-    }
-    print(views.map(folderText).join("\n\n"));
+    printFolderList(rows, ctx);
 }
 
 async function add(setting: Setting, path: string, ctx: Context): Promise<void> {

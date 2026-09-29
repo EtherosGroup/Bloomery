@@ -11,7 +11,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import type { Folder, Instance } from "../../src/config/types.ts";
-import { folderIdOf, pickFolder, readFolder, sameFolderPath } from "../../src/version/folder.ts";
+import {
+    folderIdOf,
+    pickFolder,
+    readFolder,
+    sameFolderPath,
+    summarizeFolder,
+} from "../../src/version/folder.ts";
 
 const VANILLA = { id: "1.20.6", type: "release", mainClass: "net.minecraft.client.main.Main" };
 
@@ -127,6 +133,27 @@ test("目录不存在", async () => {
         );
         assert.equal(view.exists, false);
         assert.equal(view.instances[0]?.state, "missing");
+    });
+});
+
+test("文件夹摘要只看配置与目录状态", async () => {
+    await inTemp(async (root) => {
+        const summary = await summarizeFolder(
+            folderAt(root, {
+                instances: [instanceOf("1.20.6", "1.20.6"), instanceOf("x", "1.20.6")],
+            }),
+        );
+        assert.equal(summary.id, "test");
+        assert.equal(summary.path, root);
+        assert.equal(summary.exists, true);
+        assert.equal(summary.writable, true);
+        // 只数配置清单里的条数，不扫磁盘
+        assert.equal(summary.instances, 2);
+
+        const missing = await summarizeFolder(folderAt(join(root, "没有这个")));
+        assert.equal(missing.exists, false);
+        assert.equal(missing.writable, false);
+        assert.equal(missing.instances, 0);
     });
 });
 

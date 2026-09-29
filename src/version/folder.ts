@@ -64,6 +64,16 @@ export interface FolderProbe {
     readonly versions: number;
 }
 
+export interface FolderSummary {
+    readonly id: string;
+    readonly name: string;
+    readonly path: string;
+    readonly exists: boolean;
+    readonly writable: boolean;
+    /** 配置清单里的条数，磁盘上实际有多少要看 readFolder */
+    readonly instances: number;
+}
+
 export async function readFolder(folder: Folder): Promise<FolderView> {
     const path = resolveFolderPath(folder);
     const info = await stat(path).catch(() => undefined);
@@ -131,6 +141,20 @@ export async function probeFolder(path: string): Promise<FolderProbe> {
 
 export function resolveFolderPath(folder: Folder): string {
     return resolveGameFolder(folder.path);
+}
+
+// 只读配置与目录状态，不扫版本：list 只要列出保存过的那几条
+export async function summarizeFolder(folder: Folder): Promise<FolderSummary> {
+    const path = resolveFolderPath(folder);
+    const info = await stat(path).catch(() => undefined);
+    return {
+        id: folder.id,
+        name: folder.name ?? folder.id,
+        path,
+        exists: info?.isDirectory() === true,
+        writable: await canWrite(path),
+        instances: folder.instances.length,
+    };
 }
 
 // 挑文件夹：显式指定优先，其次 setting 里选的，再次第一个

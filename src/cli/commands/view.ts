@@ -7,7 +7,12 @@
  */
 
 import { print } from "../../output/index.ts";
-import type { FolderView, InstanceState, InstanceView } from "../../version/index.ts";
+import type {
+    FolderSummary,
+    FolderView,
+    InstanceState,
+    InstanceView,
+} from "../../version/index.ts";
 import type { Context } from "../parse.ts";
 
 const STATE: Record<InstanceState, string> = {
@@ -16,6 +21,37 @@ const STATE: Record<InstanceState, string> = {
     broken: "读不出来",
     incomplete: "继承不全",
 };
+
+export interface FolderListRow extends FolderSummary {
+    readonly selected: boolean;
+}
+
+// list 只列保存过的文件夹，不展开里面的版本
+export function printFolderList(rows: readonly FolderListRow[], ctx: Context): void {
+    if (ctx.json) {
+        print(JSON.stringify(rows, null, 4));
+        return;
+    }
+    if (rows.length === 0) {
+        print("还没有添加游戏文件夹，运行 bloomery folder add <路径>");
+        return;
+    }
+
+    const lines = [`已保存 ${rows.length} 个游戏文件夹`];
+    for (const row of rows) {
+        lines.push(`  ${row.name}  ${row.path}`, `      ${folderDetail(row)}`);
+    }
+    print(lines.join("\n"));
+}
+
+function folderDetail(row: FolderListRow): string {
+    const parts = [`${row.instances} 个实例`];
+    if (row.selected) {
+        parts.push("当前");
+    }
+    parts.push(row.exists ? (row.writable ? "可写" : "只读") : "目录不存在");
+    return parts.join(" · ");
+}
 
 export function printFolder(view: FolderView, ctx: Context): void {
     if (ctx.json) {
