@@ -25,7 +25,26 @@ const LOADER_LISTS: Record<LoaderName, string> = {
     neoforge: "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge",
 };
 
-const UNSTABLE = /(alpha|beta|rc|snapshot)/i;
+// 发布通道从版本号本身判断：fabric 的 stable 只标最新那版，不能当通道用
+export type LoaderChannel = "release" | "beta" | "alpha";
+
+const ALPHA = /alpha/i;
+const BETA = /(beta|rc|pre|snapshot|preview)/i;
+
+export function channelOf(version: string): LoaderChannel {
+    if (ALPHA.test(version)) {
+        return "alpha";
+    }
+    return BETA.test(version) ? "beta" : "release";
+}
+
+// channel 为 undefined 表示不过滤
+export function filterChannel(
+    list: readonly LoaderVersion[],
+    channel: LoaderChannel | undefined,
+): readonly LoaderVersion[] {
+    return channel === undefined ? list : list.filter((item) => item.channel === channel);
+}
 
 export type LoaderName = "fabric" | "forge" | "neoforge" | "quilt";
 
@@ -35,8 +54,7 @@ export interface LoaderVersion {
     readonly version: string;
     /** forge 的清单按游戏版本分组，其余为 null */
     readonly gameVersion: string | null;
-    /** 认不出就为 null：fabric 直接给，其余按版本号里的 beta/rc 猜 */
-    readonly stable: boolean | null;
+    readonly channel: LoaderChannel;
 }
 
 export interface LoaderSpec {
@@ -91,12 +109,7 @@ function plainList(raw: unknown): LoaderVersion[] {
         if (typeof version !== "string") {
             continue;
         }
-        const stable = entry?.["stable"];
-        out.push({
-            version,
-            gameVersion: null,
-            stable: typeof stable === "boolean" ? stable : !UNSTABLE.test(version),
-        });
+        out.push({ version, gameVersion: null, channel: channelOf(version) });
     }
     return out;
 }
@@ -114,7 +127,7 @@ function byGame(raw: unknown): LoaderVersion[] {
         }
         for (const item of value) {
             if (typeof item === "string") {
-                out.push({ version: item, gameVersion: game, stable: !UNSTABLE.test(item) });
+                out.push({ version: item, gameVersion: game, channel: channelOf(item) });
             }
         }
     }
@@ -130,7 +143,7 @@ function tagged(raw: unknown): LoaderVersion[] {
     }
     return list
         .filter((item): item is string => typeof item === "string")
-        .map((version) => ({ version, gameVersion: null, stable: !UNSTABLE.test(version) }))
+        .map((version) => ({ version, gameVersion: null, channel: channelOf(version) }))
         .sort((left, right) => compare(right.version, left.version));
 }
 

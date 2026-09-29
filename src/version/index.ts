@@ -62,11 +62,14 @@ export {
 export {
     defaultVersionName,
     fetchLoaderProfile,
+    channelOf,
+    filterChannel,
     listLoaderVersions,
     parseLoaderSpec,
     resolveLoaderVersion,
     type LoaderName,
     type LoaderSpec,
+    type LoaderChannel,
     type LoaderVersion,
     type Transport,
 } from "./loader.ts";

@@ -74,6 +74,8 @@ export interface ViewCommand {
     readonly loader?: string;
     /** 页码，从 1 开始 */
     readonly page?: number;
+    /** 只看某个发布通道：release / beta / alpha，省略为全部 */
+    readonly type?: string;
 }
 
 export interface ModpackCommand {

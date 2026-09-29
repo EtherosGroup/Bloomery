@@ -157,9 +157,14 @@ export const COMMANDS: CommandTable = {
 
     view: {
         summary: "查看加载器可用的版本",
-        usage: "view loader [name] [--page <n>]",
+        usage: "view loader [name] [--page <n>] [--type <release|beta|alpha>]",
         options: {
             page: { type: "string", value: "<n>", summary: "页码，从 1 开始，每页 20 条" },
+            type: {
+                type: "string",
+                value: "<name>",
+                summary: "只看某个发布通道：release / beta / alpha",
+            },
         },
         positionals: { names: ["action", "loader"], required: 1 },
         toCommand: (values, positionals) => ({
@@ -171,6 +176,7 @@ export const COMMANDS: CommandTable = {
             ),
             loader: optionalPositional(positionals, 1, "loader"),
             page: optionalInteger(values, "page"),
+            type: optionalString(values, "type"),
         }),
         run: runView,
     },
