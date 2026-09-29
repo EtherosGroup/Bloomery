@@ -203,6 +203,8 @@ export interface MicrosoftAccount {
     readonly refreshToken?: string | null;
     readonly accessToken?: string | null;
     readonly expiresAt?: string | null;
+    /** 登录用的 client id，refreshToken 绑着它，续期要用同一个 */
+    readonly clientId?: string | null;
 }
 
 export type Account = OfflineAccount | MicrosoftAccount;

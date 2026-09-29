@@ -23,4 +23,7 @@ export type ErrorCode =
     | "AccountNotFound"
     | "AccountExists"
     | "AccountExpired"
+    | "MicrosoftClientIdMissing"
+    | "MicrosoftLoginFailed"
+    | "MicrosoftNotOwned"
     | "LaunchFailed";

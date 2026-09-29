@@ -44,6 +44,20 @@ bloomery launch 1.20.6 --folder Minecraft
 
 `bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
+## 微软登录
+
+```bash
+bloomery auth login --type microsoft --client-id <Azure 应用 id>
+```
+
+也可以先把 id 放进环境变量 `BLOOMERY_CLIENT_ID`，之后直接 `bloomery auth login --type microsoft`。
+
+终端会给出网址与代码，浏览器里授权完成后自动继续。凭据按账号存进 `accounts.json`（0600），启动时访问令牌过期会自动续期，不用每次重登。
+
+client id 取自 Azure 应用注册里的「应用程序(客户端) ID」。应用要三项配置：支持的账户类型选「任何组织目录中的账户和个人微软账户」、认证页打开「允许公共客户端流」（设备码流程需要）、不需要客户端密码。
+
+**能不能真登进去**：Minecraft 服务会校验 client id 是否获批。自注册的应用一般前几步都成功、到 `login_with_xbox` 收到 `403 Invalid app registration`，这个提示会原样报出来。Mojang 目前没对新的第三方启动器开放申请（正规通道要 ID@Xbox，且需要一个能提交审核的游戏），所以现实做法是在 `--client-id` 里填一个已获批的 id，或改走第三方认证（`auth login --type custom`，authlib-injector）。
+
 ## 开发
 
 ```bash

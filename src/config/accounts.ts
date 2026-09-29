@@ -109,6 +109,7 @@ function readAccount(value: unknown, at: string, extras: string[]): Account | un
         refreshToken: r.nullableString("refreshToken", null),
         accessToken: r.nullableString("accessToken", null),
         expiresAt: r.nullableString("expiresAt", null),
+        clientId: r.nullableString("clientId", null),
     };
     r.extra();
     return account;
@@ -127,16 +128,27 @@ export function offlineAccount(name: string, uuid: string | null = null): Offlin
     return { id: accountId(name, "offline"), type: "offline", name, uuid };
 }
 
-// 微软登录还没做：先记一条凭据为空的，启动时会提示需要重新登录
-export function microsoftAccount(name: string): MicrosoftAccount {
+// 登录成功后带着凭据建一条；clientId 与 refreshToken 配对，续期时要用同一个
+export function microsoftAccount(
+    name: string,
+    clientId: string,
+    credentials: {
+        readonly uuid: string;
+        readonly xuid: string | null;
+        readonly refreshToken: string;
+        readonly accessToken: string;
+        readonly expiresAt: string;
+    },
+): MicrosoftAccount {
     return {
         id: accountId(name, "microsoft"),
         type: "microsoft",
         name,
-        uuid: null,
-        xuid: null,
-        refreshToken: null,
-        accessToken: null,
-        expiresAt: null,
+        uuid: credentials.uuid,
+        xuid: credentials.xuid,
+        refreshToken: credentials.refreshToken,
+        accessToken: credentials.accessToken,
+        expiresAt: credentials.expiresAt,
+        clientId,
     };
 }

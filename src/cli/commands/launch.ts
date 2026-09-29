@@ -7,9 +7,26 @@
  * @since 1.0.0
  */
 
-import { loadAccounts, loadSetting, loadState, updateState } from "../../config/index.ts";
+import { refreshMicrosoft } from "../../auth/index.ts";
+import {
+    loadAccounts,
+    loadSetting,
+    loadState,
+    microsoftAccount,
+    saveAccounts,
+    updateState,
+    type Account,
+    type Accounts,
+    type Setting,
+} from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
-import { planLaunch, spawnGame, type LaunchPlan } from "../../launch/index.ts";
+import {
+    needsRefresh,
+    pickAccount,
+    planLaunch,
+    spawnGame,
+    type LaunchPlan,
+} from "../../launch/index.ts";
 import { logger, print } from "../../output/index.ts";
 import { pickFolder, readFolder, type FolderView, type InstanceView } from "../../version/index.ts";
 import type { Context, LaunchCommand } from "../parse.ts";
@@ -44,7 +61,12 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
             folder,
             config: folder.instances.find((item) => item.id === instance.id),
             instance,
-            accounts: await loadAccounts(),
+            accounts: await refreshCredentials(
+                await loadAccounts(),
+                command.account,
+                setting,
+                command.dryRun !== true,
+            ),
             probes: state.javaProbe,
             accountName: command.account,
         },
@@ -82,6 +104,50 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
     if (code !== 0) {
         process.exitCode = code;
     }
+}
+
+// 微软访问令牌按小时过期；过期或快过期时先续一次，续期用的 client id 存在账号里
+async function refreshCredentials(
+    accounts: Accounts,
+    wanted: string | undefined,
+    setting: Setting,
+    persist: boolean,
+): Promise<Accounts> {
+    const account = pickAccount(accounts.accounts, wanted, setting.selectedAccount);
+    if (account === undefined || !needsRefresh(account) || account.type !== "microsoft") {
+        return accounts;
+    }
+    const clientId = account.clientId;
+    const refreshToken = account.refreshToken;
+    if (
+        clientId === null ||
+        clientId === undefined ||
+        refreshToken === null ||
+        refreshToken === undefined
+    ) {
+        return accounts;
+    }
+
+    log.info("续期微软账户 %s", account.id);
+    const credentials = await refreshMicrosoft({
+        clientId,
+        refreshToken,
+        network: setting.network,
+    });
+
+    // id 里带着游戏名，改名后沿用原来的 id，引用它的 selectedAccount 才不会断
+    const updated: Account = {
+        ...microsoftAccount(credentials.name, clientId, credentials),
+        id: account.id,
+    };
+    const next: Accounts = {
+        ...accounts,
+        accounts: accounts.accounts.map((item) => (item.id === account.id ? updated : item)),
+    };
+    if (persist) {
+        await saveAccounts(next);
+    }
+    return next;
 }
 
 // 指定 id 或名字优先，其次上次启动的，再次第一个可用的

@@ -44,10 +44,12 @@ export interface InstallCommand {
 export interface AuthCommand {
     readonly name: "auth";
     readonly action: "login" | "logout" | "list";
-    /** login 与 logout 必给，list 不用 */
+    /** logout 必给；login 只有离线要用，微软的游戏名登录后才拿到 */
     readonly username?: string;
     /** 账号类型，省略按 offline；取值在命令里校验 */
     readonly type?: string;
+    /** 微软登录用的 client id */
+    readonly clientId?: string;
 }
 
 export interface ModCommand {

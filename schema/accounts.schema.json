@@ -103,6 +103,12 @@
                     "type": ["string", "null"],
                     "format": "date-time",
                     "default": null
+                },
+                "clientId": {
+                    "title": "Client ID",
+                    "description": "登录用的 Azure 应用 id。refreshToken 绑着它，续期要用同一个。",
+                    "type": ["string", "null"],
+                    "default": null
                 }
             }
         }

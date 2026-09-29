@@ -30,6 +30,15 @@ export interface NetworkOptions {
     readonly proxy?: string | null;
     readonly noProxy?: readonly string[];
     readonly headers?: Readonly<Record<string, string>>;
+    /** 默认 GET */
+    readonly method?: string;
+    /** 请求体，有它就按 JSON 发 */
+    readonly body?: Buffer;
+}
+
+export interface JsonResponse {
+    readonly status: number;
+    readonly body: unknown;
 }
 
 export interface HttpResponse {
@@ -95,6 +104,72 @@ export function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// 单次 JSON 请求：4xx 也把正文交回调用方，OAuth 的 authorization_pending 就在 400 的正文里
+export async function httpJson(
+    method: "GET" | "POST",
+    url: string,
+    payload: unknown,
+    options: NetworkOptions,
+): Promise<JsonResponse> {
+    const body = payload === undefined ? undefined : Buffer.from(JSON.stringify(payload), "utf8");
+    return requestJson(method, url, body, options);
+}
+
+// 表单请求：微软的 OAuth 端点只认 application/x-www-form-urlencoded
+export async function httpForm(
+    url: string,
+    fields: Readonly<Record<string, string>>,
+    options: NetworkOptions,
+): Promise<JsonResponse> {
+    const body = Buffer.from(new URLSearchParams(fields).toString(), "utf8");
+    const headers = {
+        ...options.headers,
+        "content-type": "application/x-www-form-urlencoded",
+    };
+    return requestJson("POST", url, body, { ...options, headers });
+}
+
+async function requestJson(
+    method: "GET" | "POST",
+    url: string,
+    body: Buffer | undefined,
+    options: NetworkOptions,
+): Promise<JsonResponse> {
+    const attempts = Math.max(0, options.retries) + 1;
+    let last: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            const response = await follow(url, { ...options, method, body }, 0);
+            const text = (await readAll(response.stream, MAX_BUFFER)).toString("utf8");
+            return { status: response.status, body: parseBody(text) };
+        } catch (error) {
+            last = error;
+            if (!retryable(error)) {
+                throw error;
+            }
+            if (attempt < attempts) {
+                log.debug("%s 第 %d 次失败，重试：%s", url, attempt, message(error));
+                await sleep(300 * attempt);
+            }
+        }
+    }
+
+    throw last instanceof Error ? last : new Error(String(last));
+}
+
+function parseBody(text: string): unknown {
+    if (text === "") {
+        return undefined;
+    }
+    try {
+        return JSON.parse(text);
+    } catch {
+        // 非 JSON 的正文原样交出去，报错时能带上
+        return text;
+    }
+}
+
 /* ---------- 内部 ---------- */
 
 async function follow(
@@ -111,7 +186,9 @@ async function follow(
         if (redirects >= MAX_REDIRECTS) {
             throw new Error(`重定向次数过多：${url}`);
         }
-        return follow(new URL(location, target).href, options, redirects + 1);
+        // 重定向后按 GET 重发，请求体不再带上
+        const next = { ...options, method: "GET", body: undefined };
+        return follow(new URL(location, target).href, next, redirects + 1);
     }
 
     return { url, status: response.status, headers: response.headers, stream: response.stream };
@@ -127,12 +204,17 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
     return new Promise((resolve, reject) => {
         const secure = target.protocol === "https:";
         const proxy = proxyFor(target, options);
+        const method = options.method ?? "GET";
         const headers: Record<string, string> = {
             "user-agent": USER_AGENT,
             accept: "*/*",
             "accept-encoding": "identity",
             ...options.headers,
         };
+        if (options.body !== undefined) {
+            headers["content-type"] = headers["content-type"] ?? "application/json";
+            headers["content-length"] = String(options.body.length);
+        }
 
         let request: ClientRequest;
         let response: IncomingMessage | undefined;
@@ -162,7 +244,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
                     host: proxy.hostname,
                     port,
                     path: target.href,
-                    method: "GET",
+                    method,
                     headers: { ...headers, host: target.host },
                     // 不复用连接：空闲超时挂在 socket 上，连接回池后容易误伤下一个请求
                     agent: false,
@@ -175,7 +257,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
                     host: target.hostname,
                     port: target.port === "" ? 443 : Number(target.port),
                     path: `${target.pathname}${target.search}`,
-                    method: "GET",
+                    method,
                     headers,
                     agent: false,
                     createConnection: (_opts, callback) => {
@@ -199,7 +281,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
                     host: target.hostname,
                     port,
                     path: `${target.pathname}${target.search}`,
-                    method: "GET",
+                    method,
                     headers,
                     agent: false,
                 },
@@ -234,7 +316,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
             reject(error);
         });
         request.on("close", clearConnect);
-        request.end();
+        request.end(options.body);
     });
 }
 

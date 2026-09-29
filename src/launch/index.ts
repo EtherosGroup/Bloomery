@@ -21,7 +21,13 @@ export {
     type JavaInfo,
     type JavaScan,
 } from "./java.ts";
-export { accountFor, offlineUuid, type LaunchAccount } from "./account.ts";
+export {
+    accountFor,
+    needsRefresh,
+    offlineUuid,
+    pickAccount,
+    type LaunchAccount,
+} from "./account.ts";
 export {
     buildGameArguments,
     buildJvmArguments,

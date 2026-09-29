@@ -2,7 +2,7 @@
  * 启动用的账户
  *
  * 离线账户的 UUID 由名字推导：OfflinePlayer:<名字> 的 MD5，再按 RFC 4122 v3 打版本位
- * 微软账户不在本轮登录，凭据缺失或过期时报需要重新登录
+ * 微软账户的凭据由调用方保证新鲜，缺凭据或已过期时报需要重新登录
  * @author IsCibocaz
  * @since 1.0.0
  */
@@ -51,7 +51,7 @@ export function accountFor(
         });
     }
 
-    const account = pick(list, wanted, selected);
+    const account = pickAccount(list, wanted, selected);
     if (account === undefined) {
         throw new AppError("launch", "AccountNotFound", {
             context: { detail: wanted ?? selected ?? "没有可用的账户" },
@@ -60,8 +60,8 @@ export function accountFor(
     return resolve(account);
 }
 
-// 指定的名字优先，其次 setting 里选的，再次第一个
-function pick(
+// 指定的 id 或名字优先，其次 setting 里选的，再次第一个
+export function pickAccount(
     list: readonly Account[],
     wanted: string | undefined,
     selected: string | null | undefined,
@@ -81,6 +81,26 @@ function pick(
         }
     }
     return list[0];
+}
+
+// 微软账户的访问令牌是否该续期：有 refreshToken 与 clientId 才谈得上续
+export function needsRefresh(account: Account): boolean {
+    if (account.type !== "microsoft") {
+        return false;
+    }
+    if (account.clientId === null || account.clientId === undefined) {
+        return false;
+    }
+    if (account.refreshToken === null || account.refreshToken === undefined) {
+        return false;
+    }
+    // 留一分钟余量
+    const expiresAt = account.expiresAt;
+    if (expiresAt === null || expiresAt === undefined) {
+        return true;
+    }
+    const at = Date.parse(expiresAt);
+    return !Number.isFinite(at) || at - Date.now() < 60_000;
 }
 
 function resolve(account: Account): LaunchAccount {

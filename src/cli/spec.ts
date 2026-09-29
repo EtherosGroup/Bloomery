@@ -85,12 +85,17 @@ export const COMMANDS: CommandTable = {
 
     auth: {
         summary: "账户管理",
-        usage: "auth <login|logout|list> [username] [--type <name>]",
+        usage: "auth <login|logout|list> [username] [--type <name>] [--client-id <id>]",
         options: {
             type: {
                 type: "string",
                 value: "<name>",
                 summary: "账号类型：offline（离线，默认）/ microsoft（微软）",
+            },
+            "client-id": {
+                type: "string",
+                value: "<id>",
+                summary: "微软登录用的 Azure 应用 id，也可用 BLOOMERY_CLIENT_ID",
             },
         },
         positionals: { names: ["action", "username"], required: 1 },
@@ -100,12 +105,18 @@ export const COMMANDS: CommandTable = {
                 ["login", "logout", "list"] as const,
                 "action",
             );
-            // list 不用游戏名，login 与 logout 必给
+            // 游戏名：list 不用，logout 必给，登录只有离线要（微软的游戏名从账号里取）
             const username =
-                action === "list"
-                    ? optionalPositional(positionals, 1, "username")
-                    : requirePositional(positionals, 1, "username");
-            return { name: "auth", action, username, type: optionalString(values, "type") };
+                action === "logout"
+                    ? requirePositional(positionals, 1, "username")
+                    : optionalPositional(positionals, 1, "username");
+            return {
+                name: "auth",
+                action,
+                username,
+                type: optionalString(values, "type"),
+                clientId: optionalString(values, "client-id"),
+            };
         },
         run: runAuth,
     },

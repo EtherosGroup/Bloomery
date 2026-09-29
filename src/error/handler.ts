@@ -36,6 +36,9 @@ const MESSAGES: Record<ErrorCode, string> = {
     AccountNotFound: "找不到可用的账户",
     AccountExists: "这个账号已经在清单里",
     AccountExpired: "账户凭据需要刷新",
+    MicrosoftClientIdMissing: "微软登录缺少 client id",
+    MicrosoftLoginFailed: "微软登录失败",
+    MicrosoftNotOwned: "这个微软账户没有 Minecraft: Java Edition",
     LaunchFailed: "游戏进程没起来",
 };
 
@@ -60,6 +63,9 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     AccountNotFound: 1,
     AccountExists: 1,
     AccountExpired: 1,
+    MicrosoftClientIdMissing: 2,
+    MicrosoftLoginFailed: 1,
+    MicrosoftNotOwned: 1,
     LaunchFailed: 1,
 };
 
@@ -75,6 +81,10 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     AccountNotFound: "运行 bloomery auth login 添加账户，或用 --account <名字> 指定",
     AccountExists: "运行 bloomery auth list 查看已有账号，换一个游戏名或类型",
     AccountExpired: "运行 bloomery auth login 重新登录",
+    MicrosoftClientIdMissing:
+        "登录时加 --client-id <id>，或设 BLOOMERY_CLIENT_ID；见 README 的微软登录一节",
+    MicrosoftLoginFailed: "确认网络与代理设置；client id 未被 Minecraft 服务认下时会在这里报出来",
+    MicrosoftNotOwned: "换一个已购买 Minecraft: Java Edition 的微软账户",
     VersionExists: "使用 --name <name> 指定新的版本名称",
     DownloadFailed: "检查网络，或设置里的下载源与代理",
 };

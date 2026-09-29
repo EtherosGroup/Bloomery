@@ -25,11 +25,20 @@ test("离线账号", () => {
     assert.equal(account.uuid, null);
 });
 
-test("微软账号先记一条没有凭据的", () => {
-    const account = microsoftAccount("cibocaz");
+test("微软账号带凭据与 client id", () => {
+    const account = microsoftAccount("cibocaz", "client-id-1", {
+        uuid: "5c103697-2f61-3499-8df5-6c1e4c671e80",
+        xuid: "2535410000000000",
+        refreshToken: "refresh-1",
+        accessToken: "access-1",
+        expiresAt: "2030-01-01T00:00:00.000Z",
+    });
     assert.equal(account.id, "cibocaz@microsoft");
     assert.equal(account.type, "microsoft");
-    assert.equal(account.refreshToken, null);
-    assert.equal(account.accessToken, null);
-    assert.equal(account.expiresAt, null);
+    assert.equal(account.refreshToken, "refresh-1");
+    assert.equal(account.accessToken, "access-1");
+    assert.equal(account.expiresAt, "2030-01-01T00:00:00.000Z");
+    assert.equal(account.xuid, "2535410000000000");
+    // client id 与 refreshToken 配对，续期要用同一个
+    assert.equal(account.clientId, "client-id-1");
 });
