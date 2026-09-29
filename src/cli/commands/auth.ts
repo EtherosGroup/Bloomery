@@ -134,8 +134,13 @@ function typeOf(value: string | undefined): AccountType {
         return value as AccountType;
     }
     throw new AppError("cli", "UsageError", {
-        context: { detail: `账号类型只能是 ${TYPES.join(" / ")}：${value}` },
+        context: { detail: `账号类型只能是 ${typeList()}：${value}` },
     });
+}
+
+// 取值要写英文，所以把中文名一起列出来
+function typeList(): string {
+    return TYPES.map((type) => `${type}（${LABEL[type]}）`).join(" / ");
 }
 
 function statusOf(account: Account): string {

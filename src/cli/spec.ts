@@ -87,7 +87,7 @@ export const COMMANDS: CommandTable = {
             type: {
                 type: "string",
                 value: "<name>",
-                summary: "账号类型：offline（默认）/ microsoft",
+                summary: "账号类型：offline（离线，默认）/ microsoft（微软）",
             },
         },
         positionals: { names: ["action", "username"], required: 1 },
