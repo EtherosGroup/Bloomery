@@ -10,6 +10,8 @@
 import { displayWidth } from "./text.ts";
 
 export interface TableOptions {
+    /** 列名，作为第 0 行输出；列宽把它一起算进去 */
+    readonly header?: readonly string[];
     /** 列间空格数 */
     readonly gap?: number;
     /** 每行开头的缩进 */
@@ -25,15 +27,16 @@ export function renderTable(
     const gap = options.gap ?? 2;
     const indent = options.indent ?? "";
     const right = new Set(options.right ?? []);
+    const all = options.header === undefined ? rows : [options.header, ...rows];
 
     const widths: number[] = [];
-    for (const row of rows) {
+    for (const row of all) {
         row.forEach((cell, at) => {
             widths[at] = Math.max(widths[at] ?? 0, displayWidth(cell));
         });
     }
 
-    return rows.map((row) => {
+    return all.map((row) => {
         const parts: string[] = [];
         row.forEach((cell, at) => {
             if (at === row.length - 1) {

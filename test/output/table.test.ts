@@ -58,6 +58,18 @@ test("缩进与列间距", () => {
     assert.deepEqual(renderTable([["a", "b"]], { indent: "  ", gap: 4 }), ["  a    b"]);
 });
 
+test("标题行参与列宽计算", () => {
+    const lines = renderTable([["a", "b"]], { header: ["长长的列名", "次"] });
+    assert.equal(lines.length, 2);
+    // 第一列宽取标题的 10 格，不是数据的 1 格
+    assert.equal(lines[0], "长长的列名  次");
+    assert.match(lines[1] ?? "", /^a {11}b$/);
+});
+
+test("不给标题就没有标题行", () => {
+    assert.deepEqual(renderTable([["a", "b"]]), ["a  b"]);
+});
+
 test("空表没有行", () => {
     assert.deepEqual(renderTable([]), []);
 });

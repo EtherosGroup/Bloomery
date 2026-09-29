@@ -201,7 +201,11 @@ function render(rows: readonly Row[]): string {
         row.entry.vendor ?? "-",
         row.present ? "" : "[文件不在]",
     ]);
-    return renderTable(table, { indent: "  ", right: [1] }).join("\n");
+    return renderTable(table, {
+        indent: "  ",
+        right: [1],
+        header: ["路径", "主版本", "类型", "架构", "来源", "发行方", "备注"],
+    }).join("\n");
 }
 
 function jsonOf(row: Row): unknown {

@@ -40,14 +40,18 @@ export function printFolderList(rows: readonly FolderListRow[], ctx: Context): v
     const table = rows.map((row) => [
         row.name,
         row.path,
-        `${row.instances} 个实例`,
-        row.selected ? "当前" : "",
+        String(row.instances),
+        row.selected ? "是" : "",
         folderState(row),
     ]);
     print(
         [
             `已保存 ${rows.length} 个游戏文件夹`,
-            ...renderTable(table, { indent: "  ", right: [2] }),
+            ...renderTable(table, {
+                indent: "  ",
+                right: [2],
+                header: ["标识", "路径", "实例", "当前", "状态"],
+            }),
         ].join("\n"),
     );
 }
@@ -79,7 +83,9 @@ export function folderText(view: FolderView): string {
             instance.type ?? "-",
             marksOf(instance),
         ]);
-        lines.push(...renderTable(rows, { indent: "  " }));
+        lines.push(
+            ...renderTable(rows, { indent: "  ", header: ["版本", "加载器", "类型", "备注"] }),
+        );
     }
 
     if (view.dropped.length > 0) {
