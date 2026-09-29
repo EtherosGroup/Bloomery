@@ -31,6 +31,7 @@ export const GLOBAL_OPTIONS: OptionDecls = {
     json: { type: "boolean", summary: "以 JSON 输出结果" },
     home: { type: "string", value: "<dir>", summary: "指定数据目录" },
     help: { type: "boolean", short: "h", summary: "显示帮助" },
+    version: { type: "boolean", short: "V", summary: "显示版本号" },
 };
 
 export const COMMANDS: CommandTable = {

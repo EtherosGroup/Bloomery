@@ -4,6 +4,7 @@
  * @since 1.0.0
  */
 
+import { packageVersion } from "../infra/package.ts";
 import { print } from "../output/index.ts";
 import type { CommandName, OptionDecls } from "./parse.ts";
 import { CLI_SPEC, GLOBAL_OPTIONS } from "./spec.ts";
@@ -12,6 +13,12 @@ const NAME = "bloomery";
 
 export function printHelp(name?: CommandName): void {
     print(name === undefined ? overview() : commandHelp(name));
+}
+
+// 版本号取自 package.json
+export function printVersion(json: boolean): void {
+    const version = packageVersion();
+    print(json ? JSON.stringify({ version }, null, 4) : version);
 }
 
 function overview(): string {

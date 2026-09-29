@@ -159,12 +159,14 @@ export interface GlobalOptions {
     readonly json: boolean;
     readonly home?: string;
     readonly help: boolean;
+    readonly version: boolean;
 }
 
 export type ParsedCli =
     | { readonly kind: "command"; readonly globals: GlobalOptions; readonly command: Command }
     /** 没给命令名，或者给了 --help；name 有值表示要看某个命令的帮助 */
-    | { readonly kind: "help"; readonly globals: GlobalOptions; readonly name?: CommandName };
+    | { readonly kind: "help"; readonly globals: GlobalOptions; readonly name?: CommandName }
+    | { readonly kind: "version"; readonly globals: GlobalOptions };
 
 /* ---------- 入口 ---------- */
 
@@ -178,7 +180,13 @@ export function parse(argv: readonly string[], spec: CliSpec): ParsedCli {
         json: global.values["json"] === true,
         home: optionalString(global.values, "home"),
         help: global.values["help"] === true,
+        version: global.values["version"] === true,
     };
+
+    // 低于 --help：两个都给时出帮助
+    if (globals.version && !globals.help) {
+        return { kind: "version", globals };
+    }
 
     const name = args[index];
     if (name === undefined) {

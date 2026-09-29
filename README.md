@@ -42,7 +42,7 @@ bloomery folder select Minecraft
 bloomery launch 1.20.6 --folder Minecraft
 ```
 
-`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
+`bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
 ## 开发
 

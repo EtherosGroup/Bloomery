@@ -7,7 +7,7 @@
  */
 
 import { logger, setLevel } from "../output/index.ts";
-import { printHelp } from "./help.ts";
+import { printHelp, printVersion } from "./help.ts";
 import { parse } from "./parse.ts";
 import type { Command, Context } from "./parse.ts";
 import { CLI_SPEC } from "./spec.ts";
@@ -20,6 +20,11 @@ export async function run(argv: readonly string[]): Promise<void> {
 
     if (parsed.kind === "help") {
         printHelp(parsed.name);
+        return;
+    }
+
+    if (parsed.kind === "version") {
+        printVersion(parsed.globals.json);
         return;
     }
 
