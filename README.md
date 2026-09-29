@@ -71,3 +71,7 @@ npm start -- --help
 ## 许可
 
 Apache-2.0，见 [LICENSE](LICENSE)。
+
+## 联系
+
+xiangyuanhulian@outlook.com，或在 [Issues](https://github.com/EtherosGroup/Bloomery/issues) 里提。
