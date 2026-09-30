@@ -45,6 +45,7 @@ export function defaultSetting(): Setting {
         cleanup: { orphan: "ask" },
         selectedAccount: null,
         selectedFolder: null,
+        selectedInstance: null,
         folders: [],
     };
 }

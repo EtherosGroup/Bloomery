@@ -16,7 +16,7 @@ import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
 import { installMod, searchMods, type ModInstallReport } from "../../mod/index.ts";
 import { logger, print, renderTable } from "../../output/index.ts";
-import { pickFolder, pickInstance, readFolder } from "../../version/index.ts";
+import { chooseInstance, pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, ModCommand } from "../parse.ts";
 
 const log = logger("mod");
@@ -78,7 +78,13 @@ async function install(
 
     const state = await loadState();
     const view = await readFolder(folder);
-    const instance = pickInstance(view, command.version, state.lastInstance);
+    const pick = chooseInstance(
+        view,
+        command.version,
+        setting.selectedInstance,
+        state.lastInstance,
+    );
+    const instance = pick.instance;
     if (instance === undefined) {
         throw new AppError("cli", "VersionNotFound", {
             context: { detail: command.version ?? "没有可用的版本", folder: view.id },
@@ -97,7 +103,7 @@ async function install(
     });
     log.info("mod install %s -> %s", report.project.slug, modsDirectory);
 
-    show(report, instance.id, modsDirectory, command, ctx);
+    show(report, instance.id, modsDirectory, command, ctx, pick.source === "selected");
 }
 
 function show(
@@ -106,6 +112,7 @@ function show(
     modsDirectory: string,
     command: ModCommand,
     ctx: Context,
+    selected: boolean,
 ): void {
     if (ctx.json) {
         print(JSON.stringify({ instance: instanceId, mods: modsDirectory, ...report }, null, 4));
@@ -113,7 +120,9 @@ function show(
     }
 
     const lines = [
-        `装到 ${instanceId}${command.dryRun === true ? "（只预览）" : ""}`,
+        selected
+            ? `装到当前已选择的版本 ${instanceId}（使用 bloomery version select 切换）`
+            : `装到 ${instanceId}${command.dryRun === true ? "（只预览）" : ""}`,
         `  MOD       ${report.project.title}（${report.project.slug}）`,
         `  版本      ${report.version.number} · ${report.version.type}`,
         `  匹配      ${report.version.gameVersions.join(" ") || "未标注"} / ${

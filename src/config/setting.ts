@@ -122,6 +122,7 @@ function readSetting(raw: Record<string, unknown>, extras: string[]): Setting {
         cleanup: readCleanup(cleanup, base.cleanup),
         selectedAccount: r.nullableString("selectedAccount", base.selectedAccount ?? null),
         selectedFolder: r.nullableString("selectedFolder", base.selectedFolder ?? null),
+        selectedInstance: r.nullableString("selectedInstance", base.selectedInstance ?? null),
         folders: r.list<Folder>("folders", base.folders, (value, at) =>
             readFolder(value, at, extras),
         ),

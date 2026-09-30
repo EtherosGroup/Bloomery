@@ -78,6 +78,17 @@ bloomery modpack pack.mrpack --no-assets      # 跳过资源对象，只装游�
 
 只认 Modrinth 的 `.mrpack`：清单里的文件按落点下载并校验 sha1，`overrides/` 与 `client-overrides/` 摊到实例目录，清单里没有下载地址的文件只记警告。加载器安装目前只支持 fabric，包里要 forge / neoforge / quilt 时会报未实现。
 
+### 选中版本
+
+```bash
+bloomery version select 1.20.6-fabric-0.19.5   # 选中，之后不带 --version 就用它
+bloomery version list                          # 「当前」列标出选中的实例
+bloomery launch                                # 启动并提醒当前用的是哪个
+bloomery mod install sodium                    # MOD 也装进这个实例
+```
+
+优先级是「命令行给的 > 当前选中 > 上次启动 > 第一个可用」。用选中项启动时会先提醒一行，`version select` 随时切换。
+
 `bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
 ## 微软登录

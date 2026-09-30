@@ -381,20 +381,34 @@ async function canWrite(path: string): Promise<boolean> {
     );
 }
 
-// 指定 id 或名字优先，其次上次启动的，再次第一个可用的
-export function pickInstance(
+export interface InstancePick {
+    readonly instance: InstanceView | undefined;
+    /** 哪条规则选中的：指定 / 当前选中 / 上次启动 / 第一个可用 */
+    readonly source: "wanted" | "selected" | "last" | "first";
+}
+
+// 指定的 id 或名字优先，其次当前选中的，再次上次启动的，最后第一个可用的
+export function chooseInstance(
     view: FolderView,
     wanted: string | undefined,
+    selected: string | null | undefined,
     last: string | null | undefined,
-): InstanceView | undefined {
+): InstancePick {
     if (wanted !== undefined) {
-        return view.instances.find((item) => item.id === wanted || item.name === wanted);
+        const found = view.instances.find((item) => item.id === wanted || item.name === wanted);
+        return { instance: found, source: "wanted" };
+    }
+    if (selected !== null && selected !== undefined) {
+        const found = view.instances.find((item) => item.id === selected);
+        if (found !== undefined) {
+            return { instance: found, source: "selected" };
+        }
     }
     if (last !== null && last !== undefined) {
         const found = view.instances.find((item) => item.id === last);
         if (found !== undefined) {
-            return found;
+            return { instance: found, source: "last" };
         }
     }
-    return view.instances.find((item) => item.state === "ready");
+    return { instance: view.instances.find((item) => item.state === "ready"), source: "first" };
 }

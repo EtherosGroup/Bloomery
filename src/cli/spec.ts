@@ -242,8 +242,8 @@ export const COMMANDS: CommandTable = {
     },
 
     version: {
-        summary: "列出与查看版本",
-        usage: "version <list|info> [id] [--folder <id>]",
+        summary: "列出、查看与选中版本",
+        usage: "version <list|info|select> [id] [--folder <id>]",
         options: {
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
         },
@@ -251,11 +251,11 @@ export const COMMANDS: CommandTable = {
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["list", "info"] as const,
+                ["list", "info", "select"] as const,
                 "action",
             );
             const id =
-                action === "info"
+                action === "info" || action === "select"
                     ? requirePositional(positionals, 1, "id")
                     : optionalPositional(positionals, 1, "id");
             return { name: "version", action, id, folder: optionalString(values, "folder") };

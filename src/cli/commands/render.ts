@@ -60,15 +60,15 @@ function folderState(row: FolderListRow): string {
     return row.exists ? (row.writable ? "可写" : "只读") : "目录不存在";
 }
 
-export function printFolder(view: FolderView, ctx: Context): void {
+export function printFolder(view: FolderView, ctx: Context, selected?: string | null): void {
     if (ctx.json) {
-        print(JSON.stringify(folderJson(view), null, 4));
+        print(JSON.stringify(folderJson(view, selected), null, 4));
         return;
     }
-    print(folderText(view));
+    print(folderText(view, selected));
 }
 
-export function folderText(view: FolderView): string {
+export function folderText(view: FolderView, selected?: string | null): string {
     const lines = [`${view.name}  ${view.path}`];
     if (!view.exists) {
         lines.push("  目录不存在");
@@ -79,6 +79,7 @@ export function folderText(view: FolderView): string {
     if (view.instances.length > 0) {
         const rows = view.instances.map((instance) => [
             instance.id,
+            instance.id === selected ? "是" : "",
             instance.gameVersion ?? "-",
             loaderText(instance),
             instance.type ?? "-",
@@ -87,7 +88,7 @@ export function folderText(view: FolderView): string {
         lines.push(
             ...renderTable(rows, {
                 indent: "  ",
-                header: ["版本", "游戏版本", "加载器", "类型", "备注"],
+                header: ["版本", "当前", "游戏版本", "加载器", "类型", "备注"],
             }),
         );
     }
@@ -98,9 +99,10 @@ export function folderText(view: FolderView): string {
     return lines.join("\n");
 }
 
-export function folderJson(view: FolderView): unknown {
+export function folderJson(view: FolderView, selected?: string | null): unknown {
     return {
         id: view.id,
+        selectedInstance: selected ?? null,
         name: view.name,
         path: view.path,
         exists: view.exists,

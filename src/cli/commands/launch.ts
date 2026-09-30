@@ -28,7 +28,7 @@ import {
     type LaunchPlan,
 } from "../../launch/index.ts";
 import { logger, print } from "../../output/index.ts";
-import { pickFolder, pickInstance, readFolder } from "../../version/index.ts";
+import { chooseInstance, pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, LaunchCommand } from "../parse.ts";
 
 const log = logger("launch");
@@ -45,7 +45,14 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
 
     const state = await loadState();
     const view = await readFolder(folder);
-    const instance = pickInstance(view, command.version, state.lastInstance);
+    // 指定的优先，其次当前选中的，再次上次启动的
+    const pick = chooseInstance(
+        view,
+        command.version,
+        setting.selectedInstance,
+        state.lastInstance,
+    );
+    const instance = pick.instance;
     if (instance === undefined) {
         throw new AppError("cli", "VersionNotFound", {
             context: {
@@ -73,7 +80,7 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
         { prepare: command.dryRun !== true },
     );
 
-    report(plan, ctx, command.dryRun === true);
+    report(plan, ctx, command.dryRun === true, pick.source === "selected" ? instance.id : null);
     if (command.dryRun === true) {
         return;
     }
@@ -150,13 +157,19 @@ async function refreshCredentials(
     return next;
 }
 
-function report(plan: LaunchPlan, ctx: Context, dryRun: boolean): void {
+function report(plan: LaunchPlan, ctx: Context, dryRun: boolean, selected: string | null): void {
     if (ctx.json) {
-        print(JSON.stringify(summary(plan), null, 4));
+        print(
+            JSON.stringify({ ...(summary(plan) as object), selectedInstance: selected }, null, 4),
+        );
         return;
     }
 
-    const lines = [
+    const lines: string[] = [];
+    if (selected !== null) {
+        lines.push(`启动当前已选择的版本 ${selected}（使用 bloomery version select 切换）`);
+    }
+    lines.push(
         `启动 ${plan.versionName}${dryRun ? "（只预览）" : ""}`,
         `  Java      ${plan.executable}（${describeJava(plan)}）`,
         `  账户      ${plan.account.name}（${plan.account.kind === "offline" ? "离线" : "微软"}）`,
@@ -170,7 +183,7 @@ function report(plan: LaunchPlan, ctx: Context, dryRun: boolean): void {
         plan.assets === null
             ? "  资源      索引不在，材质与声音可能缺失"
             : `  资源      ${plan.assets.index}：${plan.assets.present}/${plan.assets.total}`,
-    ];
+    );
     if (dryRun) {
         lines.push("", command(plan));
     }

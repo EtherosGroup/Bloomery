@@ -31,8 +31,8 @@ export {
     findFolder,
     findInstance,
     folderIdOf,
+    chooseInstance,
     pickFolder,
-    pickInstance,
     probeFolder,
     readFolder,
     resolveFolderPath,
@@ -42,6 +42,7 @@ export {
     type FolderProbe,
     type FolderSummary,
     type FolderView,
+    type InstancePick,
     type InstanceState,
     type InstanceView,
 } from "./folder.ts";

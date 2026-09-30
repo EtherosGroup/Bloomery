@@ -6,7 +6,8 @@
  * @since 1.0.0
  */
 
-import { loadSetting } from "../../config/index.ts";
+import { loadSetting, saveSetting } from "../../config/index.ts";
+import { print } from "../../output/index.ts";
 import { AppError } from "../../error/index.ts";
 import { pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, VersionCommand } from "../parse.ts";
@@ -22,7 +23,7 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
 
     const view = await readFolder(folder);
     if (command.action === "list") {
-        printFolder(view, ctx);
+        printFolder(view, ctx, setting.selectedInstance ?? null);
         return;
     }
 
@@ -33,5 +34,17 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
             context: { detail: id, folder: view.id },
         });
     }
+
+    // 选中只是记一条配置，launch 与 mod install 不给 --version 时用它
+    if (command.action === "select") {
+        await saveSetting({ ...setting, selectedInstance: instance.id });
+        if (ctx.json) {
+            print(JSON.stringify({ selected: instance.id, folder: view.id }, null, 4));
+            return;
+        }
+        print(`已选中 ${instance.id}  ${view.path}`);
+        return;
+    }
+
     printInstance(view.path, instance, ctx);
 }

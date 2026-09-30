@@ -180,6 +180,8 @@ export interface Setting {
     readonly cleanup: CleanupSetting;
     readonly selectedAccount?: string | null;
     readonly selectedFolder?: string | null;
+    /** 当前选中的实例 id，launch 与 mod install 默认用它 */
+    readonly selectedInstance?: string | null;
     readonly folders: readonly Folder[];
 }
 

@@ -102,8 +102,8 @@ export interface FolderCommand {
 
 export interface VersionCommand {
     readonly name: "version";
-    readonly action: "list" | "info";
-    /** info 必给 */
+    readonly action: "list" | "info" | "select";
+    /** info 与 select 必给 */
     readonly id?: string;
     /** 省略时用当前文件夹 */
     readonly folder?: string;

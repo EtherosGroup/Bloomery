@@ -252,6 +252,12 @@
             "type": ["string", "null"],
             "default": null
         },
+        "selectedInstance": {
+            "title": "当前选中的实例",
+            "description": "launch 与 mod install 不给 --version 时用的实例 id。",
+            "type": ["string", "null"],
+            "default": null
+        },
         "folders": {
             "title": "游戏目录",
             "description": "清单是缓存提示，启动前逐个复核。",

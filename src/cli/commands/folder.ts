@@ -161,10 +161,16 @@ async function scan(setting: Setting, target: string | undefined, ctx: Context):
     await saveSetting({ ...setting, folders });
 
     if (ctx.json) {
-        print(JSON.stringify(views.map(folderJson), null, 4));
+        print(
+            JSON.stringify(
+                views.map((view) => folderJson(view)),
+                null,
+                4,
+            ),
+        );
         return;
     }
-    print(views.map(folderText).join("\n\n"));
+    print(views.map((view) => folderText(view)).join("\n\n"));
 }
 
 // 核对结果写回清单：补上磁盘发现的，drop 掉的已经不在视图里
