@@ -55,6 +55,8 @@ export interface DownloadReport {
     readonly skipped: number;
     readonly bytes: number;
     readonly failures: readonly DownloadFailure[];
+    /** 成功的逐个结果，调用方要按类别分桶时用 */
+    readonly outcomes: readonly DownloadOutcome[];
 }
 
 // bytes 为 true 时 done 与 total 是字节数
@@ -91,6 +93,7 @@ export async function downloadAll(
 ): Promise<DownloadReport> {
     const queue = [...tasks];
     const failures: DownloadFailure[] = [];
+    const outcomes: DownloadOutcome[] = [];
     let downloaded = 0;
     let skipped = 0;
     let bytes = 0;
@@ -135,6 +138,7 @@ export async function downloadAll(
                             : undefined,
                     );
                     counted = true;
+                    outcomes.push(outcome);
                     if (outcome.status === "skipped") {
                         skipped++;
                     } else {
@@ -156,7 +160,7 @@ export async function downloadAll(
         }),
     );
 
-    return { downloaded, skipped, bytes, failures };
+    return { downloaded, skipped, bytes, failures, outcomes };
 }
 
 // 依次试每个源，拿回整个响应体

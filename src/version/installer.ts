@@ -35,6 +35,8 @@ import {
 import { AppError } from "../error/index.ts";
 import {
     downloadAll,
+    type DownloadFailure,
+    type DownloadOutcome,
     fetchBuffer,
     type DownloadReport,
     type DownloadTask,
@@ -58,7 +60,13 @@ const log = logger("install");
 
 const ASSET_ROOT = "https://resources.download.minecraft.net";
 
-const EMPTY_REPORT: DownloadReport = { downloaded: 0, skipped: 0, bytes: 0, failures: [] };
+const EMPTY_REPORT: DownloadReport = {
+    downloaded: 0,
+    skipped: 0,
+    bytes: 0,
+    failures: [],
+    outcomes: [],
+};
 
 export interface InstallProgress {
     (stage: string, done: number, total: number, bytes: boolean, existing: boolean): void;
@@ -168,27 +176,49 @@ async function installBody(
 ): Promise<BodyResult> {
     const versionDir = dirname(jsonPath);
     const librariesRoot = join(input.folderPath, "libraries");
+    const assetsRoot = join(input.folderPath, "assets");
     const context = platformContext();
 
-    const clientJar = await installClientJar(
-        descriptor,
-        join(versionDir, `${name}.jar`),
-        options,
-        warnings,
-        input.onProgress,
-    );
+    // 资源索引是唯一的硬前置：对象清单要先拿到，索引本身很小
+    const assetPlan =
+        input.assets === false
+            ? null
+            : await prepareAssets(descriptor, assetsRoot, options, warnings);
 
+    const hasClientEntry = descriptor.downloads["client"] !== undefined;
+    const client = await clientJarTask(descriptor, join(versionDir, `${name}.jar`), warnings);
     const { libraries: libraryTasks, natives: nativeTasks } = splitTasks(
         descriptor,
         context,
         librariesRoot,
     );
-    const libraries = await downloadAll(libraryTasks, options, stage(input.onProgress, "库"));
-    const nativeReport = await downloadAll(
-        nativeTasks,
-        options,
-        stage(input.onProgress, "natives"),
-    );
+
+    // 客户端 jar、库、natives jar、资源对象互不依赖，合成一个队列一起下
+    const kinds = new Map<string, Kind>();
+    const tasks: DownloadTask[] = [];
+    const add = (kind: Kind, list: readonly DownloadTask[]): void => {
+        for (const task of list) {
+            if (!kinds.has(task.target)) {
+                kinds.set(task.target, kind);
+                tasks.push(task);
+            }
+        }
+    };
+    add("client", client === null ? [] : [client]);
+    add("libraries", libraryTasks);
+    add("natives", nativeTasks);
+    add("assets", assetPlan?.tasks ?? []);
+
+    log.debug("合并 %d 个文件一起下", tasks.length);
+    const merged = await downloadAll(tasks, options, stage(input.onProgress, "文件"));
+    const buckets = bucketOf(merged, kinds);
+
+    // 客户端 jar 缺了整个版本都起不来，单独拦下来
+    if (buckets.client.failures.length > 0) {
+        throw new AppError("install", "DependencyMissing", {
+            context: { detail: `客户端 jar：${buckets.client.failures[0]?.error ?? ""}` },
+        });
+    }
 
     const selection = await nativeJars({
         libraries: descriptor.libraries,
@@ -197,22 +227,21 @@ async function installBody(
     });
     const files = await extractNatives(selection.jars, join(versionDir, "natives"));
 
-    const assets =
-        input.assets === false
-            ? null
-            : await installAssets(
-                  descriptor,
-                  join(input.folderPath, "assets"),
-                  options,
-                  warnings,
-                  input.onProgress,
-              );
+    if (assetPlan !== null) {
+        if (assetPlan.parsed.virtual) {
+            const linked = await layoutVirtual(assetsRoot, assetPlan.parsed);
+            log.info("索引 %s 是 virtual 的，另铺了 %d 个对象", assetPlan.id, linked);
+        }
+        if (assetPlan.parsed.mapToResources) {
+            warnings.push(`索引 ${assetPlan.id} 要 map_to_resources，这一版还没处理`);
+        }
+    }
 
     return {
-        clientJar,
-        libraries,
-        natives: { jars: selection.jars.length, files, report: nativeReport },
-        assets,
+        clientJar: hasClientEntry,
+        libraries: buckets.libraries,
+        natives: { jars: selection.jars.length, files, report: buckets.natives },
+        assets: assetPlan === null ? null : { index: assetPlan.index, objects: buckets.assets },
     };
 }
 
@@ -287,35 +316,65 @@ async function fetchVanillaJson(
 
 /* ---------- 客户端 jar ---------- */
 
-async function installClientJar(
+// 客户端 jar 的任务；没有下载信息或本地已经有时给 null
+async function clientJarTask(
     descriptor: Descriptor,
     clientJar: string,
-    options: TransferOptions,
     warnings: string[],
-    onProgress: InstallProgress | undefined,
-): Promise<boolean> {
+): Promise<DownloadTask | null> {
     const entry = descriptor.downloads["client"];
     if (entry === undefined) {
         // 加载器版本靠 inheritsFrom 用基础版本的 jar，没有下载信息是正常的
         if (descriptor.inheritsFrom === null) {
             warnings.push("版本 json 里没有客户端 jar 的下载信息");
         }
-        return false;
+        return null;
     }
     if (await pathExists(clientJar)) {
-        return true;
+        return null;
     }
-    const report = await downloadAll(
-        [{ url: entry.url, target: clientJar, sha1: entry.sha1, size: entry.size }],
-        options,
-        stage(onProgress, "客户端 jar"),
-    );
-    if (report.failures.length > 0) {
-        throw new AppError("install", "DependencyMissing", {
-            context: { detail: `客户端 jar：${report.failures[0]?.error ?? ""}` },
-        });
+    return { url: entry.url, target: clientJar, sha1: entry.sha1, size: entry.size };
+}
+
+type Kind = "client" | "libraries" | "natives" | "assets";
+
+interface Bucket {
+    downloaded: number;
+    skipped: number;
+    bytes: number;
+    failures: DownloadFailure[];
+    outcomes: DownloadOutcome[];
+}
+
+function emptyBucket(): Bucket {
+    return { downloaded: 0, skipped: 0, bytes: 0, failures: [], outcomes: [] };
+}
+
+// 合并成一个队列后，按目标把结果分回各段，分项数字才不会丢
+function bucketOf(
+    report: DownloadReport,
+    kinds: ReadonlyMap<string, Kind>,
+): Record<Kind, DownloadReport> {
+    const buckets: Record<Kind, Bucket> = {
+        client: emptyBucket(),
+        libraries: emptyBucket(),
+        natives: emptyBucket(),
+        assets: emptyBucket(),
+    };
+    for (const outcome of report.outcomes) {
+        const bucket = buckets[kinds.get(outcome.target) ?? "libraries"];
+        bucket.outcomes.push(outcome);
+        if (outcome.status === "skipped") {
+            bucket.skipped++;
+        } else {
+            bucket.downloaded++;
+            bucket.bytes += outcome.bytes;
+        }
     }
-    return true;
+    for (const failure of report.failures) {
+        buckets[kinds.get(failure.target) ?? "libraries"].failures.push(failure);
+    }
+    return buckets;
 }
 
 /* ---------- 库与 natives ---------- */
@@ -402,13 +461,20 @@ function taskOf(
 
 /* ---------- 资源 ---------- */
 
-async function installAssets(
+interface AssetPlan {
+    readonly id: string;
+    readonly index: DownloadReport;
+    readonly parsed: AssetIndex;
+    readonly tasks: readonly DownloadTask[];
+}
+
+// 只下索引并算出对象任务，对象本体交给合并队列
+async function prepareAssets(
     descriptor: Descriptor,
     assetsRoot: string,
     options: TransferOptions,
     warnings: string[],
-    onProgress: InstallProgress | undefined,
-): Promise<{ index: DownloadReport; objects: DownloadReport } | null> {
+): Promise<AssetPlan | null> {
     const id = descriptor.assetIndex?.id ?? descriptor.assets;
     if (id === null || id === "") {
         // 继承型版本用的是基础版本的资源，这里没有索引是正常的
@@ -444,21 +510,7 @@ async function installAssets(
         return null;
     }
 
-    const objects = await downloadAll(
-        objectTasks(assetsRoot, parsed),
-        options,
-        stage(onProgress, "资源"),
-    );
-
-    if (parsed.virtual) {
-        const linked = await layoutVirtual(assetsRoot, parsed);
-        log.info("索引 %s 是 virtual 的，另铺了 %d 个对象", id, linked);
-    }
-    if (parsed.mapToResources) {
-        warnings.push(`索引 ${id} 要 map_to_resources，这一版还没处理`);
-    }
-
-    return { index, objects };
+    return { id, index, parsed, tasks: objectTasks(assetsRoot, parsed) };
 }
 
 // 同一个哈希可能挂在多个名字下，按目标去重
