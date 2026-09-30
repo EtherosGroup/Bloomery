@@ -26,7 +26,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     FolderUnusable: "游戏文件夹不可用",
     FolderDuplicate: "游戏文件夹已经添加过",
     VersionNotFound: "版本不存在",
-    VersionBroken: "版本文件读不出来",
+    VersionBroken: "无法读取版本文件",
     VersionExists: "版本已经存在",
     JavaNotFound: "找不到可用的 Java",
     JavaBroken: "Java 跑不起来",

@@ -9,7 +9,7 @@
  * @since 1.0.0
  */
 
-import { copyFile, link, mkdir } from "node:fs/promises";
+import { copyFile, link, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { object, parseJson } from "../config/read.ts";
@@ -88,6 +88,8 @@ export interface InstallInput {
     readonly assets?: boolean | undefined;
     /** forge 与 neoforge 要跑官方安装器，这是挑好的 java；由调用方解析 */
     readonly officialJava?: string | undefined;
+    /** 过程提示；--json 时调用方不给 */
+    readonly logLine?: ((text: string) => void) | undefined;
     readonly onProgress?: InstallProgress | undefined;
 }
 
@@ -149,7 +151,13 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         loader === null
             ? null
             : isOfficial
-              ? await officialLoaderVersion(loader.name, input.versionId, loader.version, options)
+              ? await officialLoaderVersion(
+                    loader.name,
+                    input.versionId,
+                    loader.version,
+                    options,
+                    (text) => input.logLine?.(text),
+                )
               : await resolveLoaderVersion(loader, input.versionId, options);
 
     // forge 的版本号自带游戏版本前缀（1.20.6-50.2.10），目录名里不重复放
@@ -176,29 +184,12 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
             options,
         );
         official = { versionDirectory: installed.versionDirectory, java: installed.java };
-        // forge 的安装器就用 <游戏版本>-forge-<版本> 当目录名，和我们本来要建的实例名一样
-        // 这时不能再写一份继承型 json：会覆盖掉它的真 json，还会让它指向自己成环
-        if (installed.versionDirectory === name) {
-            warnings.push(
-                `${loader.name} 已由官方安装器装入 versions/${installed.versionDirectory}，启动就用它`,
-            );
-            log.info("安装器写出的目录名与实例名一致，不再另建实例");
-            return {
-                name,
-                versionId: input.versionId,
-                loader: { name: loader.name, version: loaderVersion ?? "" },
-                base,
-                clientJar: true,
-                libraries: EMPTY_REPORT,
-                natives: { jars: 0, files: 0, report: EMPTY_REPORT },
-                assets: null,
-                official,
-                timing: { downloadMs: 0, finishMs: Date.now() - installStartedAt },
-                warnings,
-            };
+        // 安装器写出的目录改名接管：实例名就是 name，继承链只留一层
+        if (installed.versionDirectory !== name) {
+            await adoptVersion(input.folderPath, installed.versionDirectory, name);
+            warnings.push(`安装器目录 ${installed.versionDirectory} 改名 ${name}`);
         }
-        json = { id: name, inheritsFrom: installed.versionDirectory, type: "release" };
-        warnings.push(`${loader.name} 由官方安装器装入 versions/${installed.versionDirectory}`);
+        json = await readVersionJson(join(input.folderPath, "versions", name, `${name}.json`));
     } else {
         base = await ensureBase(input, options, warnings);
         json = await fetchLoaderProfile(loader, input.versionId, loaderVersion ?? "", options);
@@ -252,6 +243,7 @@ async function officialLoaderVersion(
     game: string,
     wanted: string | null | undefined,
     options: TransferOptions,
+    say: (text: string) => void,
 ): Promise<string> {
     if (wanted !== null && wanted !== undefined && wanted !== "") {
         // 指定了版本就只验地址存不存在：forge 的清单是几 MB 的 JSON，国内拉它经常超时
@@ -300,6 +292,40 @@ async function officialLoaderVersion(
     return picked.version;
 }
 
+// 安装器写出的版本目录整份改名：目录、json 文件名、json 里的 id 与 jar 一起改
+export async function adoptVersion(folderPath: string, from: string, to: string): Promise<void> {
+    const versionsRoot = join(folderPath, "versions");
+    const source = join(versionsRoot, from);
+    const target = join(versionsRoot, to);
+    await rm(target, { recursive: true, force: true });
+    await rename(source, target);
+
+    const fromJson = join(target, `${from}.json`);
+    if (!(await pathExists(fromJson))) {
+        return;
+    }
+    const raw = parseJson(await readFile(fromJson, "utf8"), fromJson);
+    const data: Record<string, unknown> = object(raw, fromJson) ?? {};
+    data["id"] = to;
+
+    // 客户端 jar 跟着实例名走，json 里的 jar 字段可能是 id 也可能是文件名
+    const jarFile = `${from}.jar`;
+    if (await pathExists(join(target, jarFile))) {
+        await rename(join(target, jarFile), join(target, `${to}.jar`));
+        if (data["jar"] === from || data["jar"] === jarFile) {
+            data["jar"] = to;
+        }
+    }
+    await writeAtomic(join(target, `${to}.json`), `${JSON.stringify(data, null, 4)}\n`);
+    await rm(fromJson, { force: true });
+    log.info("版本目录 %s 改名 %s", from, to);
+}
+
+async function readVersionJson(path: string): Promise<Record<string, unknown>> {
+    const raw = parseJson(await readFile(path, "utf8"), path);
+    return object(raw, path) ?? {};
+}
+
 // 跑官方安装器前要先有 java：调用方（CLI）没给就说明这条路径没准备好
 async function runOfficialInstaller(
     input: InstallInput,
@@ -324,6 +350,7 @@ async function runOfficialInstaller(
         folderPath: input.folderPath,
         java,
         options,
+        onLine: input.logLine,
     });
 }
 

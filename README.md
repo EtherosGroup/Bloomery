@@ -71,7 +71,7 @@ bloomery view game 1.20.6                      # 这个游戏版本上四种加�
 
 ```bash
 bloomery modpack ~/下载/SomePack.mrpack       # 按包里的游戏版本与加载器建实例
-bloomery modpack pack.mrpack --name MyPack    # 指定实例名
+bloomery modpack pack.mrpack --name MyPack    # 实例名，指定时把安装器产物改名接管
 bloomery modpack pack.mrpack --dry-run        # 只算不导入
 bloomery modpack pack.mrpack --no-assets      # 跳过资源对象，只装游戏本体
 ```

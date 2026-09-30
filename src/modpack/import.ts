@@ -41,6 +41,8 @@ export interface ModpackImportInput {
     readonly assets?: boolean | undefined;
     /** 包里要 forge / neoforge 时官方安装器用的 java */
     readonly officialJava?: string | undefined;
+    /** 过程提示；--json 时调用方不给 */
+    readonly logLine?: ((text: string) => void) | undefined;
     readonly onProgress?: InstallProgress | undefined;
 }
 
@@ -93,6 +95,7 @@ export async function importModpack(input: ModpackImportInput): Promise<ModpackI
         download: input.download,
         assets: input.assets !== false,
         officialJava: input.officialJava,
+        logLine: input.logLine,
         onProgress: input.onProgress,
     });
 

@@ -39,6 +39,8 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
         assets: command.noAssets !== true,
         officialJava,
         onProgress: progress.update,
+        // --json 时不给过程提示，避免污染标准输出
+        logLine: ctx.json ? undefined : print,
     });
     progress.close();
     log.info("整合包导入 %s", report.name);

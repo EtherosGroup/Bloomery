@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { AppError } from "../error/index.ts";
 import { downloadOne, type TransferOptions } from "../infra/download.ts";
 import { pathExists, writeAtomic } from "../infra/fs.ts";
-import { logger, print } from "../output/index.ts";
+import { logger } from "../output/index.ts";
 import { installerUrlOf, type LoaderName } from "./loader.ts";
 
 const log = logger("official");
@@ -43,6 +43,8 @@ export interface OfficialInstallInput {
     readonly folderPath: string;
     /** 挑好的 java 可执行文件 */
     readonly java: string;
+    /** 过程提示；--json 时调用方不给 */
+    readonly onLine?: ((text: string) => void) | undefined;
     readonly options: TransferOptions;
 }
 
@@ -184,14 +186,14 @@ function attempt(
         flag,
         input.folderPath,
     ];
-    // 安装器要跑几分钟下库打补丁，输出实时透传，否则看着像卡死
-    print(`正在运行 ${input.name} 官方安装器（可能要几分钟）…`);
+    // 安装器要跑几分钟，输出实时透传
+    input.onLine?.(`运行 ${input.name} 官方安装器`);
     return run(input.java, args, input.folderPath, (line) => {
         tail.push(line);
         if (tail.length > TAIL_LINES) {
             tail.shift();
         }
-        print(`  ${line}`);
+        input.onLine?.(`  ${line}`);
     });
 }
 

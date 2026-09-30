@@ -61,6 +61,8 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         assets: command.assets !== false,
         officialJava,
         onProgress: progress.update,
+        // --json 时不给过程提示，避免污染标准输出
+        logLine: ctx.json ? undefined : print,
     });
     progress.close();
     log.info("安装完成 %s", report.name);
@@ -87,7 +89,7 @@ function render(report: InstallReport): string {
 
     if (report.loader !== null) {
         lines.push(`  加载器     ${report.loader.name} ${report.loader.version}`);
-        lines.push(`  基础版本   ${report.base === "installed" ? "这次顺带装的" : "本来就在"}`);
+        lines.push(`  基础版本   ${report.base === "installed" ? "无（首次安装）" : "已有"}`);
     }
     if (report.official !== null) {
         lines.push(
@@ -121,7 +123,7 @@ function clientJarText(report: InstallReport): string {
     if (report.clientJar) {
         return "已有或已下";
     }
-    return report.loader === null ? "缺失" : "用基础版本的";
+    return report.loader === null ? "缺失" : "使用基本jar";
 }
 
 function describe(name: string, report: InstallReport["libraries"]): string {
