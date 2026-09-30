@@ -85,6 +85,12 @@ export interface ViewCommand {
 export interface ModpackCommand {
     readonly name: "modpack";
     readonly file: string;
+    /** 实例名，省略按包名或文件名推 */
+    readonly displayName?: string;
+    readonly folder?: string;
+    readonly dryRun?: boolean;
+    /** 跳过资源对象 */
+    readonly noAssets?: boolean;
 }
 
 export interface FolderCommand {

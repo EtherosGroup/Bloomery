@@ -58,7 +58,11 @@ export async function extractZip(
             if (options.keep !== undefined && !options.keep(entry.name)) {
                 continue;
             }
-            const name = options.flatten === true ? basename(entry.name) : entry.name;
+            const named = options.flatten === true ? basename(entry.name) : entry.name;
+            const name = options.strip === undefined ? named : options.strip(named);
+            if (name === "") {
+                continue;
+            }
             const target = safeJoin(destination, name);
             if (target === undefined) {
                 continue;
@@ -80,6 +84,20 @@ export async function extractZip(
 export interface ExtractOptions {
     readonly keep?: (name: string) => boolean;
     readonly flatten?: boolean;
+    /** 剥掉条目前缀，用来把 overrides/ 里的文件摊到目标目录 */
+    readonly strip?: (name: string) => string;
+}
+
+// 读单个条目，找不到返回 undefined
+export async function readZipEntry(path: string, name: string): Promise<Buffer | undefined> {
+    const file = await open(path, "r");
+    try {
+        const entry = (await readDirectory(file, path)).find((item) => item.name === name);
+        // 必须 await：不等它读完 finally 就把文件关了
+        return entry === undefined ? undefined : await readEntry(file, entry);
+    } finally {
+        await file.close();
+    }
 }
 
 async function readDirectory(file: FileHandle, path: string): Promise<ZipEntry[]> {

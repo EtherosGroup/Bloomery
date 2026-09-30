@@ -195,13 +195,22 @@ export const COMMANDS: CommandTable = {
     },
 
     modpack: {
-        summary: "导入整合包",
-        usage: "modpack <file>",
-        options: {},
+        summary: "导入整合包（.mrpack）",
+        usage: "modpack <file> [--name <name>] [--folder <id>] [--dry-run] [--no-assets]",
+        options: {
+            name: { type: "string", value: "<name>", summary: "实例名，省略按包名推" },
+            folder: { type: "string", value: "<id>", summary: "游戏文件夹" },
+            "dry-run": { type: "boolean", summary: "只算不导入" },
+            "no-assets": { type: "boolean", summary: "跳过资源对象，只装游戏本体" },
+        },
         positionals: { names: ["file"], required: 1 },
-        toCommand: (_values, positionals) => ({
+        toCommand: (values, positionals) => ({
             name: "modpack",
             file: requirePositional(positionals, 0, "file"),
+            displayName: optionalString(values, "name"),
+            folder: optionalString(values, "folder"),
+            dryRun: values["dry-run"] === true,
+            noAssets: values["no-assets"] === true,
         }),
         run: runModpack,
     },

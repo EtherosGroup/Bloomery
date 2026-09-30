@@ -67,6 +67,17 @@ bloomery view game 1.20.6                      # 这个游戏版本上四种加�
 
 版本清单直接取自各加载器的官方接口（Fabric / Quilt 的 meta、Forge 与 NeoForge 的 maven）。安装目前只支持 fabric，另外三种的版本号可以查，装的时候会提示未实现。
 
+### 导入整合包
+
+```bash
+bloomery modpack ~/下载/SomePack.mrpack       # 按包里的游戏版本与加载器建实例
+bloomery modpack pack.mrpack --name MyPack    # 指定实例名
+bloomery modpack pack.mrpack --dry-run        # 只算不导入
+bloomery modpack pack.mrpack --no-assets      # 跳过资源对象，只装游戏本体
+```
+
+只认 Modrinth 的 `.mrpack`：清单里的文件按落点下载并校验 sha1，`overrides/` 与 `client-overrides/` 摊到实例目录，清单里没有下载地址的文件只记警告。加载器安装目前只支持 fabric，包里要 forge / neoforge / quilt 时会报未实现。
+
 `bloomery --version` 看当前版本，`bloomery --help` 列出全部命令，`bloomery <命令> --help` 看单个命令。
 
 ## 微软登录
