@@ -278,8 +278,7 @@ function run(
         }, HEARTBEAT_MS);
 
         const feed = (chunk: Buffer): void => {
-            for (const line of chunk.toString("utf8").split(/?
-/)) {
+            for (const line of chunk.toString("utf8").split(/\r?\n/)) {
                 if (line.trim() !== "") {
                     lastLineAt = Date.now();
                     onLine(line.trim());
