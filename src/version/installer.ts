@@ -45,7 +45,7 @@ import {
 } from "../infra/download.ts";
 import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
-import { logger } from "../output/index.ts";
+import { logger, print } from "../output/index.ts";
 import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
 import { installWithOfficial, type OfficialInstallReport } from "./official.ts";
 import {
@@ -231,6 +231,19 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
     };
 }
 
+// 只问地址在不在，不拉内容
+async function addressExists(url: string, options: TransferOptions): Promise<boolean> {
+    try {
+        const response = await fetch(url, {
+            method: "HEAD",
+            signal: AbortSignal.timeout(options.timeoutMs),
+        });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
 // forge 与 neoforge 的版本号：给了就用，没给就取清单里最新的正式版
 async function officialLoaderVersion(
     name: LoaderName,
@@ -239,7 +252,20 @@ async function officialLoaderVersion(
     options: TransferOptions,
 ): Promise<string> {
     if (wanted !== null && wanted !== undefined && wanted !== "") {
-        // 版本号与游戏版本必须对得上：neoforge 21.1.x 是给 1.21.1 的，装到 1.20.6 上安装器必崩
+        // 指定了版本就只验地址存不存在：forge 的清单是几 MB 的 JSON，国内拉它经常超时
+        const url = installerUrlOf(name, game, wanted);
+        if (url !== null && !(await addressExists(url, options))) {
+            throw new AppError("loader", "VersionNotFound", {
+                context: {
+                    detail: `${name} ${wanted} 在 ${game} 上没有安装器`,
+                    hint: "版本号要带游戏版本前缀，或者省略版本号自动取最新的",
+                },
+            });
+        }
+        if (url !== null) {
+            return wanted;
+        }
+        // 地址拼不出来才退回清单校验
         const list = await listLoaderVersionsFor(name, game, options);
         const known = list.some(
             (item) =>
@@ -259,6 +285,9 @@ async function officialLoaderVersion(
         }
         return wanted;
     }
+    print(
+        `正在取 ${name} 的版本清单（${name === "forge" ? "文件较大，国内可能较慢；指定 @<版本> 可跳过" : "稍等"}）…`,
+    );
     const list = await listLoaderVersionsFor(name, game, options);
     const picked = list.find((item) => item.channel === "release") ?? list[0];
     if (picked === undefined) {
