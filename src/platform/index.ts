@@ -26,3 +26,4 @@ export {
     settingFile,
     stateFile,
 } from "./path.ts";
+export { mirrorListFile } from "./path.ts";

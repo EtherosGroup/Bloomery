@@ -9,6 +9,7 @@
  * @since 1.0.0
  */
 
+import { object } from "../config/read.ts";
 import type { DownloadProvider, DownloadSetting, DownloadSource } from "../config/types.ts";
 
 const BMCLAPI = "https://bmclapi2.bangbang93.com";
@@ -30,6 +31,61 @@ export const SOURCE_PRESETS: readonly SourcePreset[] = [
     { name: "bmclapi", provider: "bmclapi", label: "BMCLAPI" },
     { name: "custom", provider: "custom", label: "自定义地址" },
 ];
+
+/** 镜像站清单里的一条 */
+export interface MirrorEntry {
+    readonly name: string;
+    readonly label: string;
+    readonly base: string;
+}
+
+// 解析镜像站给的清单：数组，或 { entries: [...] }
+export function parseMirrorList(raw: unknown, where: string): MirrorEntry[] {
+    const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(object(raw, where)?.["entries"])
+          ? (object(raw, where)?.["entries"] as unknown[])
+          : [];
+    const entries: MirrorEntry[] = [];
+    for (const item of list) {
+        const row = object(item, `${where}[]`);
+        const name = row?.["name"];
+        const base = row?.["base"] ?? row?.["url"];
+        if (typeof name !== "string" || name.trim() === "" || typeof base !== "string") {
+            continue;
+        }
+        const clean = base.trim().replace(/\/+$/, "");
+        if (clean === "") {
+            continue;
+        }
+        const label = row?.["label"];
+        entries.push({
+            name: name.trim().toLowerCase(),
+            label: typeof label === "string" && label !== "" ? label : name.trim(),
+            base: clean,
+        });
+    }
+    return entries;
+}
+
+// 拉来的清单里按名字找
+export function cachedOf(cached: readonly MirrorEntry[], name: string): MirrorEntry | undefined {
+    const wanted = name.trim().toLowerCase();
+    return cached.find((item) => item.name === wanted);
+}
+
+// 预置优先，其次拉来的清单；拉来的源按 custom 写入
+export function sourceFor(
+    name: string,
+    url: string | null | undefined,
+    cached: readonly MirrorEntry[],
+): DownloadSource | undefined {
+    if (presetOf(name) !== undefined) {
+        return sourceOf(name, url);
+    }
+    const entry = cachedOf(cached, name);
+    return entry === undefined ? undefined : { provider: "custom", enabled: true, url: entry.base };
+}
 
 export function presetOf(name: string): SourcePreset | undefined {
     const wanted = name.trim().toLowerCase();

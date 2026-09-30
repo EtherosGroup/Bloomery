@@ -69,11 +69,13 @@ export interface ModCommand {
 
 export interface MirrorCommand {
     readonly name: "mirror";
-    readonly action: "list" | "use";
+    readonly action: "list" | "use" | "update";
     /** use 必给 */
     readonly preset?: string;
     /** custom 必给 */
     readonly url?: string;
+    /** update 的清单地址，省略用上次的 */
+    readonly from?: string;
 }
 
 export interface ViewCommand {

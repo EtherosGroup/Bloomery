@@ -165,16 +165,24 @@ bloomery java list --major 21
 
 ### mirror
 
-查看与切换下载源。默认 Mojang 官方直连。
+查看、切换下载源，或从镜像站拉取清单。默认 Mojang 官方直连。
 
 ```bash
-bloomery mirror list                             # 预置源与当前选择
+bloomery mirror list                             # 预置源、拉来的源与当前选择
 bloomery mirror use bmclapi                      # 切到 BMCLAPI
 bloomery mirror use official                     # 切回官方
 bloomery mirror use custom --url https://mirror.example.com
+bloomery mirror update --from https://example.com/mirrors.json
+bloomery mirror update                           # 不给 --from 就用上次的地址
 ```
 
-预置源在 `src/infra/source.ts` 的 `SOURCE_PRESETS` 表里，加源加一行。BMCLAPI 只改写 Mojang 主机（库、资源、版本 json），Forge 等第三方 maven 原样直连。写入的是 `setting.json` 的 `download.sources`。
+`update` 拉取的清单格式（数组，或 `{ "entries": [...] }`）：
+
+```json
+[{ "name": "bmclapi", "label": "BMCLAPI", "base": "https://bmclapi2.bangbang93.com" }]
+```
+
+拉来的清单缓存在 `<配置目录>/mirrors.json`（含来源地址与拉取时刻），`mirror use <名字>` 对预置与拉来的源一视同仁；拉来的源按 `custom` 写入。BMCLAPI 只改写 Mojang 主机（库、资源、版本 json），Forge 等第三方 maven 原样直连。写入的是 `setting.json` 的 `download.sources`。
 
 ### 全局选项
 

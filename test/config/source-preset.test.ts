@@ -7,7 +7,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SOURCE_PRESETS, presetOf, sourceOf, sourcesOf } from "../../src/infra/source.ts";
+import {
+    SOURCE_PRESETS,
+    parseMirrorList,
+    presetOf,
+    sourceFor,
+    sourceOf,
+    sourcesOf,
+} from "../../src/infra/source.ts";
 
 test("预置名忽略大小写与空白", () => {
     assert.equal(presetOf(" BMCLAPI ")?.provider, "bmclapi");
@@ -53,4 +60,38 @@ test("一条启用的都没有时退回官方", () => {
     const list = sourcesOf({ verify: "strict", sources: [] });
     assert.equal(list.length, 1);
     assert.equal(list[0]?.provider, "official");
+});
+
+test("解析镜像站清单：数组与 entries 两种都认，坏条目跳过", () => {
+    const rows = parseMirrorList(
+        [
+            { name: "Aaa", label: "甲", base: "https://a.example.com/" },
+            { name: "bbb", url: "https://b.example.com" },
+            { name: "", base: "https://c.example.com" },
+            { name: "ddd" },
+            "not-an-object",
+        ],
+        "test",
+    );
+    assert.deepEqual(rows, [
+        { name: "aaa", label: "甲", base: "https://a.example.com" },
+        { name: "bbb", label: "bbb", base: "https://b.example.com" },
+    ]);
+
+    const wrapped = parseMirrorList(
+        { from: "x", entries: [{ name: "ccc", base: "https://c.example.com" }] },
+        "test",
+    );
+    assert.equal(wrapped.length, 1);
+});
+
+test("拉来的源按 custom 写入，预置名不受清单影响", () => {
+    const cached = [{ name: "zzz", label: "某镜像", base: "https://z.example.com" }];
+    assert.deepEqual(sourceFor("zzz", null, cached), {
+        provider: "custom",
+        enabled: true,
+        url: "https://z.example.com",
+    });
+    assert.deepEqual(sourceFor("bmclapi", null, cached)?.provider, "bmclapi");
+    assert.equal(sourceFor("nope", null, cached), undefined);
 });

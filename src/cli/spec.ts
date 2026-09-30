@@ -158,15 +158,16 @@ export const COMMANDS: CommandTable = {
 
     mirror: {
         summary: "查看与切换下载源",
-        usage: "mirror <list|use> [name] [--url <地址>]",
+        usage: "mirror <list|use|update> [name] [--url <地址>] [--from <地址>]",
         options: {
             url: { type: "string", value: "<地址>", summary: "custom 的根地址" },
+            from: { type: "string", value: "<地址>", summary: "镜像清单地址，省略用上次的" },
         },
         positionals: { names: ["action", "name"], required: 1 },
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["list", "use"] as const,
+                ["list", "use", "update"] as const,
                 "action",
             );
             return {
@@ -177,6 +178,7 @@ export const COMMANDS: CommandTable = {
                         ? requirePositional(positionals, 1, "name")
                         : optionalPositional(positionals, 1, "name"),
                 url: optionalString(values, "url"),
+                from: optionalString(values, "from"),
             };
         },
         run: runMirror,

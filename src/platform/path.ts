@@ -47,3 +47,8 @@ export function expandHome(path: string): string {
     }
     return path;
 }
+
+// 从镜像站拉来的源清单
+export function mirrorListFile(): string {
+    return join(configDirectory(), "mirrors.json");
+}
