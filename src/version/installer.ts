@@ -232,15 +232,17 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
 }
 
 // 只问地址在不在，不拉内容
-async function addressExists(url: string, options: TransferOptions): Promise<boolean> {
+// 返回 false 才代表确定没有；true 与 undefined 都不拦人
+// 这里用的是裸 fetch，不走设置里的代理，也不代表所有站点都支持 HEAD，所以只在 404 时才下结论
+async function addressExists(url: string, options: TransferOptions): Promise<boolean | undefined> {
     try {
         const response = await fetch(url, {
             method: "HEAD",
             signal: AbortSignal.timeout(options.timeoutMs),
         });
-        return response.ok;
+        return response.status === 404 ? false : true;
     } catch {
-        return false;
+        return undefined;
     }
 }
 
@@ -254,7 +256,7 @@ async function officialLoaderVersion(
     if (wanted !== null && wanted !== undefined && wanted !== "") {
         // 指定了版本就只验地址存不存在：forge 的清单是几 MB 的 JSON，国内拉它经常超时
         const url = installerUrlOf(name, game, wanted);
-        if (url !== null && !(await addressExists(url, options))) {
+        if (url !== null && (await addressExists(url, options)) === false) {
             throw new AppError("loader", "VersionNotFound", {
                 context: {
                     detail: `${name} ${wanted} 在 ${game} 上没有安装器`,
