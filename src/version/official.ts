@@ -25,6 +25,12 @@ const INSTALL_FLAGS: Partial<Record<LoaderName, string>> = {
     neoforge: "--install-client",
 };
 
+/** 安装器静默时的提示间隔 */
+const HEARTBEAT_MS = 10_000;
+
+/** 静默多久判定为卡死：安装器下库时本来就会长时间不打字 */
+const IDLE_LIMIT_MS = 30 * 60_000;
+
 /** 安装器下载的空闲上限，宿主不吐字节时不至于过早失败 */
 const INSTALLER_TIMEOUT_MS = 60_000;
 
@@ -256,17 +262,38 @@ function run(
 ): Promise<void> {
     return new Promise((resolve, reject) => {
         const child = spawn(java, [...args], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+        const startedAt = Date.now();
+        let lastLineAt = startedAt;
+
+        // 安装器下库打补丁时长时间不打字，定期报一次时长，免得看着像卡死
+        const timer = setInterval(() => {
+            const idle = Date.now() - lastLineAt;
+            if (idle >= IDLE_LIMIT_MS) {
+                clearInterval(timer);
+                child.kill("SIGKILL");
+                reject(new Error(`安装器静默 ${Math.round(idle / 1000)}s`));
+                return;
+            }
+            onLine(`安装器运行中 ${Math.round((Date.now() - startedAt) / 1000)}s`);
+        }, HEARTBEAT_MS);
+
         const feed = (chunk: Buffer): void => {
-            for (const line of chunk.toString("utf8").split(/\r?\n/)) {
+            for (const line of chunk.toString("utf8").split(/?
+/)) {
                 if (line.trim() !== "") {
+                    lastLineAt = Date.now();
                     onLine(line.trim());
                 }
             }
         };
         child.stdout.on("data", feed);
         child.stderr.on("data", feed);
-        child.on("error", reject);
+        child.on("error", (error) => {
+            clearInterval(timer);
+            reject(error);
+        });
         child.on("close", (code) => {
+            clearInterval(timer);
             if (code === 0) {
                 resolve();
                 return;
