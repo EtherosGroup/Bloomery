@@ -66,8 +66,10 @@ bloomery install 1.20.6                          # 原版
 bloomery install 1.20.6 --loader fabric          # 最新 fabric
 bloomery install 1.20.6 --loader fabric@0.19.5   # 指定加载器版本
 bloomery install 1.20.6 --loader quilt
-bloomery install 1.20.6 --loader forge           # 官方安装器
-bloomery install 1.20.6 --loader neoforge
+bloomery install 1.20.6 --loader forge           # 官方安装器，取最新正式版
+bloomery install 1.20.6 --loader forge@50.2.10   # 指定 Forge 版本，游戏版本前缀可省
+bloomery install 1.20.6 --loader neoforge        # neoforge 版本号不带游戏版本前缀
+bloomery install 1.20.6 --loader neoforge@20.6.141
 bloomery install 1.20.6 --name MyPack            # 指定实例名
 bloomery install 1.20.6 --no-assets              # 跳过资源对象
 ```
