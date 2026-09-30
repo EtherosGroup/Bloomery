@@ -65,6 +65,7 @@ export {
     fetchLoaderProfile,
     channelOf,
     filterChannel,
+    installerUrlOf,
     listLoaderGames,
     listLoaderVersions,
     listLoaderVersionsFor,

@@ -12,6 +12,7 @@ import { AppError } from "../../src/error/index.ts";
 import {
     channelOf,
     filterChannel,
+    installerUrlOf,
     listLoaderGames,
     listLoaderVersions,
     listLoaderVersionsFor,
@@ -208,4 +209,24 @@ test("列出加载器支持的游戏版本", async () => {
         transport({ versions: ["20.6.1", "26.2.0.88", "21.1.2"] }),
     );
     assert.deepEqual(neo, ["26.2", "1.21.1", "1.20.6"]);
+});
+
+test("官方安装器地址：forge 带游戏版本前缀，neoforge 直接用版本号", () => {
+    // 这两个地址都用 curl 验过 HTTP 200
+    assert.equal(
+        installerUrlOf("forge", "1.20.6", "1.20.6-50.2.10"),
+        "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.6-50.2.10/forge-1.20.6-50.2.10-installer.jar",
+    );
+    // 只给后半段时自动补前缀
+    assert.equal(
+        installerUrlOf("forge", "1.20.6", "50.2.10"),
+        "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.6-50.2.10/forge-1.20.6-50.2.10-installer.jar",
+    );
+    assert.equal(
+        installerUrlOf("neoforge", "1.21.1", "21.1.72"),
+        "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.72/neoforge-21.1.72-installer.jar",
+    );
+    // fabric 与 quilt 走 meta，没有安装器
+    assert.equal(installerUrlOf("fabric", "1.20.6", "0.19.5"), null);
+    assert.equal(installerUrlOf("quilt", "1.20.6", "0.20.0"), null);
 });

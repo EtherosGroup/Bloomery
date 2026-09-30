@@ -311,6 +311,22 @@ export function defaultVersionName(
     return loader === null ? versionId : `${versionId}-${loader.name}-${loaderVersion ?? "latest"}`;
 }
 
+const FORGE_MAVEN = "https://maven.minecraftforge.net";
+const NEOFORGE_MAVEN = "https://maven.neoforged.net";
+
+// forge 与 neoforge 没有 profile json，只能下官方安装器跑一次
+// forge 的版本号带游戏版本前缀（1.20.6-50.2.10），只给后半段时补上
+export function installerUrlOf(name: LoaderName, game: string, version: string): string | null {
+    if (name === "forge") {
+        const full = version.startsWith(`${game}-`) ? version : `${game}-${version}`;
+        return `${FORGE_MAVEN}/net/minecraftforge/forge/${full}/forge-${full}-installer.jar`;
+    }
+    if (name === "neoforge") {
+        return `${NEOFORGE_MAVEN}/releases/net/neoforged/neoforge/${version}/neoforge-${version}-installer.jar`;
+    }
+    return null;
+}
+
 // quilt 的 meta 与 fabric 同构，只是基址不同；forge 与 neoforge 得走官方安装器
 const META_BASE: Partial<Record<LoaderName, string>> = {
     fabric: FABRIC_BASE,
