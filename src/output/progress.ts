@@ -99,23 +99,22 @@ export function progressReporter(
     io: ProgressIo = terminalIo(),
 ): ProgressReporter {
     const bar = style === "bar" && io.interactive;
-    let stage: string | undefined;
-    let shown = -1;
-    let plainShown = -1;
-    // 上一帧画了多宽，用来看终端有没有改过大小；0 表示当前这行还没有东西
-    let frameWidth = 0;
+    // 每条通道一行条，同时刷新；顺序按第一次出现的先后
+    const lanes = new Map<string, { done: number; total: number; note: string; percent: number }>();
+    // 上一帧每行的显示宽度；用当前列数重算折成几行，终端改大小时光标才对得上
+    let drawnWidths: number[] = [];
 
-    // 重画前要发的控制序列
-    // 平时只擦掉行尾：帧比终端窄时（终端刚变小）不会留下上一帧的长尾巴
-    // 终端改过大小的话，上一帧现在会被折成好几行，光标也落在折行块中间，得先退回那一块的第一行再整片擦掉
-    const redraw = (width: number): string => {
-        if (frameWidth !== 0 && width !== frameWidth) {
-            const rows = Math.max(1, Math.ceil(frameWidth / Math.max(1, io.columns)));
-            frameWidth = width;
-            return `${rows > 1 ? `\u001b[${rows - 1}A` : ""}\u001b[J`;
+    const clearBlock = (): string => {
+        if (drawnWidths.length === 0) {
+            return "";
         }
-        frameWidth = width;
-        return "\u001b[K";
+        const columns = Math.max(1, io.columns);
+        const rows = drawnWidths.reduce(
+            (sum, width) => sum + Math.max(1, Math.ceil(width / columns)),
+            0,
+        );
+        drawnWidths = [];
+        return `${rows > 1 ? `\u001b[${rows - 1}A` : ""}\r\u001b[J`;
     };
 
     return {
@@ -124,56 +123,61 @@ export function progressReporter(
                 return;
             }
 
-            if (next !== stage) {
-                // 上一个阶段那一行留在屏幕上，新阶段另起一行，不用回头清理
-                if (stage !== undefined && bar) {
-                    io.write("\n");
-                    frameWidth = 0;
-                }
-                stage = next;
-                shown = -1;
-                plainShown = -1;
-            }
-
+            const lane = lanes.get(next) ?? { done: 0, total, note: "", percent: -1 };
+            lane.done = done;
+            lane.total = total;
+            lane.note = existing ? EXISTING_NOTE : "";
             const percent = Math.floor((done * 100) / total);
-            const note = existing ? EXISTING_NOTE : "";
 
-            if (bar) {
-                // 同一个百分比不重复刷，最后一步必刷
-                if (percent === shown && done !== total) {
+            if (!bar) {
+                // 管道里只能逐条打印，各通道的进度会交错
+                if (bytes) {
+                    if (
+                        done !== total &&
+                        lane.percent >= 0 &&
+                        percent - lane.percent < PLAIN_STEP
+                    ) {
+                        lanes.set(next, lane);
+                        return;
+                    }
+                    lane.percent = percent;
+                    lanes.set(next, lane);
+                    io.line(`${next} ${sizeText(done)}/${sizeText(total)}${lane.note}`);
                     return;
                 }
-                shown = percent;
-                // 宽度只取一次：两次读取之间终端可能又变了，条与清理就对不上
-                const width = io.width;
-                io.write(`\r${redraw(width)}${renderBar(next, done, total, width, note)}`);
+                lane.percent = percent;
+                lanes.set(next, lane);
+                if (done === total || done % STEP === 0) {
+                    io.line(`${next} ${done}/${total}${lane.note}`);
+                }
                 return;
             }
 
-            // 按字节报时没法按个数数，改成每 5% 报一次，阶段第一帧必报
-            if (bytes) {
-                if (done !== total && plainShown >= 0 && percent - plainShown < PLAIN_STEP) {
-                    return;
-                }
-                plainShown = percent;
-                io.line(`${next} ${sizeText(done)}/${sizeText(total)}${note}`);
+            // 同一个百分比不重复刷，最后一步必刷
+            if (percent === lane.percent && done !== total && lane.percent >= 0) {
                 return;
             }
+            lane.percent = percent;
+            lanes.set(next, lane);
 
-            if (done === total || done % STEP === 0) {
-                io.line(`${next} ${done}/${total}${note}`);
-            }
+            // 宽度只取一次：两次读取之间终端可能又变了，条与清理就对不上
+            const width = io.width;
+            const lines = [...lanes].map(([name, item]) =>
+                renderBar(name, item.done, item.total, width, item.note),
+            );
+            io.write(`${clearBlock()}${lines.join("\n")}`);
+            drawnWidths = lines.map(displayWidth);
         },
 
         close(): void {
-            if (bar && stage !== undefined) {
+            if (bar && drawnWidths.length > 0) {
                 io.write("\n");
+                drawnWidths = [];
             }
         },
     };
 }
 
-// 字节数用人看的单位
 function sizeText(value: number): string {
     return value >= 1024 * 1024
         ? `${(value / 1024 / 1024).toFixed(1)}MB`

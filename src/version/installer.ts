@@ -193,30 +193,29 @@ async function installBody(
         librariesRoot,
     );
 
-    // 客户端 jar、库、natives jar、资源对象互不依赖，合成一个队列一起下
-    const kinds = new Map<string, Kind>();
-    const tasks: DownloadTask[] = [];
-    const add = (kind: Kind, list: readonly DownloadTask[]): void => {
-        for (const task of list) {
-            if (!kinds.has(task.target)) {
-                kinds.set(task.target, kind);
-                tasks.push(task);
-            }
-        }
-    };
-    add("client", client === null ? [] : [client]);
-    add("libraries", libraryTasks);
-    add("natives", nativeTasks);
-    add("assets", assetPlan?.tasks ?? []);
+    // 四类各跑一个队列、同时进行；每条通道自己报进度，终端上就是四行条各走各的
+    // 并发数是总数按通道摊，避免四类各开满导致总连接数翻四倍
+    const perLane = Math.max(1, Math.floor(options.concurrency / 4));
+    const lane = (label: string, tasks: readonly DownloadTask[]): Promise<DownloadReport> =>
+        tasks.length === 0
+            ? Promise.resolve(EMPTY_REPORT)
+            : downloadAll(
+                  tasks,
+                  { ...options, concurrency: perLane },
+                  stage(input.onProgress, label),
+              );
 
-    log.debug("合并 %d 个文件一起下", tasks.length);
-    const merged = await downloadAll(tasks, options, stage(input.onProgress, "文件"));
-    const buckets = bucketOf(merged, kinds);
+    const [clientReport, libraries, nativeReport, assetObjects] = await Promise.all([
+        lane("客户端 jar", client === null ? [] : [client]),
+        lane("库", libraryTasks),
+        lane("natives", nativeTasks),
+        lane("资源", assetPlan?.tasks ?? []),
+    ]);
 
     // 客户端 jar 缺了整个版本都起不来，单独拦下来
-    if (buckets.client.failures.length > 0) {
+    if (clientReport.failures.length > 0) {
         throw new AppError("install", "DependencyMissing", {
-            context: { detail: `客户端 jar：${buckets.client.failures[0]?.error ?? ""}` },
+            context: { detail: `客户端 jar：${clientReport.failures[0]?.error ?? ""}` },
         });
     }
 
@@ -239,9 +238,9 @@ async function installBody(
 
     return {
         clientJar: hasClientEntry,
-        libraries: buckets.libraries,
-        natives: { jars: selection.jars.length, files, report: buckets.natives },
-        assets: assetPlan === null ? null : { index: assetPlan.index, objects: buckets.assets },
+        libraries,
+        natives: { jars: selection.jars.length, files, report: nativeReport },
+        assets: assetPlan === null ? null : { index: assetPlan.index, objects: assetObjects },
     };
 }
 
@@ -334,47 +333,6 @@ async function clientJarTask(
         return null;
     }
     return { url: entry.url, target: clientJar, sha1: entry.sha1, size: entry.size };
-}
-
-type Kind = "client" | "libraries" | "natives" | "assets";
-
-interface Bucket {
-    downloaded: number;
-    skipped: number;
-    bytes: number;
-    failures: DownloadFailure[];
-    outcomes: DownloadOutcome[];
-}
-
-function emptyBucket(): Bucket {
-    return { downloaded: 0, skipped: 0, bytes: 0, failures: [], outcomes: [] };
-}
-
-// 合并成一个队列后，按目标把结果分回各段，分项数字才不会丢
-function bucketOf(
-    report: DownloadReport,
-    kinds: ReadonlyMap<string, Kind>,
-): Record<Kind, DownloadReport> {
-    const buckets: Record<Kind, Bucket> = {
-        client: emptyBucket(),
-        libraries: emptyBucket(),
-        natives: emptyBucket(),
-        assets: emptyBucket(),
-    };
-    for (const outcome of report.outcomes) {
-        const bucket = buckets[kinds.get(outcome.target) ?? "libraries"];
-        bucket.outcomes.push(outcome);
-        if (outcome.status === "skipped") {
-            bucket.skipped++;
-        } else {
-            bucket.downloaded++;
-            bucket.bytes += outcome.bytes;
-        }
-    }
-    for (const failure of report.failures) {
-        buckets[kinds.get(failure.target) ?? "libraries"].failures.push(failure);
-    }
-    return buckets;
 }
 
 /* ---------- 库与 natives ---------- */

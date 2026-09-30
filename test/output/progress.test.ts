@@ -158,34 +158,36 @@ test("终端改大小后先擦掉被折行的旧帧", () => {
 
     // 第一帧没有东西要清
     bar.update("资源", 0, 100);
-    assert.match(io.writes[0] ?? "", /^\r\u001b\[K\[/);
+    assert.match(io.writes[0] ?? "", /^\[/);
 
     // 100 格的旧帧在 41 列下会折成 3 行：退回 2 行，再整片擦掉
     resize(41);
     bar.update("资源", 50, 100);
     const cleaned = io.writes[1] ?? "";
-    assert.match(cleaned, /^\r\u001b\[2A\u001b\[J/);
-    assert.equal(displayWidth(cleaned.replace(/^\r\u001b\[2A\u001b\[J/, "")), 40);
+    assert.match(cleaned, /^\u001b\[2A\r\u001b\[J/);
+    assert.equal(displayWidth(cleaned.replace(/^\u001b\[2A\r\u001b\[J/, "")), 40);
 
-    // 宽度没再变就照旧原地刷，不带清屏序列
+    // 宽度没再变就只擦这一行
     bar.update("资源", 60, 100);
-    assert.match(io.writes[2] ?? "", /^\r\u001b\[K\[/);
+    assert.match(io.writes[2] ?? "", /^\r\u001b\[J\[/);
 });
 
-test("换阶段另起一行，不回头擦上一阶段那行", () => {
-    const { io, resize } = resizableIo();
+test("两条通道各占一行，同一个块里一起刷新", () => {
+    const { io } = resizableIo();
     const bar = progressReporter("bar", io);
 
     bar.update("库", 0, 100);
-    resize(41);
     bar.update("natives", 0, 100);
+    bar.update("库", 50, 100);
 
-    // 上一阶段已经用换行收尾，新帧直接画在新行上
-    assert.deepEqual(
-        io.writes.map((text) => (text === "\n" ? "换行" : "帧")),
-        ["帧", "换行", "帧"],
-    );
-    assert.equal(displayWidth(io.writes[2]!.slice(1 + 3)), 40);
+    // 后一帧是两行：库 与 natives 同时重画
+    const frame = io.writes.at(-1) ?? "";
+    const parts = frame.split("\n");
+    assert.equal(parts.length, 2);
+    assert.match(parts[0] ?? "", /50% 库\s*$/);
+    assert.match(parts[1] ?? "", /0% natives\s*$/);
+    // 上一块两行，重画前退一行
+    assert.match(frame, /^\u001b\[1A\r\u001b\[J/);
 });
 
 test("一批文件全是已有的，后缀跟着收尾那一帧", () => {
@@ -213,20 +215,21 @@ test("非交互时后缀也带上", () => {
     assert.deepEqual(io.lines, ["库 47/47（已存在）", "natives 8/8"]);
 });
 
-test("换阶段时上一行留在屏幕上", () => {
-    const io = fakeIo();
+test("两条通道重画时退两行，收尾留一块在屏幕上", () => {
+    const io = fakeIo({ columns: 41, width: 40 });
     const bar = progressReporter("bar", io);
 
-    bar.update("库", 0, 2);
-    bar.update("库", 2, 2);
-    bar.update("natives", 0, 1);
-    bar.close();
+    bar.update("客户端 jar", 0, 100);
+    bar.update("库", 0, 100);
+    // 上一块两行，重画前退一行再整片擦掉
+    bar.update("客户端 jar", 100, 100);
+    assert.match(io.writes.at(-1) ?? "", /^\u001b\[1A\r\u001b\[J/);
 
-    // 换阶段前后各补一个换行：库 那行收尾，natives 那行收尾
-    assert.equal(io.writes.filter((text) => text === "\n").length, 2);
-    assert.equal(io.writes.filter((text) => text.startsWith("\r\u001b[K[")).length, 3);
-    assert.match(io.writes.at(-2) ?? "", /0% natives\s*$/);
-    assert.equal(io.writes.at(-1), "\n");
+    bar.close();
+    // 收尾只补一个换行，条留在屏幕上
+    assert.equal(io.writes.filter((text) => text === "\n").length, 1);
+    const last = io.writes.at(-2) ?? "";
+    assert.equal(last.split("\n").length, 2);
 });
 
 test("同一个百分比不重复刷", () => {
