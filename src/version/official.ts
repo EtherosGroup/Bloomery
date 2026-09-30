@@ -25,6 +25,9 @@ const INSTALL_FLAGS: Partial<Record<LoaderName, string>> = {
     neoforge: "--install-client",
 };
 
+/** 安装器下载的空闲上限，宿主不吐字节时不至于过早失败 */
+const INSTALLER_TIMEOUT_MS = 60_000;
+
 /** 安装器输出先留这么多行，报错时再挑有效行 */
 const TAIL_LINES = 200;
 
@@ -73,7 +76,24 @@ export async function installWithOfficial(
     const installer = join(workDirectory, `${input.name}-${input.loaderVersion}-installer.jar`);
 
     log.info("下安装器 %s", url);
-    await downloadOne({ url, target: installer, sha1: null, size: null }, input.options);
+    try {
+        await downloadOne(
+            { url, target: installer, sha1: null, size: null },
+            // 安装器十来 MB，宿主可能长时间不吐字节，空闲上限放宽
+            {
+                ...input.options,
+                timeoutMs: Math.max(input.options.timeoutMs, INSTALLER_TIMEOUT_MS),
+            },
+        );
+    } catch (error) {
+        throw new AppError("install", "DownloadFailed", {
+            context: {
+                detail: `${input.name} 安装器`,
+                url,
+                cause: error instanceof Error ? error.message : String(error),
+            },
+        });
+    }
 
     // 安装器会检查启动器档案，缺了就写一个最小的；官方启动器之后会覆盖它
     if (await ensureLauncherProfile(input.folderPath)) {
