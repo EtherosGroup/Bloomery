@@ -65,7 +65,7 @@ bloomery view loader fabric --games            # 这个加载器支持哪些游�
 bloomery view game 1.20.6                      # 这个游戏版本上四种加载器各有哪些版本
 ```
 
-版本清单直接取自各加载器的官方接口（Fabric / Quilt 的 meta、Forge 与 NeoForge 的 maven）。安装目前只支持 fabric，另外三种的版本号可以查，装的时候会提示未实现。
+版本清单直接取自各加载器的官方接口（Fabric / Quilt 的 meta、Forge 与 NeoForge 的 maven）。安装支持 fabric 与 quilt，forge / neoforge 的版本可以查，装的时候会提示未实现。
 
 ### 导入整合包
 
@@ -76,7 +76,7 @@ bloomery modpack pack.mrpack --dry-run        # 只算不导入
 bloomery modpack pack.mrpack --no-assets      # 跳过资源对象，只装游戏本体
 ```
 
-只认 Modrinth 的 `.mrpack`：清单里的文件按落点下载并校验 sha1，`overrides/` 与 `client-overrides/` 摊到实例目录，清单里没有下载地址的文件只记警告。加载器安装目前只支持 fabric，包里要 forge / neoforge / quilt 时会报未实现。
+只认 Modrinth 的 `.mrpack`：清单里的文件按落点下载并校验 sha1，`overrides/` 与 `client-overrides/` 摊到实例目录，清单里没有下载地址的文件只记警告。加载器安装支持 fabric 与 quilt，包里要 forge / neoforge 时会报未实现。
 
 ### 选中版本
 

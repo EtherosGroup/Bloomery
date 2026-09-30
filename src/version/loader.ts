@@ -311,17 +311,24 @@ export function defaultVersionName(
     return loader === null ? versionId : `${versionId}-${loader.name}-${loaderVersion ?? "latest"}`;
 }
 
+// quilt 的 meta 与 fabric 同构，只是基址不同；forge 与 neoforge 得走官方安装器
+const META_BASE: Partial<Record<LoaderName, string>> = {
+    fabric: FABRIC_BASE,
+    quilt: QUILT_BASE,
+};
+
 export async function resolveLoaderVersion(
     spec: LoaderSpec,
     game: string,
     options: FetchOptions,
 ): Promise<string> {
-    if (spec.name !== "fabric") {
+    const base = META_BASE[spec.name];
+    if (base === undefined) {
         throw new AppError("loader", "NotImplemented", {
             context: { detail: `安装 ${spec.name} 加载器` },
         });
     }
-    return spec.version ?? (await latestFabric(game, options));
+    return spec.version ?? (await latestMeta(base, spec.name, game, options));
 }
 
 export async function fetchLoaderProfile(
@@ -330,29 +337,35 @@ export async function fetchLoaderProfile(
     version: string,
     options: FetchOptions,
 ): Promise<Record<string, unknown>> {
-    if (spec.name !== "fabric") {
+    const base = META_BASE[spec.name];
+    if (base === undefined) {
         throw new AppError("loader", "NotImplemented", {
             context: { detail: `安装 ${spec.name} 加载器` },
         });
     }
 
-    const url = `${FABRIC_BASE}/versions/loader/${encodeURIComponent(game)}/${encodeURIComponent(version)}/profile/json`;
+    const url = `${base}/versions/loader/${encodeURIComponent(game)}/${encodeURIComponent(version)}/profile/json`;
     const raw = object(await fetchJson(url, options), url);
     if (raw === undefined) {
         throw new AppError("loader", "VersionBroken", {
-            context: { detail: `Fabric ${version} 的 profile 读不出来` },
+            context: { detail: `${spec.name} ${version} 的 profile 读不出来` },
         });
     }
     return raw;
 }
 
 // 列表按新到旧排，优先取 stable
-async function latestFabric(game: string, options: FetchOptions): Promise<string> {
-    const url = `${FABRIC_BASE}/versions/loader/${encodeURIComponent(game)}`;
+async function latestMeta(
+    base: string,
+    name: LoaderName,
+    game: string,
+    options: FetchOptions,
+): Promise<string> {
+    const url = `${base}/versions/loader/${encodeURIComponent(game)}`;
     const list = await fetchJson(url, options);
     if (!Array.isArray(list)) {
         throw new AppError("loader", "VersionNotFound", {
-            context: { detail: `Fabric 没有 ${game} 的加载器列表` },
+            context: { detail: `${name} 没有 ${game} 的加载器列表` },
         });
     }
 
@@ -371,10 +384,10 @@ async function latestFabric(game: string, options: FetchOptions): Promise<string
     const picked = versions.find((item) => item.stable) ?? versions[0];
     if (picked === undefined) {
         throw new AppError("loader", "VersionNotFound", {
-            context: { detail: `Fabric 没有 ${game} 的加载器` },
+            context: { detail: `${name} 没有 ${game} 的加载器` },
         });
     }
-    log.debug("fabric %s 选到 %s", game, picked.version);
+    log.debug("%s %s 选到 %s", name, game, picked.version);
     return picked.version;
 }
 
