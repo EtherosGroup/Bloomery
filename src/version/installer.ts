@@ -252,7 +252,7 @@ async function officialLoaderVersion(
             throw new AppError("loader", "VersionNotFound", {
                 context: {
                     detail: `${name} ${wanted} 在 ${game} 上没有安装器`,
-                    hint: "版本号要带游戏版本前缀，或者省略版本号自动取最新的",
+                    hint: "版本号带游戏版本前缀，或省略取最新",
                 },
             });
         }
@@ -271,7 +271,7 @@ async function officialLoaderVersion(
             const newest = list.find((item) => item.channel === "release") ?? list[0];
             throw new AppError("loader", "VersionNotFound", {
                 context: {
-                    detail: `${name} ${wanted} 不是给 ${game} 的`,
+                    detail: `${name} ${wanted} 与 ${game} 不匹配`,
                     available: `${game} 上最新的是 ${newest?.version ?? "未知"}`,
                     hint: "省略版本号就自动取该游戏版本上最新的正式版",
                 },
@@ -337,8 +337,8 @@ async function runOfficialInstaller(
     if (java === undefined) {
         throw new AppError("install", "DependencyMissing", {
             context: {
-                detail: `${name} 要跑官方安装器，但没找到可用的 java`,
-                hint: "装一个 java，或用 bloomery java scan 看看现在能认出哪些",
+                detail: `${name} 官方安装器缺少 java`,
+                hint: "装 java，或 bloomery java scan",
             },
         });
     }

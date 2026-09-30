@@ -77,7 +77,7 @@ export async function installWithOfficial(
 
     // 安装器会检查启动器档案，缺了就写一个最小的；官方启动器之后会覆盖它
     if (await ensureLauncherProfile(input.folderPath)) {
-        log.info("写了最小的 launcher_profiles.json，安装器要求目录里有它");
+        log.info("补 launcher_profiles.json");
     }
 
     const before = await versionsOf(input.folderPath);
@@ -103,15 +103,18 @@ export async function installWithOfficial(
 
     const after = await versionsOf(input.folderPath);
     const added = after.filter((item) => !before.includes(item));
-    // 安装器发现目标版本已经装好时会直接退出、不写新目录，这时用已有的那份
-    const versionDirectory =
-        added.find((item) => item.includes(input.loaderVersion)) ??
-        added[0] ??
-        after.find((item) => item.includes(input.loaderVersion));
+    // 安装器认为已装好时不写新目录，这时用已有的那份
+    // forge 的目录名是 <游戏版本>-forge-<版本>，用后缀匹配才盖得住两种写法
+    const short = input.loaderVersion.startsWith(`${input.game}-`)
+        ? input.loaderVersion.slice(input.game.length + 1)
+        : input.loaderVersion;
+    const match = (item: string): boolean =>
+        item.includes(input.loaderVersion) || item.endsWith(short);
+    const versionDirectory = added.find(match) ?? added[0] ?? after.find(match);
     if (versionDirectory === undefined) {
-        throw new AppError("install", "VersionBroken", {
+        throw new AppError("install", "InstallBroken", {
             context: {
-                detail: "安装器跑完了，但 versions 下没多出目录",
+                detail: "安装器未产出新版本目录",
                 tail: usefulLines(tail, input.folderPath),
             },
         });
@@ -204,7 +207,7 @@ function officialError(
 ): AppError {
     return new AppError("install", "DependencyMissing", {
         context: {
-            detail: `${input.name} 的官方安装器没跑成`,
+            detail: `${input.name} 官方安装器执行失败`,
             java: input.java,
             cause: error instanceof Error ? error.message : String(error),
             tail: usefulLines(tail, input.folderPath),

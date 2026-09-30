@@ -14,6 +14,7 @@ export type ErrorCode =
     | "FolderDuplicate"
     | "VersionNotFound"
     | "VersionBroken"
+    | "InstallBroken"
     | "VersionExists"
     | "JavaNotFound"
     | "JavaBroken"
