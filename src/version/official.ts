@@ -99,8 +99,13 @@ export async function installWithOfficial(
         await rm(installer, { force: true }).catch(() => undefined);
     }
 
-    const added = (await versionsOf(input.folderPath)).filter((item) => !before.includes(item));
-    const versionDirectory = added.find((item) => item.includes(input.loaderVersion)) ?? added[0];
+    const after = await versionsOf(input.folderPath);
+    const added = after.filter((item) => !before.includes(item));
+    // 安装器发现目标版本已经装好时会直接退出、不写新目录，这时用已有的那份
+    const versionDirectory =
+        added.find((item) => item.includes(input.loaderVersion)) ??
+        added[0] ??
+        after.find((item) => item.includes(input.loaderVersion));
     if (versionDirectory === undefined) {
         throw new AppError("install", "VersionBroken", {
             context: {
