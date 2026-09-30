@@ -8,6 +8,7 @@
  */
 
 import { loadSetting } from "../../config/index.ts";
+import { officialJavaOf } from "../java-choice.ts";
 import { AppError } from "../../error/index.ts";
 import { importModpack, type ModpackImportReport } from "../../modpack/index.ts";
 import { logger, print, progressReporter } from "../../output/index.ts";
@@ -25,6 +26,8 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
         });
     }
 
+    // 包里要 forge / neoforge 时安装器要用 java；这里统一挑一个，只有那条路会用到
+    const officialJava = await officialJavaOf(setting.java);
     const progress = progressReporter(ctx.json ? "off" : setting.appearance.progress);
     const report = await importModpack({
         archive: command.file,
@@ -34,6 +37,7 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
         download: setting.download,
         dryRun: command.dryRun,
         assets: command.noAssets !== true,
+        officialJava,
         onProgress: progress.update,
     });
     progress.close();

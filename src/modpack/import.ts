@@ -39,6 +39,8 @@ export interface ModpackImportInput {
     readonly dryRun?: boolean | undefined;
     /** false 时跳过资源对象，只装游戏本体 */
     readonly assets?: boolean | undefined;
+    /** 包里要 forge / neoforge 时官方安装器用的 java */
+    readonly officialJava?: string | undefined;
     readonly onProgress?: InstallProgress | undefined;
 }
 
@@ -90,6 +92,7 @@ export async function importModpack(input: ModpackImportInput): Promise<ModpackI
         network: input.network,
         download: input.download,
         assets: input.assets !== false,
+        officialJava: input.officialJava,
         onProgress: input.onProgress,
     });
 

@@ -10,6 +10,7 @@
 import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
 import { logger, print, progressReporter } from "../../output/index.ts";
+import { officialJavaOf } from "../java-choice.ts";
 import {
     installVersion,
     parseLoaderSpec,
@@ -43,6 +44,12 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         throw new AppError("cli", "FolderNotFound", { context: { detail } });
     }
 
+    // forge 与 neoforge 要跑官方安装器，先挑一个 java；挑不到就把错留给安装器那步报
+    const officialJava =
+        loader !== null && (loader.name === "forge" || loader.name === "neoforge")
+            ? await officialJavaOf(setting.java)
+            : undefined;
+
     const progress = progressReporter(ctx.json ? "off" : setting.appearance.progress);
     const report = await installVersion({
         folderPath: resolveFolderPath(folder),
@@ -52,6 +59,7 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         network: setting.network,
         download: setting.download,
         assets: command.assets !== false,
+        officialJava,
         onProgress: progress.update,
     });
     progress.close();
@@ -80,6 +88,11 @@ function render(report: InstallReport): string {
     if (report.loader !== null) {
         lines.push(`  加载器     ${report.loader.name} ${report.loader.version}`);
         lines.push(`  基础版本   ${report.base === "installed" ? "这次顺带装的" : "本来就在"}`);
+    }
+    if (report.official !== null) {
+        lines.push(
+            `  安装器     ${report.official.versionDirectory}（java ${report.official.java}）`,
+        );
     }
     lines.push(
         `  启动       bloomery launch ${report.name}`,

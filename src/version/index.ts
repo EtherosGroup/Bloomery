@@ -77,3 +77,4 @@ export {
     type LoaderVersion,
     type Transport,
 } from "./loader.ts";
+export { installWithOfficial, type OfficialInstallReport } from "./official.ts";

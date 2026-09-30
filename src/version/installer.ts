@@ -47,9 +47,12 @@ import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
 import { logger } from "../output/index.ts";
 import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
+import { installWithOfficial, type OfficialInstallReport } from "./official.ts";
 import {
     defaultVersionName,
     fetchLoaderProfile,
+    installerUrlOf,
+    listLoaderVersionsFor,
     resolveLoaderVersion,
     type LoaderName,
     type LoaderSpec,
@@ -83,7 +86,14 @@ export interface InstallInput {
     readonly download: DownloadSetting;
     /** false 时跳过资源对象，只装游戏本体 */
     readonly assets?: boolean | undefined;
+    /** forge 与 neoforge 要跑官方安装器，这是挑好的 java；由调用方解析 */
+    readonly officialJava?: string | undefined;
     readonly onProgress?: InstallProgress | undefined;
+}
+
+export interface OfficialNote {
+    readonly versionDirectory: string;
+    readonly java: string;
 }
 
 export interface InstallReport {
@@ -100,6 +110,8 @@ export interface InstallReport {
         readonly report: DownloadReport;
     };
     readonly assets: { readonly index: DownloadReport; readonly objects: DownloadReport } | null;
+    /** 走官方安装器时才有 */
+    readonly official: OfficialNote | null;
     readonly warnings: readonly string[];
 }
 
@@ -124,16 +136,43 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
     };
 
     // 加载器版本要先解出来：目录名里带的是具体版本号，不是 latest
+    // forge 与 neoforge 没有 meta，版本号要么用户给、要么从清单挑最新的正式版
+    const isOfficial =
+        loader !== null &&
+        installerUrlOf(loader.name, input.versionId, loader.version ?? "") !== null;
     const loaderVersion =
-        loader === null ? null : await resolveLoaderVersion(loader, input.versionId, options);
-    const name = input.name ?? defaultVersionName(input.versionId, loader, loaderVersion);
+        loader === null
+            ? null
+            : isOfficial
+              ? await officialLoaderVersion(loader.name, input.versionId, loader.version, options)
+              : await resolveLoaderVersion(loader, input.versionId, options);
+
+    // forge 的版本号自带游戏版本前缀（1.20.6-50.2.10），目录名里不重复放
+    const shortVersion =
+        loaderVersion !== null && loaderVersion.startsWith(`${input.versionId}-`)
+            ? loaderVersion.slice(input.versionId.length + 1)
+            : loaderVersion;
+    const name = input.name ?? defaultVersionName(input.versionId, loader, shortVersion);
     assertName(name);
     await assertFree(input.folderPath, name);
 
     let base: InstallReport["base"] = "none";
+    let official: OfficialNote | null = null;
     let json: Record<string, unknown>;
     if (loader === null) {
         json = await fetchVanillaJson(input.versionId, options);
+    } else if (isOfficial) {
+        // forge 与 neoforge：跑官方安装器，我们的实例继承它写出的版本目录
+        base = await ensureBase(input, options, warnings);
+        const installed = await runOfficialInstaller(
+            input,
+            loader.name,
+            loaderVersion ?? "",
+            options,
+        );
+        official = { versionDirectory: installed.versionDirectory, java: installed.java };
+        json = { id: name, inheritsFrom: installed.versionDirectory, type: "release" };
+        warnings.push(`${loader.name} 由官方安装器装入 versions/${installed.versionDirectory}`);
     } else {
         base = await ensureBase(input, options, warnings);
         json = await fetchLoaderProfile(loader, input.versionId, loaderVersion ?? "", options);
@@ -161,8 +200,56 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         loader: loader === null ? null : { name: loader.name, version: loaderVersion ?? "" },
         base,
         ...body,
+        official,
         warnings,
     };
+}
+
+// forge 与 neoforge 的版本号：给了就用，没给就取清单里最新的正式版
+async function officialLoaderVersion(
+    name: LoaderName,
+    game: string,
+    wanted: string | null | undefined,
+    options: TransferOptions,
+): Promise<string> {
+    if (wanted !== null && wanted !== undefined && wanted !== "") {
+        return wanted;
+    }
+    const list = await listLoaderVersionsFor(name, game, options);
+    const picked = list.find((item) => item.channel === "release") ?? list[0];
+    if (picked === undefined) {
+        throw new AppError("loader", "VersionNotFound", {
+            context: { detail: `${name} 没有 ${game} 的版本` },
+        });
+    }
+    return picked.version;
+}
+
+// 跑官方安装器前要先有 java：调用方（CLI）没给就说明这条路径没准备好
+async function runOfficialInstaller(
+    input: InstallInput,
+    name: LoaderName,
+    loaderVersion: string,
+    options: TransferOptions,
+): Promise<OfficialInstallReport> {
+    const java = input.officialJava;
+    if (java === undefined) {
+        throw new AppError("install", "DependencyMissing", {
+            context: {
+                detail: `${name} 要跑官方安装器，但没找到可用的 java`,
+                hint: "装一个 java，或用 bloomery java scan 看看现在能认出哪些",
+            },
+        });
+    }
+    log.info("%s 走官方安装器（java %s）", name, java);
+    return await installWithOfficial({
+        name,
+        game: input.versionId,
+        loaderVersion,
+        folderPath: input.folderPath,
+        java,
+        options,
+    });
 }
 
 // 装一份版本 json 描述的全部内容
