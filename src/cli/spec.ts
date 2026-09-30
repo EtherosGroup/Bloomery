@@ -14,6 +14,7 @@ import { runLaunch } from "./commands/launch.ts";
 import { runMod } from "./commands/mod.ts";
 import { runModpack } from "./commands/modpack.ts";
 import { runVersion } from "./commands/version.ts";
+import { runMirror } from "./commands/mirror.ts";
 import { runView } from "./commands/view.ts";
 import {
     optionalInteger,
@@ -153,6 +154,32 @@ export const COMMANDS: CommandTable = {
             limit: optionalInteger(values, "limit"),
         }),
         run: runMod,
+    },
+
+    mirror: {
+        summary: "查看与切换下载源",
+        usage: "mirror <list|use> [name] [--url <地址>]",
+        options: {
+            url: { type: "string", value: "<地址>", summary: "custom 的根地址" },
+        },
+        positionals: { names: ["action", "name"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["list", "use"] as const,
+                "action",
+            );
+            return {
+                name: "mirror",
+                action,
+                preset:
+                    action === "use"
+                        ? requirePositional(positionals, 1, "name")
+                        : optionalPositional(positionals, 1, "name"),
+                url: optionalString(values, "url"),
+            };
+        },
+        run: runMirror,
     },
 
     view: {

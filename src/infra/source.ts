@@ -9,13 +9,44 @@
  * @since 1.0.0
  */
 
-import type { DownloadProvider, DownloadSetting } from "../config/types.ts";
+import type { DownloadProvider, DownloadSetting, DownloadSource } from "../config/types.ts";
 
 const BMCLAPI = "https://bmclapi2.bangbang93.com";
 
 export interface Source {
     readonly provider: DownloadProvider;
     readonly rewrite: (url: string) => string;
+}
+
+/** 预置下载源，加源在表里加一行 */
+export interface SourcePreset {
+    readonly name: string;
+    readonly provider: DownloadProvider;
+    readonly label: string;
+}
+
+export const SOURCE_PRESETS: readonly SourcePreset[] = [
+    { name: "official", provider: "official", label: "Mojang 官方" },
+    { name: "bmclapi", provider: "bmclapi", label: "BMCLAPI" },
+    { name: "custom", provider: "custom", label: "自定义地址" },
+];
+
+export function presetOf(name: string): SourcePreset | undefined {
+    const wanted = name.trim().toLowerCase();
+    return SOURCE_PRESETS.find((item) => item.name === wanted);
+}
+
+// custom 要地址；其余用内置地址
+export function sourceOf(name: string, url?: string | null): DownloadSource | undefined {
+    const preset = presetOf(name);
+    if (preset === undefined) {
+        return undefined;
+    }
+    if (preset.provider === "custom") {
+        const base = (url ?? "").trim().replace(/\/+$/, "");
+        return base === "" ? undefined : { provider: "custom", enabled: true, url: base };
+    }
+    return { provider: preset.provider, enabled: true, url: null };
 }
 
 export function sourcesOf(download: DownloadSetting): readonly Source[] {

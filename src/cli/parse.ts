@@ -67,6 +67,15 @@ export interface ModCommand {
     readonly limit?: number;
 }
 
+export interface MirrorCommand {
+    readonly name: "mirror";
+    readonly action: "list" | "use";
+    /** use 必给 */
+    readonly preset?: string;
+    /** custom 必给 */
+    readonly url?: string;
+}
+
 export interface ViewCommand {
     readonly name: "view";
     readonly action: "loader" | "game";
@@ -124,6 +133,7 @@ export type Command =
     | AuthCommand
     | ModCommand
     | ViewCommand
+    | MirrorCommand
     | ModpackCommand
     | FolderCommand
     | VersionCommand

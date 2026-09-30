@@ -163,6 +163,19 @@ bloomery java remove /path/to/java
 bloomery java list --major 21
 ```
 
+### mirror
+
+查看与切换下载源。默认 Mojang 官方直连。
+
+```bash
+bloomery mirror list                             # 预置源与当前选择
+bloomery mirror use bmclapi                      # 切到 BMCLAPI
+bloomery mirror use official                     # 切回官方
+bloomery mirror use custom --url https://mirror.example.com
+```
+
+预置源在 `src/infra/source.ts` 的 `SOURCE_PRESETS` 表里，加源加一行。BMCLAPI 只改写 Mojang 主机（库、资源、版本 json），Forge 等第三方 maven 原样直连。写入的是 `setting.json` 的 `download.sources`。
+
 ### 全局选项
 
 ```
