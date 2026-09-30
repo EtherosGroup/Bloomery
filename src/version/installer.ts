@@ -213,6 +213,24 @@ async function officialLoaderVersion(
     options: TransferOptions,
 ): Promise<string> {
     if (wanted !== null && wanted !== undefined && wanted !== "") {
+        // 版本号与游戏版本必须对得上：neoforge 21.1.x 是给 1.21.1 的，装到 1.20.6 上安装器必崩
+        const list = await listLoaderVersionsFor(name, game, options);
+        const known = list.some(
+            (item) =>
+                item.version === wanted ||
+                item.version.endsWith(`-${wanted}`) ||
+                item.version === `${game}-${wanted}`,
+        );
+        if (list.length > 0 && !known) {
+            const newest = list.find((item) => item.channel === "release") ?? list[0];
+            throw new AppError("loader", "VersionNotFound", {
+                context: {
+                    detail: `${name} ${wanted} 不是给 ${game} 的`,
+                    available: `${game} 上最新的是 ${newest?.version ?? "未知"}`,
+                    hint: "省略版本号就自动取该游戏版本上最新的正式版",
+                },
+            });
+        }
         return wanted;
     }
     const list = await listLoaderVersionsFor(name, game, options);

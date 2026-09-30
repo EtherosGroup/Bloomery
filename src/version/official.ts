@@ -19,8 +19,22 @@ import { installerUrlOf, type LoaderName } from "./loader.ts";
 
 const log = logger("official");
 
-/** 安装器输出留这么多行给用户看 */
-const TAIL_LINES = 12;
+// 两家安装器的参数名不同：forge 用驼峰，neoforge 的 fork 两个都认
+const INSTALL_FLAGS: Partial<Record<LoaderName, string>> = {
+    forge: "--installClient",
+    neoforge: "--install-client",
+};
+
+/** 安装器输出先留这么多行，报错时再挑有效行 */
+const TAIL_LINES = 200;
+
+/** 这些是逐个库的噪声，报错时要滤掉 */
+const NOISY =
+    /Considering library|File .* exists|Checksum valid|^Downloading|^Extracting|^Considering/i;
+
+/** 这些才说明出了什么事 */
+const INTERESTING =
+    /(Exception|Caused by|error|Error|failed|Failed|cannot|Cannot|unable|Unable|refus|refused|denied|timeout|timed out|not found|No such)/;
 
 export interface OfficialInstallInput {
     readonly name: LoaderName;
@@ -66,31 +80,21 @@ export async function installWithOfficial(
 
     const before = await versionsOf(input.folderPath);
     const tail: string[] = [];
+    const flag = INSTALL_FLAGS[input.name] ?? "--install-client";
     try {
-        // 安装器是 java 程序，不认 http_proxy 环境变量，代理只能从 -D 传进去
-        const args = [
-            ...proxyArgs(input.options.proxy ?? null),
-            "-jar",
-            installer,
-            "--install-client",
-            input.folderPath,
-        ];
-        await run(input.java, args, input.folderPath, (line) => {
-            tail.push(line);
-            if (tail.length > TAIL_LINES) {
-                tail.shift();
-            }
-            log.debug("安装器：%s", line);
-        });
+        await attempt(input, installer, flag, tail);
     } catch (error) {
-        throw new AppError("install", "DependencyMissing", {
-            context: {
-                detail: `${input.name} 的官方安装器没跑成`,
-                java: input.java,
-                cause: error instanceof Error ? error.message : String(error),
-                tail: tail.join(" / "),
-            },
-        });
+        // 参数名认不出就换另一种写法再试一次
+        if (!tail.some((line) => line.includes("UnrecognizedOption"))) {
+            throw officialError(input, error, tail);
+        }
+        const other = flag === "--installClient" ? "--install-client" : "--installClient";
+        log.info("%s 不认 %s，换 %s 再试", input.name, flag, other);
+        try {
+            await attempt(input, installer, other, tail);
+        } catch (retry) {
+            throw officialError(input, retry, tail);
+        }
     } finally {
         await rm(installer, { force: true }).catch(() => undefined);
     }
@@ -101,7 +105,7 @@ export async function installWithOfficial(
         throw new AppError("install", "VersionBroken", {
             context: {
                 detail: "安装器跑完了，但 versions 下没多出目录",
-                tail: tail.join(" / "),
+                tail: usefulLines(tail, input.folderPath),
             },
         });
     }
@@ -114,6 +118,14 @@ export async function installWithOfficial(
         java: input.java,
         tail,
     };
+}
+
+// 先去噪声再挑真正的错；挑不到就把去噪后的行都给出来，末尾附上完整日志位置
+export function usefulLines(lines: readonly string[], folderPath: string): string {
+    const quiet = lines.filter((line) => !NOISY.test(line));
+    const hits = quiet.filter((line) => INTERESTING.test(line));
+    const picked = (hits.length > 0 ? hits : quiet).slice(-6);
+    return [...picked, `完整输出见 ${join(folderPath, "installer.log")}`].join(" / ");
 }
 
 function proxyArgs(proxy: string | null): string[] {
@@ -151,6 +163,44 @@ async function ensureLauncherProfile(folderPath: string): Promise<boolean> {
     };
     await writeAtomic(file, `${JSON.stringify(minimal, null, 4)}\n`);
     return true;
+}
+
+// 安装器是 java 程序，不认 http_proxy 环境变量，代理只能从 -D 传进去
+function attempt(
+    input: OfficialInstallInput,
+    installer: string,
+    flag: string,
+    tail: string[],
+): Promise<void> {
+    const args = [
+        ...proxyArgs(input.options.proxy ?? null),
+        "-jar",
+        installer,
+        flag,
+        input.folderPath,
+    ];
+    return run(input.java, args, input.folderPath, (line) => {
+        tail.push(line);
+        if (tail.length > TAIL_LINES) {
+            tail.shift();
+        }
+        log.debug("安装器：%s", line);
+    });
+}
+
+function officialError(
+    input: OfficialInstallInput,
+    error: unknown,
+    tail: readonly string[],
+): AppError {
+    return new AppError("install", "DependencyMissing", {
+        context: {
+            detail: `${input.name} 的官方安装器没跑成`,
+            java: input.java,
+            cause: error instanceof Error ? error.message : String(error),
+            tail: usefulLines(tail, input.folderPath),
+        },
+    });
 }
 
 async function versionsOf(folderPath: string): Promise<string[]> {

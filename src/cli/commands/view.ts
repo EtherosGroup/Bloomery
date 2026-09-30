@@ -31,7 +31,7 @@ const log = logger("view");
 
 const PER_PAGE = 20;
 const NAMES: readonly LoaderName[] = ["fabric", "forge", "neoforge", "quilt"];
-const INSTALLABLE: readonly LoaderName[] = ["fabric", "quilt"];
+const INSTALLABLE: readonly LoaderName[] = ["fabric", "forge", "neoforge", "quilt"];
 const CHANNELS: readonly LoaderChannel[] = ["release", "beta", "alpha"];
 const LABEL: Record<LoaderChannel, string> = { release: "正式", beta: "测试", alpha: "预览" };
 
