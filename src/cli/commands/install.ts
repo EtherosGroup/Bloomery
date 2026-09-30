@@ -95,6 +95,7 @@ function render(report: InstallReport): string {
         );
     }
     lines.push(
+        `  耗时       下载 ${(report.timing.downloadMs / 1000).toFixed(1)}s，收尾 ${(report.timing.finishMs / 1000).toFixed(1)}s`,
         `  启动       bloomery launch ${report.name}`,
         `  客户端 jar ${clientJarText(report)}`,
         `  ${describe("库", report.libraries)}`,

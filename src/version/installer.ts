@@ -112,10 +112,14 @@ export interface InstallReport {
     readonly assets: { readonly index: DownloadReport; readonly objects: DownloadReport } | null;
     /** 走官方安装器时才有 */
     readonly official: OfficialNote | null;
+    /** 下载四类与收尾各花了多久，用来定位"进度条走完却卡住" */
+    readonly timing: { readonly downloadMs: number; readonly finishMs: number };
     readonly warnings: readonly string[];
 }
 
 interface BodyResult {
+    /** 下载四类与收尾各花了多久 */
+    readonly timing: { readonly downloadMs: number; readonly finishMs: number };
     readonly clientJar: boolean;
     readonly libraries: DownloadReport;
     readonly natives: InstallReport["natives"];
@@ -124,6 +128,7 @@ interface BodyResult {
 
 export async function installVersion(input: InstallInput): Promise<InstallReport> {
     const warnings: string[] = [];
+    const installStartedAt = Date.now();
     const loader = input.loader ?? null;
     const options: TransferOptions = {
         timeoutMs: input.network.timeoutMs,
@@ -171,6 +176,27 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
             options,
         );
         official = { versionDirectory: installed.versionDirectory, java: installed.java };
+        // forge 的安装器就用 <游戏版本>-forge-<版本> 当目录名，和我们本来要建的实例名一样
+        // 这时不能再写一份继承型 json：会覆盖掉它的真 json，还会让它指向自己成环
+        if (installed.versionDirectory === name) {
+            warnings.push(
+                `${loader.name} 已由官方安装器装入 versions/${installed.versionDirectory}，启动就用它`,
+            );
+            log.info("安装器写出的目录名与实例名一致，不再另建实例");
+            return {
+                name,
+                versionId: input.versionId,
+                loader: { name: loader.name, version: loaderVersion ?? "" },
+                base,
+                clientJar: true,
+                libraries: EMPTY_REPORT,
+                natives: { jars: 0, files: 0, report: EMPTY_REPORT },
+                assets: null,
+                official,
+                timing: { downloadMs: 0, finishMs: Date.now() - installStartedAt },
+                warnings,
+            };
+        }
         json = { id: name, inheritsFrom: installed.versionDirectory, type: "release" };
         warnings.push(`${loader.name} 由官方安装器装入 versions/${installed.versionDirectory}`);
     } else {
@@ -280,6 +306,8 @@ async function installBody(
     warnings: string[],
 ): Promise<BodyResult> {
     const versionDir = dirname(jsonPath);
+    const startedAt = Date.now();
+    let downloadMs = 0;
     const librariesRoot = join(input.folderPath, "libraries");
     const assetsRoot = join(input.folderPath, "assets");
     const context = platformContext();
@@ -299,23 +327,40 @@ async function installBody(
     );
 
     // 四类各跑一个队列、同时进行；每条通道自己报进度，终端上就是四行条各走各的
-    // 并发数是总数按通道摊，避免四类各开满导致总连接数翻四倍
-    const perLane = Math.max(1, Math.floor(options.concurrency / 4));
+    // 并发不能平均分：资源动辄几千个文件，平均分只给它 2 个连接，会慢成瓶颈
+    // 每类保底 1 个，剩下的名额全给任务最多的那类，总数仍等于设置里的并发数
+    const lanes: Array<readonly [string, readonly DownloadTask[]]> = [
+        ["客户端 jar", client === null ? [] : [client]],
+        ["库", libraryTasks],
+        ["natives", nativeTasks],
+        ["资源", assetPlan?.tasks ?? []],
+    ];
+    const active = lanes.filter(([, tasks]) => tasks.length > 0);
+    const budget = new Map(active.map(([label]) => [label, 1]));
+    const largest = [...active].sort((left, right) => right[1].length - left[1].length)[0];
+    if (largest !== undefined) {
+        budget.set(largest[0], Math.max(1, options.concurrency - (active.length - 1)));
+    }
+    log.debug("并发分配 %s", [...budget].map(([label, count]) => `${label}=${count}`).join(" "));
+
     const lane = (label: string, tasks: readonly DownloadTask[]): Promise<DownloadReport> =>
         tasks.length === 0
             ? Promise.resolve(EMPTY_REPORT)
             : downloadAll(
                   tasks,
-                  { ...options, concurrency: perLane },
+                  { ...options, concurrency: budget.get(label) ?? 1 },
                   stage(input.onProgress, label),
               );
 
+    const downloadStartedAt = Date.now();
     const [clientReport, libraries, nativeReport, assetObjects] = await Promise.all([
         lane("客户端 jar", client === null ? [] : [client]),
         lane("库", libraryTasks),
         lane("natives", nativeTasks),
         lane("资源", assetPlan?.tasks ?? []),
     ]);
+    downloadMs = Date.now() - downloadStartedAt;
+    log.info("四类下载用了 %d ms", downloadMs);
 
     // 客户端 jar 缺了整个版本都起不来，单独拦下来
     if (clientReport.failures.length > 0) {
@@ -346,6 +391,7 @@ async function installBody(
         libraries,
         natives: { jars: selection.jars.length, files, report: nativeReport },
         assets: assetPlan === null ? null : { index: assetPlan.index, objects: assetObjects },
+        timing: { downloadMs, finishMs: Date.now() - downloadStartedAt - downloadMs },
     };
 }
 
