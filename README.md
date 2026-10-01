@@ -246,13 +246,13 @@ MOD、配置、存档都在实例目录下，互不影响。
 
 ## 微软登录
 
-代码已就绪，等待 Mojang AppID 审核。审核通过前，微软登录返回 403。
+内置应用 id 已通过 Mojang 审核，直接登录：
 
 ```bash
-bloomery auth login --type microsoft --client-id <azure 应用 id>
+bloomery auth login --type microsoft
 ```
 
-流程为设备码：终端给出一串代码与网址，浏览器完成授权。凭据过期时启动前自动刷新。
+流程为设备码：终端给出一串代码与网址（<https://www.microsoft.com/link>），浏览器完成授权。凭据过期时启动前自动刷新。`--client-id <id>` 或环境变量 `BLOOMERY_CLIENT_ID` 可覆盖内置值。
 
 ## 开发
 

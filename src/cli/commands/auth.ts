@@ -32,6 +32,9 @@ const LABEL: Record<AccountType, string> = { offline: "离线", microsoft: "微�
 
 const CLIENT_ID_ENV = "BLOOMERY_CLIENT_ID";
 
+/** 已通过 Mojang 审核的 Bloomery 应用 id */
+export const DEFAULT_CLIENT_ID = "77af6809-5d9c-432f-b0cb-7b42b8761e3c";
+
 export async function runAuth(command: AuthCommand, ctx: Context): Promise<void> {
     const type = typeOf(command.type);
     log.debug("action=%s type=%s", command.action, type);
@@ -114,10 +117,11 @@ async function microsoftLogin(command: AuthCommand, ctx: Context): Promise<void>
         });
     }
 
-    const clientId = command.clientId ?? process.env[CLIENT_ID_ENV] ?? "";
+    // 内置应用 id：已通过 Mojang 审核，普通用户不用手抄 uuid
+    const clientId = command.clientId ?? process.env[CLIENT_ID_ENV] ?? DEFAULT_CLIENT_ID;
     if (clientId === "") {
         throw new AppError("cli", "MicrosoftClientIdMissing", {
-            context: { detail: `没给 --client-id，环境变量 ${CLIENT_ID_ENV} 也是空的` },
+            context: { detail: "client id 为空" },
         });
     }
 
