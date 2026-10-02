@@ -15,6 +15,7 @@ export type ErrorCode =
     | "VersionNotFound"
     | "VersionBroken"
     | "InstallBroken"
+    | "GameFilesMissing"
     | "VersionExists"
     | "JavaNotFound"
     | "JavaBroken"

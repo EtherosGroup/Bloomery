@@ -147,12 +147,12 @@ export async function planLaunch(
     // 预览只算不落盘，缺件也不拦；真启动才补依赖检查与解压
     if (prepare) {
         if (!classpath.clientJarPresent) {
-            throw new AppError("launch", "DependencyMissing", {
+            throw new AppError("launch", "GameFilesMissing", {
                 context: { detail: `客户端 jar ${clientJar}` },
             });
         }
         if (natives.missing.length > 0) {
-            throw new AppError("launch", "DependencyMissing", {
+            throw new AppError("launch", "GameFilesMissing", {
                 context: {
                     detail: `${natives.missing.length} 个 natives`,
                     first: natives.missing[0] ?? "",
