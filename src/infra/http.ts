@@ -11,9 +11,9 @@
 import { request as httpRequest } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, ClientRequest } from "node:http";
 import { connect as netConnect, type Socket } from "node:net";
-import { request as httpsRequest } from "node:https";
+import { Agent as HttpsAgent, request as httpsRequest, type RequestOptions } from "node:https";
 import { connect as tlsConnect } from "node:tls";
-import type { Readable } from "node:stream";
+import type { Duplex, Readable } from "node:stream";
 
 import { logger } from "../output/index.ts";
 import { packageVersion } from "./package.ts";
@@ -259,17 +259,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
                     path: `${target.pathname}${target.search}`,
                     method,
                     headers,
-                    agent: false,
-                    createConnection: (_opts, callback) => {
-                        tunnel(proxy, target, (error, socket) => {
-                            if (error !== null) {
-                                callback(error, undefined as unknown as Socket);
-                                return;
-                            }
-                            // https 层自己在这个裸 socket 上再包 TLS
-                            callback(null, socket as Socket);
-                        });
-                    },
+                    agent: new TunnelAgent(proxy, target),
                 },
                 onResponse,
             );
@@ -318,6 +308,51 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
         request.on("close", clearConnect);
         request.end(options.body);
     });
+}
+
+/*
+ * 走 CONNECT 隧道的 https agent
+ *
+ * agent: false 时请求上的 createConnection 不会被调用（Node 24 实测），代理被整个跳过
+ * agent 一定会调用 createConnection，隧道与 TLS 都在这一层做
+ */
+class TunnelAgent extends HttpsAgent {
+    readonly proxy: URL;
+    readonly target: URL;
+
+    constructor(proxy: URL, target: URL) {
+        // 不复用连接：空闲超时挂在 socket 上，连接回池后容易误伤下一个请求
+        super({ keepAlive: false });
+        this.proxy = proxy;
+        this.target = target;
+    }
+
+    override createConnection(
+        options: RequestOptions,
+        callback?: (error: Error | null, stream: Duplex) => void,
+    ): undefined {
+        const settle = callback ?? ((): void => {});
+        tunnel(this.proxy, this.target, (error, socket) => {
+            if (error !== null || socket === undefined) {
+                settle(
+                    error ?? new Error(`代理隧道未建立：${this.target.href}`),
+                    undefined as unknown as Duplex,
+                );
+                return;
+            }
+            // 隧道给的是裸 socket，TLS 在这一层包；servername 沿用 agent 给的，SNI 与证书校验落在目标主机上
+            settle(
+                null,
+                tlsConnect({
+                    socket,
+                    host: this.target.hostname,
+                    port: this.target.port === "" ? 443 : Number(this.target.port),
+                    servername: options.servername,
+                }),
+            );
+        });
+        return undefined;
+    }
 }
 
 // CONNECT 隧道：先跟代理建连，拿到 200 之后把裸 socket 交出去

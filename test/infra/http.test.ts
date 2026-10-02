@@ -1,14 +1,17 @@
 /**
- * HTTP：直连、重定向、重试、空闲超时、自定义头
+ * HTTP：直连、重定向、重试、空闲超时、自定义头、CONNECT 代理
  * @author IsCibocaz
  * @since 1.0.0
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { bypassed, httpGet, httpGetBuffer } from "../../src/infra/http.ts";
-import { serve } from "../helpers/server.ts";
+import { closedPort, selfSigned, serve, serveProxy } from "../helpers/server.ts";
 
 const OPTIONS = { timeoutMs: 3000, retries: 2 };
 
@@ -99,4 +102,64 @@ test("noProxy 的匹配", () => {
     assert.equal(bypassed(new URL("http://a.example.com"), ["other.com"]), false);
     assert.equal(bypassed(new URL("http://a.example.com"), ["*"]), true);
     assert.equal(bypassed(new URL("http://a.example.com"), ["EXAMPLE.COM"]), true);
+});
+
+// 目标主机是假名：CONNECT 由代理转发，客户端不做 DNS
+const TARGET_HOST = "manifest.bloomery.test";
+
+test("https 配了代理就发 CONNECT，代理拒绝时报出来", async () => {
+    // createConnection 挂在请求上时 Node 24 不调用它，代理会被整个跳过
+    const port = await closedPort();
+    const proxy = await serveProxy(() => ({ status: 502 }));
+    try {
+        await assert.rejects(
+            httpGet(`https://${TARGET_HOST}:${port}/a.txt`, {
+                ...OPTIONS,
+                retries: 0,
+                proxy: proxy.url,
+            }),
+            /代理 CONNECT 返回 502/,
+        );
+        assert.deepEqual([...proxy.connects], [`${TARGET_HOST}:${port}`]);
+    } finally {
+        await proxy.close();
+    }
+});
+
+test("https 经 CONNECT 隧道取回内容", async (t) => {
+    const directory = mkdtempSync(join(tmpdir(), "bloomery-tls-"));
+    try {
+        const certificate = await selfSigned(directory);
+        if (certificate === undefined) {
+            t.skip("没有 openssl，起不了 TLS 服务");
+            return;
+        }
+        const server = await serve(() => ({ status: 200, body: "隧道到了" }), certificate);
+        const proxy = await serveProxy(() => ({
+            status: 200,
+            host: "127.0.0.1",
+            port: server.port,
+        }));
+        // 自签证书不在信任库里，这一条只测隧道
+        const previous = process.env["NODE_TLS_REJECT_UNAUTHORIZED"];
+        process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
+        try {
+            const buffer = await httpGetBuffer(`https://${TARGET_HOST}:${server.port}/tunnel`, {
+                ...OPTIONS,
+                proxy: proxy.url,
+            });
+            assert.equal(buffer.toString("utf8"), "隧道到了");
+            assert.deepEqual([...proxy.connects], [`${TARGET_HOST}:${server.port}`]);
+        } finally {
+            if (previous === undefined) {
+                delete process.env["NODE_TLS_REJECT_UNAUTHORIZED"];
+            } else {
+                process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = previous;
+            }
+            await proxy.close();
+            await server.close();
+        }
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
 });
