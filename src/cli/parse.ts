@@ -123,11 +123,18 @@ export interface VersionCommand {
 
 export interface JavaCommand {
     readonly name: "java";
-    readonly action: "list" | "scan" | "add" | "remove" | "which";
+    readonly action: "list" | "scan" | "add" | "remove" | "which" | "install";
     /** add 与 remove 收路径，其余可省略 */
     readonly target?: string;
     /** which 用，限定主版本 */
     readonly major?: number;
+    /** install 用 */
+    readonly path?: string;
+    readonly image?: "jre" | "jdk";
+    readonly arch?: string;
+    readonly dryRun?: boolean;
+    readonly noRegister?: boolean;
+    readonly force?: boolean;
 }
 
 export type Command =

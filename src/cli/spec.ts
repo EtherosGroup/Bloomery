@@ -299,22 +299,44 @@ export const COMMANDS: CommandTable = {
 
     java: {
         summary: "Java 运行时管理",
-        usage: "java <list|scan|add|remove|which> [path] [--major <版本>]",
+        usage: "java <list|scan|add|remove|which|install> [path|版本] [--major <版本>] [--image <jre|jdk>] [--path <目录>] [--arch <架构>] [--dry-run] [--no-register] [--force]",
         options: {
             major: { type: "string", value: "<版本>", summary: "限定 Java 主版本" },
+            image: { type: "string", value: "<jre|jdk>", summary: "install 要哪种包，默认 jre" },
+            path: { type: "string", value: "<目录>", summary: "install 的安装位置" },
+            arch: { type: "string", value: "<x64|arm64>", summary: "install 的目标架构，默认本机" },
+            "dry-run": { type: "boolean", summary: "只查地址，不下载" },
+            "no-register": { type: "boolean", summary: "装完不写进 java 清单" },
+            force: { type: "boolean", summary: "目标已存在时也重装" },
         },
         positionals: { names: ["action", "target"], required: 1 },
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["list", "scan", "add", "remove", "which"] as const,
+                ["list", "scan", "add", "remove", "which", "install"] as const,
                 "action",
             );
             const target =
                 action === "add" || action === "remove"
                     ? requirePositional(positionals, 1, "path")
                     : optionalPositional(positionals, 1, "target");
-            return { name: "java", action, target, major: optionalInteger(values, "major") };
+            return {
+                name: "java",
+                action,
+                target,
+                major: optionalInteger(values, "major"),
+                image:
+                    values["image"] === "jdk"
+                        ? "jdk"
+                        : values["image"] === "jre"
+                          ? "jre"
+                          : undefined,
+                path: optionalString(values, "path"),
+                arch: optionalString(values, "arch"),
+                dryRun: values["dry-run"] === true,
+                noRegister: values["no-register"] === true,
+                force: values["force"] === true,
+            };
         },
         run: runJava,
     },

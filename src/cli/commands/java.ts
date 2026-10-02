@@ -9,7 +9,11 @@
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { runtimeDirectory } from "../../launch/java.ts";
 import { loadSetting, loadState, saveSetting, updateState } from "../../config/index.ts";
+import { installJavaRuntime } from "../../java/install.ts";
+import type { TransferOptions } from "../../infra/download.ts";
+import { sourcesOf } from "../../infra/source.ts";
 import type { JavaEntry, JavaSource, Setting } from "../../config/types.ts";
 import { AppError } from "../../error/index.ts";
 import {
@@ -48,9 +52,74 @@ export async function runJava(command: JavaCommand, ctx: Context): Promise<void>
             return add(await loadSetting(), required(command.target, "path"), ctx);
         case "remove":
             return remove(await loadSetting(), required(command.target, "path"), ctx);
+        case "install":
+            return install(command, ctx);
         case "which":
             return which(await loadSetting(), command.major, ctx);
     }
+}
+
+// 下载解压 Java 运行时并登记；不跑任何安装程序
+async function install(command: JavaCommand, ctx: Context): Promise<void> {
+    const setting = await loadSetting();
+    const raw = command.target ?? (command.major === undefined ? "" : String(command.major));
+    const major = Number.parseInt(raw, 10);
+    if (!Number.isFinite(major) || major <= 0) {
+        throw new AppError("cli", "UsageError", {
+            context: { detail: "java install 要给主版本，例如 bloomery java install 21" },
+        });
+    }
+
+    const image = command.image ?? "jre";
+    const report = await installJavaRuntime({
+        major,
+        image,
+        root: command.path ?? runtimeDirectory(setting.java),
+        arch: command.arch,
+        options: transferOf(setting),
+        dryRun: command.dryRun,
+        force: command.force,
+    });
+
+    let registered = false;
+    if (command.dryRun !== true && command.noRegister !== true) {
+        const info = await probeJava(report.java);
+        if (info !== null) {
+            const entry = { ...javaEntryOf(info), source: "downloaded" as const };
+            const list = setting.java.list.filter((item) => item.path !== entry.path);
+            await saveSetting({ ...setting, java: { ...setting.java, list: [...list, entry] } });
+            registered = true;
+        }
+    }
+
+    if (ctx.json) {
+        print(JSON.stringify({ ...report, registered }, null, 4));
+        return;
+    }
+    print(
+        [
+            `安装 java ${major} ${image}`,
+            `  来源     adoptium`,
+            `  地址     ${report.url}`,
+            `  安装根   ${report.root}`,
+            `  可执行   ${report.java}`,
+            command.dryRun === true
+                ? "  预览     未下载"
+                : `  已登记   ${registered ? "是" : "否"}`,
+        ].join("\n"),
+    );
+}
+
+function transferOf(setting: Setting): TransferOptions {
+    return {
+        timeoutMs: setting.network.timeoutMs,
+        retries: setting.network.retries,
+        proxy: setting.network.proxy ?? null,
+        noProxy: setting.network.noProxy,
+        verify: setting.download.verify,
+        concurrency: setting.network.concurrency,
+        sources: sourcesOf(setting.download),
+    };
 }
 
 async function list(setting: Setting, ctx: Context): Promise<void> {
