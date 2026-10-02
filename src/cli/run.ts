@@ -8,6 +8,7 @@
 
 import { errorJson } from "../error/handler.ts";
 import { logger, print, setLevel } from "../output/index.ts";
+import { setHome } from "../platform/index.ts";
 import { printHelp, printVersion } from "./help.ts";
 import { parse } from "./parse.ts";
 import type { Command, Context } from "./parse.ts";
@@ -18,6 +19,11 @@ const log = logger("cli");
 export async function run(argv: readonly string[]): Promise<void> {
     const parsed = parse(argv, CLI_SPEC);
     setLevel(parsed.globals.level);
+
+    // --home 要在任何配置读取之前生效，否则 setting 已经落到系统家目录了
+    if (parsed.globals.home !== undefined && parsed.globals.home !== "") {
+        setHome(parsed.globals.home);
+    }
 
     if (parsed.kind === "help") {
         printHelp(parsed.name);

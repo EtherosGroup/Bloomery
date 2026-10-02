@@ -5,11 +5,18 @@
  */
 
 import { homedir } from "node:os";
+
+// --home 指定的数据目录；未指定时用系统家目录
+let homeOverride: string | null = null;
+
+export function setHome(directory: string): void {
+    homeOverride = directory;
+}
 import { join } from "node:path";
 
 // 用户文件夹：Linux /home/<名字>，Windows C:\Users\<名字>
 export function homeDirectory(): string {
-    return homedir();
+    return homeOverride ?? homedir();
 }
 
 // 配置文件夹：<用户文件夹>/.config/bloomery

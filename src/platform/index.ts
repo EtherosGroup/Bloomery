@@ -27,3 +27,4 @@ export {
     stateFile,
 } from "./path.ts";
 export { mirrorListFile } from "./path.ts";
+export { setHome } from "./path.ts";
