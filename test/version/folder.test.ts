@@ -182,12 +182,12 @@ test("文件夹摘要只看配置与目录状态", async () => {
         assert.equal(summary.exists, true);
         assert.equal(summary.writable, true);
         // 只数配置清单里的条数，不扫磁盘
-        assert.equal(summary.instances, 2);
+        assert.equal(summary.instanceCount, 2);
 
         const missing = await summarizeFolder(folderAt(join(root, "没有这个")));
         assert.equal(missing.exists, false);
         assert.equal(missing.writable, false);
-        assert.equal(missing.instances, 0);
+        assert.equal(missing.instanceCount, 0);
     });
 });
 

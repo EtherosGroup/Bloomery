@@ -80,7 +80,7 @@ export interface FolderSummary {
     readonly exists: boolean;
     readonly writable: boolean;
     /** 配置清单里的条数，磁盘上实际有多少要看 readFolder */
-    readonly instances: number;
+    readonly instanceCount: number;
 }
 
 export async function readFolder(folder: Folder): Promise<FolderView> {
@@ -188,7 +188,7 @@ export async function summarizeFolder(folder: Folder): Promise<FolderSummary> {
         path,
         exists: info?.isDirectory() === true,
         writable: await canWrite(path),
-        instances: folder.instances.length,
+        instanceCount: folder.instances.length,
     };
 }
 

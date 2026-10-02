@@ -40,7 +40,7 @@ export function printFolderList(rows: readonly FolderListRow[], ctx: Context): v
     const table = rows.map((row) => [
         row.name,
         row.path,
-        String(row.instances),
+        String(row.instanceCount),
         row.selected ? "是" : "",
         folderState(row),
     ]);

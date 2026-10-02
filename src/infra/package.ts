@@ -11,6 +11,12 @@ import { readFileSync } from "node:fs";
 let cached: string | undefined;
 
 // 自己的版本号；读不到就 unknown
+// 源码运行（node src/main.ts）时打个 dev 标记，外壳据此区分已发版与 master
+export function runtimeVersion(): string {
+    const base = packageVersion() ?? "0.0.0";
+    return process.argv[1]?.endsWith(".ts") === true ? `${base}+dev` : base;
+}
+
 export function packageVersion(): string {
     if (cached === undefined) {
         cached = read() ?? "unknown";

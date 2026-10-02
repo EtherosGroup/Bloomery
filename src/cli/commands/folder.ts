@@ -20,7 +20,13 @@ import {
     type FolderView,
 } from "../../version/index.ts";
 import type { Context, FolderCommand } from "../parse.ts";
-import { folderJson, folderText, printFolderList, type FolderListRow } from "./render.ts";
+import {
+    folderJson,
+    folderText,
+    printFolder,
+    printFolderList,
+    type FolderListRow,
+} from "./render.ts";
 
 const log = logger("folder");
 
@@ -30,7 +36,7 @@ export async function runFolder(command: FolderCommand, ctx: Context): Promise<v
         case "list":
             return list(setting, ctx);
         case "add":
-            return add(setting, command.target ?? "", ctx);
+            return add(setting, command.target ?? "", command, ctx);
         case "remove":
             return remove(setting, command.target ?? "", ctx);
         case "scan":
@@ -52,7 +58,12 @@ async function list(setting: Setting, ctx: Context): Promise<void> {
     printFolderList(rows, ctx);
 }
 
-async function add(setting: Setting, path: string, ctx: Context): Promise<void> {
+async function add(
+    setting: Setting,
+    path: string,
+    command: FolderCommand,
+    ctx: Context,
+): Promise<void> {
     if (path === "") {
         throw new AppError("cli", "UsageError", { context: { detail: "缺少参数 <path>" } });
     }
@@ -86,15 +97,28 @@ async function add(setting: Setting, path: string, ctx: Context): Promise<void> 
         memory: null,
         instances: [],
     };
+    // dry-run 只返回能不能加与扫描结果，配置一个字都不写
+    if (command.dryRun === true) {
+        printFolder(await readFolder(folder), ctx, null);
+        return;
+    }
+
     await saveSetting({
         ...setting,
         folders: [...setting.folders, folder],
-        selectedFolder: setting.selectedFolder ?? folder.id,
+        selectedFolder:
+            command.noSelect === true
+                ? setting.selectedFolder
+                : (setting.selectedFolder ?? folder.id),
     });
 
     if (ctx.json) {
         print(
-            JSON.stringify({ id: folder.id, path: folder.path, versions: probe.versions }, null, 4),
+            JSON.stringify(
+                { id: folder.id, path: folder.path, versionCount: probe.versions },
+                null,
+                4,
+            ),
         );
         return;
     }

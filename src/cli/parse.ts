@@ -110,6 +110,10 @@ export interface FolderCommand {
     readonly action: "add" | "remove" | "list" | "scan" | "select";
     /** add 收路径，remove 与 select 收标识，scan 收标识且可省略 */
     readonly target?: string;
+    /** add 用：只校验与扫描，不落盘、不改选中 */
+    readonly dryRun?: boolean;
+    /** add 用：登记但不设为当前 */
+    readonly noSelect?: boolean;
 }
 
 export interface VersionCommand {

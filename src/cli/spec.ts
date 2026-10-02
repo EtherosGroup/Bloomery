@@ -252,9 +252,12 @@ export const COMMANDS: CommandTable = {
     folder: {
         summary: "游戏文件夹管理",
         usage: "folder <add|remove|list|scan|select> [path|id]",
-        options: {},
+        options: {
+            "dry-run": { type: "boolean", summary: "add 只校验不落盘" },
+            "no-select": { type: "boolean", summary: "add 后不设为当前文件夹" },
+        },
         positionals: { names: ["action", "target"], required: 1 },
-        toCommand: (_values, positionals) => {
+        toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
                 ["add", "remove", "list", "scan", "select"] as const,
@@ -265,6 +268,8 @@ export const COMMANDS: CommandTable = {
                     name: "folder",
                     action,
                     target: requirePositional(positionals, 1, "path"),
+                    dryRun: values["dry-run"] === true,
+                    noSelect: values["no-select"] === true,
                 };
             }
             if (action === "remove" || action === "select") {
