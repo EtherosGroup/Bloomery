@@ -99,7 +99,7 @@ export async function installJavaRuntime(input: JavaInstallInput): Promise<JavaI
             .digest("hex");
         if (actual !== artifact.sha256) {
             await rm(archive, { force: true }).catch(() => undefined);
-            throw new AppError("java", "DependencyMissing", {
+            throw new AppError("java", "InstallBroken", {
                 context: { detail: `${artifact.name} 校验不过`, expected: artifact.sha256, actual },
             });
         }

@@ -335,7 +335,7 @@ async function runOfficialInstaller(
 ): Promise<OfficialInstallReport> {
     const java = input.officialJava;
     if (java === undefined) {
-        throw new AppError("install", "DependencyMissing", {
+        throw new AppError("install", "JavaNotFound", {
             context: {
                 detail: `${name} 官方安装器缺少 java`,
                 hint: "装 java，或 bloomery java scan",
