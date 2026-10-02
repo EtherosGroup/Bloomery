@@ -7,7 +7,7 @@
  */
 
 import { loadSetting, saveSetting } from "../../config/index.ts";
-import { print } from "../../output/index.ts";
+import { print, versioned } from "../../output/index.ts";
 import { AppError } from "../../error/index.ts";
 import { pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, VersionCommand } from "../parse.ts";
@@ -39,7 +39,7 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
     if (command.action === "select") {
         await saveSetting({ ...setting, selectedInstance: instance.id });
         if (ctx.json) {
-            print(JSON.stringify({ selected: instance.id, folder: view.id }, null, 4));
+            print(JSON.stringify(versioned({ selected: instance.id, folder: view.id }), null, 4));
             return;
         }
         print(`已选中 ${instance.id}  ${view.path}`);

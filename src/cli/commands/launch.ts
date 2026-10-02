@@ -27,7 +27,7 @@ import {
     spawnGame,
     type LaunchPlan,
 } from "../../launch/index.ts";
-import { logger, print } from "../../output/index.ts";
+import { logger, print, versioned } from "../../output/index.ts";
 import { chooseInstance, pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, LaunchCommand } from "../parse.ts";
 
@@ -160,7 +160,11 @@ async function refreshCredentials(
 function report(plan: LaunchPlan, ctx: Context, dryRun: boolean, selected: string | null): void {
     if (ctx.json) {
         print(
-            JSON.stringify({ ...(summary(plan) as object), selectedInstance: selected }, null, 4),
+            JSON.stringify(
+                versioned({ ...(summary(plan) as object), selectedInstance: selected }),
+                null,
+                4,
+            ),
         );
         return;
     }

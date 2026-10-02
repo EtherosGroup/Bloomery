@@ -25,7 +25,7 @@ import {
     resolveJavaExecutable,
     scanJava,
 } from "../../launch/index.ts";
-import { logger, print, renderTable } from "../../output/index.ts";
+import { logger, print, renderTable, versioned } from "../../output/index.ts";
 import { expandHome } from "../../platform/index.ts";
 import type { Context, JavaCommand } from "../parse.ts";
 
@@ -93,7 +93,7 @@ async function install(command: JavaCommand, ctx: Context): Promise<void> {
     }
 
     if (ctx.json) {
-        print(JSON.stringify({ ...report, registered }, null, 4));
+        print(JSON.stringify(versioned({ ...report, registered }), null, 4));
         return;
     }
     print(
@@ -185,7 +185,7 @@ async function add(setting: Setting, target: string, ctx: Context): Promise<void
     log.debug("记录 %s", entry.path);
 
     if (ctx.json) {
-        print(JSON.stringify(entry, null, 4));
+        print(JSON.stringify(versioned(entry), null, 4));
         return;
     }
     print(`已添加 ${entry.path}`);
@@ -218,7 +218,7 @@ async function remove(setting: Setting, target: string, ctx: Context): Promise<v
     });
 
     if (ctx.json) {
-        print(JSON.stringify({ removed: found.path }, null, 4));
+        print(JSON.stringify(versioned({ removed: found.path }), null, 4));
         return;
     }
     print(`已移除 ${found.path}`);
@@ -239,7 +239,7 @@ async function which(setting: Setting, major: number | undefined, ctx: Context):
 
     const entry = javaEntryOf(info);
     if (ctx.json) {
-        print(JSON.stringify({ ...entry, home: info.home }, null, 4));
+        print(JSON.stringify(versioned({ ...entry, home: info.home }), null, 4));
         return;
     }
     print("选中的 Java");

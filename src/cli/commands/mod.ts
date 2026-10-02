@@ -15,7 +15,7 @@ import { AppError } from "../../error/index.ts";
 import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
 import { installMod, searchMods, type ModInstallReport } from "../../mod/index.ts";
-import { logger, print, renderTable } from "../../output/index.ts";
+import { logger, print, renderTable, versioned } from "../../output/index.ts";
 import { chooseInstance, pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, ModCommand } from "../parse.ts";
 
@@ -115,7 +115,13 @@ function show(
     selected: boolean,
 ): void {
     if (ctx.json) {
-        print(JSON.stringify({ instance: instanceId, mods: modsDirectory, ...report }, null, 4));
+        print(
+            JSON.stringify(
+                versioned({ instance: instanceId, mods: modsDirectory, ...report }),
+                null,
+                4,
+            ),
+        );
         return;
     }
 

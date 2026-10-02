@@ -9,7 +9,7 @@
 
 import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
-import { logger, print, progressReporter } from "../../output/index.ts";
+import { logger, print, progressReporter, versioned } from "../../output/index.ts";
 import { officialJavaOf, requiredJavaIn } from "../java-choice.ts";
 import {
     installVersion,
@@ -72,7 +72,7 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
     log.info("安装完成 %s", report.name);
 
     if (ctx.json) {
-        print(JSON.stringify(report, null, 4));
+        print(JSON.stringify(versioned(report), null, 4));
     } else {
         print(render(report));
     }

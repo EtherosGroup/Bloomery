@@ -9,7 +9,7 @@
 import { loadSetting, saveSetting } from "../../config/index.ts";
 import type { Folder, Instance, Setting } from "../../config/types.ts";
 import { AppError } from "../../error/index.ts";
-import { logger, print } from "../../output/index.ts";
+import { logger, print, versioned } from "../../output/index.ts";
 import {
     findFolder,
     folderIdOf,
@@ -138,7 +138,7 @@ async function remove(setting: Setting, target: string, ctx: Context): Promise<v
     });
 
     if (ctx.json) {
-        print(JSON.stringify({ removed: folder.id }, null, 4));
+        print(JSON.stringify(versioned({ removed: folder.id }), null, 4));
         return;
     }
     print(`已移除 ${folder.id}`);
@@ -154,7 +154,7 @@ async function select(setting: Setting, target: string, ctx: Context): Promise<v
     await saveSetting({ ...setting, selectedFolder: folder.id });
 
     if (ctx.json) {
-        print(JSON.stringify({ selected: folder.id, path: folder.path }, null, 4));
+        print(JSON.stringify(versioned({ selected: folder.id, path: folder.path }), null, 4));
         return;
     }
     print(`已选择 ${folder.id}  ${folder.path}`);

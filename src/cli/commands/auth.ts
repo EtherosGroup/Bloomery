@@ -21,7 +21,7 @@ import {
     type AccountType,
 } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
-import { logger, print, printError, renderTable } from "../../output/index.ts";
+import { logger, print, printError, renderTable, versioned } from "../../output/index.ts";
 import type { AuthCommand, Context } from "../parse.ts";
 
 const log = logger("auth");
@@ -103,7 +103,7 @@ async function login(username: string, ctx: Context): Promise<void> {
     await saveSetting({ ...setting, selectedAccount: account.id });
 
     if (ctx.json) {
-        print(JSON.stringify(account, null, 4));
+        print(JSON.stringify(versioned(account), null, 4));
         return;
     }
     print(`已添加 ${account.id}`);
@@ -154,7 +154,7 @@ async function microsoftLogin(command: AuthCommand, ctx: Context): Promise<void>
     log.info("微软登录成功 %s", account.id);
 
     if (ctx.json) {
-        print(JSON.stringify(publicAccount(account), null, 4));
+        print(JSON.stringify(versioned(publicAccount(account)), null, 4));
         return;
     }
     print(`已添加 ${account.id}`);
@@ -195,7 +195,7 @@ async function logout(username: string, type: AccountType, ctx: Context): Promis
     }
 
     if (ctx.json) {
-        print(JSON.stringify({ removed: id }, null, 4));
+        print(JSON.stringify(versioned({ removed: id }), null, 4));
         return;
     }
     print(`已移除 ${id}`);

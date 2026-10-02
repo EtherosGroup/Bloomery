@@ -11,7 +11,7 @@ import { loadSetting } from "../../config/index.ts";
 import { officialJavaOf } from "../java-choice.ts";
 import { AppError } from "../../error/index.ts";
 import { importModpack, type ModpackImportReport } from "../../modpack/index.ts";
-import { logger, print, progressReporter } from "../../output/index.ts";
+import { logger, print, progressReporter, versioned } from "../../output/index.ts";
 import { pickFolder, resolveFolderPath } from "../../version/index.ts";
 import type { Context, ModpackCommand } from "../parse.ts";
 
@@ -48,7 +48,7 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
     log.info("整合包导入 %s", report.name);
 
     if (ctx.json) {
-        print(JSON.stringify(report, null, 4));
+        print(JSON.stringify(versioned(report), null, 4));
         return;
     }
     print(render(report, command.dryRun === true));

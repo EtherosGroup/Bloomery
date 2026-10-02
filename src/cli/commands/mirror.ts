@@ -19,7 +19,7 @@ import {
     sourcesOf,
     type MirrorEntry,
 } from "../../infra/source.ts";
-import { print, renderTable } from "../../output/index.ts";
+import { print, renderTable, versioned } from "../../output/index.ts";
 import { mirrorListFile } from "../../platform/index.ts";
 import type { Context, MirrorCommand } from "../parse.ts";
 
@@ -89,7 +89,7 @@ export async function runMirror(command: MirrorCommand, ctx: Context): Promise<v
 
     await saveSetting({ ...setting, download: { ...setting.download, sources: [source] } });
     if (ctx.json) {
-        print(JSON.stringify({ source }, null, 4));
+        print(JSON.stringify(versioned({ source }), null, 4));
         return;
     }
     print(`下载源 ${wanted}${source.url === null ? "" : `  ${source.url}`}`);

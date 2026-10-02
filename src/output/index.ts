@@ -33,3 +33,8 @@ export {
 export { renderTable, type TableOptions } from "./table.ts";
 export { displayWidth } from "./text.ts";
 export { paginate, type Page } from "./page.ts";
+
+// 对象输出的协议版本，数组输出不带
+export function versioned<T extends object>(value: T): T & { v: number } {
+    return { v: 1, ...value };
+}

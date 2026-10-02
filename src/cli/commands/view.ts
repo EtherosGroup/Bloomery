@@ -15,7 +15,7 @@ import type { DownloadSetting, Network } from "../../config/types.ts";
 import { AppError } from "../../error/index.ts";
 import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
-import { logger, paginate, print, renderTable, type Page } from "../../output/index.ts";
+import { logger, paginate, print, renderTable, type Page, versioned } from "../../output/index.ts";
 import {
     filterChannel,
     listLoaderGames,
@@ -77,7 +77,7 @@ async function overview(
     }
 
     if (ctx.json) {
-        print(JSON.stringify({ type: channel ?? null, loaders: rows }, null, 4));
+        print(JSON.stringify(versioned({ type: channel ?? null, loaders: rows }), null, 4));
         return;
     }
 
@@ -111,7 +111,13 @@ async function versions(
     const scope = channel === undefined ? "" : `（只看 ${channel}）`;
 
     if (ctx.json) {
-        print(JSON.stringify(pageJson({ loader: name, type: channel ?? null }, page), null, 4));
+        print(
+            JSON.stringify(
+                versioned(pageJson({ loader: name, type: channel ?? null }, page) as object),
+                null,
+                4,
+            ),
+        );
         return;
     }
     if (page.total === 0) {
@@ -259,7 +265,13 @@ async function gameList(
     const games = await listLoaderGames(name, network);
     const page = paginate(games, command.page ?? 1, PER_PAGE);
     if (ctx.json) {
-        print(JSON.stringify({ ...pageJson({ loader: name }, page), games: page.items }, null, 4));
+        print(
+            JSON.stringify(
+                versioned({ ...pageJson({ loader: name }, page), games: page.items }),
+                null,
+                4,
+            ),
+        );
         return;
     }
     if (page.total === 0) {

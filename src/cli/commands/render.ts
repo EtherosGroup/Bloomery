@@ -6,7 +6,7 @@
  * @since 1.0.0
  */
 
-import { print, renderTable } from "../../output/index.ts";
+import { print, renderTable, versioned } from "../../output/index.ts";
 import type {
     FolderSummary,
     FolderView,
@@ -62,7 +62,7 @@ function folderState(row: FolderListRow): string {
 
 export function printFolder(view: FolderView, ctx: Context, selected?: string | null): void {
     if (ctx.json) {
-        print(JSON.stringify(folderJson(view, selected), null, 4));
+        print(JSON.stringify(versioned(folderJson(view, selected) as object), null, 4));
         return;
     }
     print(folderText(view, selected));
@@ -158,7 +158,7 @@ export function loaderText(instance: InstanceView): string {
 
 export function printInstance(folderPath: string, instance: InstanceView, ctx: Context): void {
     if (ctx.json) {
-        print(JSON.stringify(instanceDetail(folderPath, instance), null, 4));
+        print(JSON.stringify(versioned(instanceDetail(folderPath, instance) as object), null, 4));
         return;
     }
     print(instanceDetailText(folderPath, instance));
