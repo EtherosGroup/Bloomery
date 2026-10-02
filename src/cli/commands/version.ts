@@ -46,5 +46,5 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
         return;
     }
 
-    printInstance(view.path, instance, ctx);
+    await printInstance(view.path, instance, ctx);
 }

@@ -6,13 +6,16 @@
  * @since 1.0.0
  */
 
+import { loadSetting } from "../../config/index.ts";
 import { print, renderTable, versioned } from "../../output/index.ts";
+import { probeJava } from "../../launch/java.ts";
 import type {
     FolderSummary,
     FolderView,
     InstanceState,
     InstanceView,
 } from "../../version/index.ts";
+import { officialJavaOf } from "../java-choice.ts";
 import type { Context } from "../parse.ts";
 
 const STATE: Record<InstanceState, string> = {
@@ -24,6 +27,11 @@ const STATE: Record<InstanceState, string> = {
 
 export interface FolderListRow extends FolderSummary {
     readonly selected: boolean;
+}
+
+export interface ResolvedJava {
+    readonly major: number;
+    readonly path: string;
 }
 
 // list 只列保存过的文件夹，不展开里面的版本
@@ -156,23 +164,61 @@ export function loaderText(instance: InstanceView): string {
     return version === null || version === undefined ? type : `${type} ${version}`;
 }
 
-export function printInstance(folderPath: string, instance: InstanceView, ctx: Context): void {
-    if (ctx.json) {
-        print(JSON.stringify(versioned(instanceDetail(folderPath, instance) as object), null, 4));
-        return;
+// 详情才扫盘：设置里的登记项与探测结果一起按要求主版本挑，再探出实际主版本
+export async function resolvedJavaOf(instance: InstanceView): Promise<ResolvedJava | null> {
+    const setting = await loadSetting();
+    const required = instance.descriptor?.javaVersion?.majorVersion ?? null;
+    const path = await officialJavaOf(setting.java, required);
+    if (path === undefined) {
+        return null;
     }
-    print(instanceDetailText(folderPath, instance));
+    const info = await probeJava(path);
+    if (info === null || info.major === null) {
+        return null;
+    }
+    return { major: info.major, path };
 }
 
-export function instanceDetail(folderPath: string, instance: InstanceView): unknown {
+export async function printInstance(
+    folderPath: string,
+    instance: InstanceView,
+    ctx: Context,
+): Promise<void> {
+    const resolved = await resolvedJavaOf(instance);
+    if (ctx.json) {
+        print(
+            JSON.stringify(
+                versioned(instanceDetail(folderPath, instance, resolved) as object),
+                null,
+                4,
+            ),
+        );
+        return;
+    }
+    print(instanceDetailText(folderPath, instance, resolved));
+}
+
+export function instanceDetail(
+    folderPath: string,
+    instance: InstanceView,
+    resolved: ResolvedJava | null = null,
+): unknown {
+    const detail = instanceJson(instance) as {
+        java: { required: { major: number }; resolved: ResolvedJava | null };
+    };
     return {
         folder: folderPath,
-        ...(instanceJson(instance) as object),
+        ...detail,
+        java: { ...detail.java, resolved },
         descriptor: descriptorSummary(instance),
     };
 }
 
-export function instanceDetailText(folderPath: string, instance: InstanceView): string {
+export function instanceDetailText(
+    folderPath: string,
+    instance: InstanceView,
+    resolved: ResolvedJava | null = null,
+): string {
     const descriptor = instance.descriptor;
     const lines = [
         `${instance.id}${instance.name === instance.id ? "" : `  (${instance.name})`}`,
@@ -191,13 +237,19 @@ export function instanceDetailText(folderPath: string, instance: InstanceView): 
             `  主类       ${descriptor.mainClass ?? "-"}`,
             `  客户端 jar ${descriptor.jar ?? "-"}`,
             `  资源索引   ${descriptor.assetIndex?.id ?? descriptor.assets ?? "-"}`,
-            `  Java       ${descriptor.javaVersion?.majorVersion ?? "-"}`,
+            `  Java       需要 ${descriptor.javaVersion?.majorVersion ?? "-"}`,
+            `             使用 ${javaUsage(resolved)}`,
             `  库         ${descriptor.libraries.length}`,
             `  参数       game ${descriptor.arguments.game.length} / jvm ${descriptor.arguments.jvm.length}`,
             `  版本 json  ${descriptor.json}`,
         );
     }
     return lines.join("\n");
+}
+
+// 实际使用的 Java：主版本与可执行文件路径
+function javaUsage(resolved: ResolvedJava | null): string {
+    return resolved === null ? "-" : `${resolved.major}  ${resolved.path}`;
 }
 
 // 合并后的摘要，原始 json 太长不直接给
