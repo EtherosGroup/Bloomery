@@ -147,3 +147,26 @@ function detailOf(error: AppError): string {
     const head = detail === undefined ? "" : `：${String(detail)}`;
     return rest.length === 0 ? head : `${head}（${rest.join(" ")}）`;
 }
+
+// 机器可读的错误对象，--json 时给外壳用
+export function errorJson(error: unknown): Record<string, unknown> {
+    const app = error instanceof AppError ? error : null;
+    const code: ErrorCode = app?.code ?? "UnknownError";
+    const context = (app?.context ?? {}) as Record<string, unknown>;
+    const detail = typeof context["detail"] === "string" ? context["detail"] : "";
+    const rest: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(context)) {
+        if (key !== "detail") {
+            rest[key] = value;
+        }
+    }
+    return {
+        error: {
+            code,
+            message: MESSAGES[code],
+            detail,
+            exit: EXIT_CODES[code],
+            ...(Object.keys(rest).length > 0 ? { context: rest } : {}),
+        },
+    };
+}

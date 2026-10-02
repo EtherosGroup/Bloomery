@@ -199,6 +199,22 @@ bloomery mirror update                           # 不给 --from 就用上次的
 
 `--json` 下标准输出只有一份 JSON，过程提示静默。
 
+`--json` 出错时标准输出给一份机器可读的错误（人类可读的那份仍写 stderr）：
+
+```json
+{
+    "error": {
+        "code": "DownloadFailed",
+        "message": "下载失败",
+        "detail": "forge 安装器",
+        "exit": 1,
+        "context": { "url": "…" }
+    }
+}
+```
+
+`code` 是稳定的错误码，`message` 是它对应的中文短语，`exit` 是进程退出码。
+
 `--progress ndjson` 把进度写成机器可读事件到 **stderr**（标准输出不受影响），供外壳读取：
 
 ```json

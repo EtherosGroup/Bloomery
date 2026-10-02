@@ -6,7 +6,8 @@
  * @since 1.0.0
  */
 
-import { logger, setLevel } from "../output/index.ts";
+import { errorJson } from "../error/handler.ts";
+import { logger, print, setLevel } from "../output/index.ts";
 import { printHelp, printVersion } from "./help.ts";
 import { parse } from "./parse.ts";
 import type { Command, Context } from "./parse.ts";
@@ -36,7 +37,15 @@ export async function run(argv: readonly string[]): Promise<void> {
         home: parsed.globals.home,
         progress: parsed.globals.progress,
     };
-    await dispatch(parsed.command, ctx);
+    try {
+        await dispatch(parsed.command, ctx);
+    } catch (error) {
+        // --json 时标准输出出一份机器可读的错误，人类可读的那份仍由上层写 stderr
+        if (parsed.globals.json) {
+            print(JSON.stringify(errorJson(error), null, 4));
+        }
+        throw error;
+    }
 }
 
 // TS 无法关联索引访问的类型，断言集中在这一处

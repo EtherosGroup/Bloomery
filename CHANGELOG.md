@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.8.0
+
+- `--progress ndjson`：机器可读进度事件走 stderr，节流 100ms，新阶段与收尾必发，积压超 64KB 丢中间帧
+- `--json` 出错时标准输出一份机器可读的错误对象（`code` / `message` / `detail` / `exit`）
+
 ## 1.7.0
 
 - 微软登录使用内置应用 id：`bloomery auth login --type microsoft` 不再需要 `--client-id`
