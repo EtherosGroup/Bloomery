@@ -154,7 +154,11 @@ async function forGame(
 
     if (ctx.json) {
         print(
-            JSON.stringify(pageJson({ loader: name, game, type: channel ?? null }, page), null, 4),
+            JSON.stringify(
+                versioned(pageJson({ loader: name, game, type: channel ?? null }, page) as object),
+                null,
+                4,
+            ),
         );
         return;
     }
@@ -265,13 +269,7 @@ async function gameList(
     const games = await listLoaderGames(name, network);
     const page = paginate(games, command.page ?? 1, PER_PAGE);
     if (ctx.json) {
-        print(
-            JSON.stringify(
-                versioned({ ...pageJson({ loader: name }, page), games: page.items }),
-                null,
-                4,
-            ),
-        );
+        print(JSON.stringify(versioned({ ...pageJson({ loader: name }, page) }), null, 4));
         return;
     }
     if (page.total === 0) {

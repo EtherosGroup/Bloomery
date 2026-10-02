@@ -43,7 +43,7 @@ export async function runMirror(command: MirrorCommand, ctx: Context): Promise<v
         if (ctx.json) {
             print(
                 JSON.stringify(
-                    { presets: SOURCE_PRESETS, mirrors: cached.entries, source: active },
+                    versioned({ presets: SOURCE_PRESETS, mirrors: cached.entries, source: active }),
                     null,
                     4,
                 ),

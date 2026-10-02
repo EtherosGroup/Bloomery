@@ -115,7 +115,7 @@ async function add(
     if (ctx.json) {
         print(
             JSON.stringify(
-                { id: folder.id, path: folder.path, versionCount: probe.versions },
+                versioned({ id: folder.id, path: folder.path, versionCount: probe.versions }),
                 null,
                 4,
             ),
