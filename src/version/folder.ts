@@ -131,16 +131,20 @@ export async function readFolder(folder: Folder): Promise<FolderView> {
         exists: info?.isDirectory() === true,
         writable,
         versionsDirectory: scan.directory,
-        instances: withLastPlayed(inferGameVersions(instances), await loadState()),
+        instances: withLastPlayed(inferGameVersions(instances), await loadState(), folder.id),
         dropped,
     };
 }
 
 // 从 state.json 的实例统计里取上次启动时刻
-function withLastPlayed(views: readonly InstanceView[], state: State): InstanceView[] {
+function withLastPlayed(
+    views: readonly InstanceView[],
+    state: State,
+    folderId: string,
+): InstanceView[] {
     return views.map((view) => ({
         ...view,
-        lastPlayedAt: state.instances[view.id]?.lastPlayedAt ?? null,
+        lastPlayedAt: state.instances[`${folderId}/${view.id}`]?.lastPlayedAt ?? null,
     }));
 }
 
