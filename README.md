@@ -221,7 +221,7 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 
 `--version` 输出单个 token。从源码运行（`node src/main.ts`）时带 `+dev` 后缀，安装版不带。
 
-`--home <dir>` 指定数据目录，`setting.json` / `accounts.json` / `state.json` / `mirrors.json` 都跟着走。日志落点不跟随 `--home`：进程启动时就定在 `<用户文件夹>/.config/bloomery/logs`，在解析参数之前。
+`--home <dir>` 指定数据目录，`setting.json` / `accounts.json` / `state.json` / `mirrors.json` 与日志都跟着走，日志落在 `<dir>/.config/bloomery/logs`。落点目录在第一条日志写入时才取，那时 `--home` 已经生效。
 
 `--json` 下标准输出只有一份 JSON，过程提示静默；出错时标准输出给一份机器可读的错误，人类可读的那份仍写 stderr。形状、错误码与流事件见下文。
 
@@ -427,7 +427,7 @@ MOD、配置、存档都在实例目录下，互不影响。
   logs/latest.log
 ```
 
-`--home <dir>` 时配置目录换成 `<dir>/.config/bloomery`；日志落点不跟随 `--home`，仍是 `<用户文件夹>/.config/bloomery/logs`。
+`--home <dir>` 时配置目录换成 `<dir>/.config/bloomery`，日志落点 `logs/` 也在这个目录下。
 
 下载源、代理与并发在 `setting.json` 的 `network` 段（`concurrency` 默认 8，四类文件按任务数分配）。
 
@@ -448,7 +448,7 @@ bloomery auth login --type microsoft
 ```bash
 npm run start -- <参数>     # 直接跑源码，Node 原生剥离类型
 npm run check               # tsc --noEmit
-npm test                    # node --test，207 项
+npm test                    # node --test，208 项
 npm run fmt                 # oxfmt 格式化
 npm run build               # 产物到 dist/
 ```

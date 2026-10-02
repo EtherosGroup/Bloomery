@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -149,6 +149,20 @@ test("--version --json 是对象输出，带 v", () => {
     const info = JSON.parse(outcome.stdout) as { v: number; version: string };
     assert.equal(info.v, 1);
     assert.match(info.version, /^\d+\.\d+\.\d+/);
+});
+
+test("--home 之后日志落在该目录", () => {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-home-"));
+    try {
+        const outcome = cli(["--home", home, "--json", "folder", "list"]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        assert.doesNotMatch(outcome.stderr, /落点写入失败/);
+
+        const log = readFileSync(join(home, ".config", "bloomery", "logs", "latest.log"), "utf8");
+        assert.match(log, /\[cli\] 命令/);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
 });
 
 test("mirror update --json 是对象输出，带 v", async () => {

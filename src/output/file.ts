@@ -57,9 +57,11 @@ export interface FileSink {
 }
 
 export function addFileSink(options: FileSinkOptions = {}): FileSink {
-    const directory = options.directory ?? logDirectory();
     const keep = options.keep ?? KEEP;
-    let path = join(directory, LATEST);
+    // 目录在第一次写入时才取：addFileSink 在模块加载时跑，--home 要等 run() 解析参数
+    let resolved: string | null = options.directory ?? null;
+    const directory = (): string => (resolved ??= logDirectory());
+    let path = "";
     let handle: FileHandle | undefined;
     let owned = false;
     let written = 0;
@@ -70,28 +72,29 @@ export function addFileSink(options: FileSinkOptions = {}): FileSink {
         if (handle !== undefined) {
             return handle;
         }
-        await mkdir(directory, { recursive: true });
-        owned = await acquire(directory);
+        const dir = directory();
+        await mkdir(dir, { recursive: true });
+        owned = await acquire(dir);
         // 抢到锁才轮转：上一次的占用者已经不在了，latest.log 不会有人再写
         let mode: "w" | "a" = "w";
         if (owned) {
-            path = join(directory, LATEST);
+            path = join(dir, LATEST);
             // 归档失败就不截断，接着上一次追加，内容不丢
-            mode = (await rotate(directory, LATEST).then(
+            mode = (await rotate(dir, LATEST).then(
                 () => true,
                 () => false,
             ))
                 ? "w"
                 : "a";
-            await sweep(directory).catch(() => {});
+            await sweep(dir).catch(() => {});
         } else {
-            path = join(directory, `bloomery-${stampOf(Date.now())}-${process.pid}.log`);
+            path = join(dir, `bloomery-${stampOf(Date.now())}-${process.pid}.log`);
         }
 
         const file = await open(path, mode);
         handle = file;
         await file.write(await sessionHeader(), undefined, "utf8");
-        await prune(directory, keep).catch(() => {});
+        await prune(dir, keep).catch(() => {});
         return file;
     }
 
@@ -124,7 +127,7 @@ export function addFileSink(options: FileSinkOptions = {}): FileSink {
             await handle?.close();
             handle = undefined;
             if (owned) {
-                await rm(join(directory, LOCK), { force: true }).catch(() => {});
+                await rm(join(directory(), LOCK), { force: true }).catch(() => {});
             }
         },
     };
