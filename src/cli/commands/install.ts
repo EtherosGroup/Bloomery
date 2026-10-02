@@ -10,7 +10,7 @@
 import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
 import { logger, print, progressReporter } from "../../output/index.ts";
-import { officialJavaOf } from "../java-choice.ts";
+import { officialJavaOf, requiredJavaIn } from "../java-choice.ts";
 import {
     installVersion,
     parseLoaderSpec,
@@ -45,16 +45,18 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
     }
 
     // forge 与 neoforge 要跑官方安装器，先挑一个 java；挑不到就把错留给安装器那步报
+    const folderPath = resolveFolderPath(folder);
+    // 安装器要用游戏版本要求的那个 Java：1.12.2 要 8，拿最新的去跑会失败
     const officialJava =
         loader !== null && (loader.name === "forge" || loader.name === "neoforge")
-            ? await officialJavaOf(setting.java)
+            ? await officialJavaOf(setting.java, await requiredJavaIn(folderPath, command.version))
             : undefined;
 
     const progress = progressReporter(
         ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
     );
     const report = await installVersion({
-        folderPath: resolveFolderPath(folder),
+        folderPath,
         versionId: command.version,
         name: command.displayName,
         loader,

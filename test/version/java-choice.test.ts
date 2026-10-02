@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { pickJava } from "../../src/cli/java-choice.ts";
+import { pickJava, requiredJavaOf } from "../../src/cli/java-choice.ts";
 
 const JVMS = [
     { path: "/jvm/25/bin/java", major: 25 },
@@ -34,4 +34,21 @@ test("拿不到要求时按 17 起步，主版本未知的兜底", () => {
     assert.equal(pickJava(JVMS, null), "/jvm/21/bin/java");
     assert.equal(pickJava([{ path: "/jvm/x/bin/java", major: null }], null), "/jvm/x/bin/java");
     assert.equal(pickJava([], null), undefined);
+});
+
+test("从版本 json 取 Java 主版本要求", () => {
+    assert.equal(requiredJavaOf({ javaVersion: { majorVersion: 8 } }), 8);
+    assert.equal(requiredJavaOf({ javaVersion: { majorVersion: 21 } }), 21);
+    assert.equal(requiredJavaOf({ javaVersion: {} }), null);
+    assert.equal(requiredJavaOf({}), null);
+    assert.equal(requiredJavaOf(null), null);
+    assert.equal(requiredJavaOf({ javaVersion: { majorVersion: "8" } }), null);
+});
+
+test("要求 8 时挑 8，缺 8 才退到比 8 大的里面最小的", () => {
+    assert.equal(pickJava(JVMS, 8), "/jvm/8/bin/java");
+
+    const noEight = JVMS.filter((item) => item.major !== 8);
+    assert.equal(pickJava(noEight, 8), "/jvm/21/bin/java");
+    assert.equal(pickJava(noEight, 25), "/jvm/25/bin/java");
 });

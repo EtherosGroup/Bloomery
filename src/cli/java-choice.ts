@@ -7,7 +7,11 @@
  * @since 1.6.0
  */
 
+import { join } from "node:path";
+
 import type { JavaSetting } from "../config/types.ts";
+import { object, parseJson } from "../config/read.ts";
+import { readText } from "../infra/fs.ts";
 import { findJava, probeJava } from "../launch/java.ts";
 
 /** 现代加载器安装器的最低要求；拿不到更准确的要求时用它 */
@@ -61,4 +65,25 @@ export function pickJava(
     }
     const any = [...known].sort((left, right) => right.major - left.major);
     return any[0]?.path ?? candidates[0]?.path;
+}
+
+// 版本 json 里的 Java 主版本要求：1.12.2 是 8，1.20.6 是 21
+export function requiredJavaOf(raw: unknown): number | null {
+    const javaVersion = object(object(raw, "version")?.["javaVersion"], "version.javaVersion");
+    const major = javaVersion?.["majorVersion"];
+    return typeof major === "number" && Number.isFinite(major) ? major : null;
+}
+
+// 从基础版本 json 读要求；文件不在或读不出来时给 null，由调用方退回默认
+export async function requiredJavaIn(folderPath: string, game: string): Promise<number | null> {
+    const path = join(folderPath, "versions", game, `${game}.json`);
+    const text = await readText(path);
+    if (text === undefined) {
+        return null;
+    }
+    try {
+        return requiredJavaOf(parseJson(text, path));
+    } catch {
+        return null;
+    }
 }
