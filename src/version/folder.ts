@@ -8,7 +8,7 @@
  * @since 1.0.0
  */
 
-import { access, constants, stat } from "node:fs/promises";
+import { access, constants, readdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
 import type { Folder, Instance, Loader } from "../config/types.ts";
@@ -179,6 +179,17 @@ export function resolveFolderPath(folder: Folder): string {
 }
 
 // 只读配置与目录状态，不扫版本：list 只要列出保存过的那几条
+// 已配置与磁盘扫到的并集，与 instances[] 同源
+async function countInstances(path: string, folder: Folder): Promise<number> {
+    const ids = new Set(folder.instances.map((item) => item.id));
+    for (const entry of await readdir(join(path, "versions")).catch(() => [])) {
+        if (!entry.startsWith(".")) {
+            ids.add(entry);
+        }
+    }
+    return ids.size;
+}
+
 export async function summarizeFolder(folder: Folder): Promise<FolderSummary> {
     const path = resolveFolderPath(folder);
     const info = await stat(path).catch(() => undefined);
@@ -188,7 +199,7 @@ export async function summarizeFolder(folder: Folder): Promise<FolderSummary> {
         path,
         exists: info?.isDirectory() === true,
         writable: await canWrite(path),
-        instanceCount: folder.instances.length,
+        instanceCount: await countInstances(path, folder),
     };
 }
 
