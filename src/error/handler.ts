@@ -151,6 +151,12 @@ function detailOf(error: AppError): string {
 }
 
 // 机器可读的错误对象，--json 时给外壳用
+// 值得让外壳出「重试」按钮的码：只有网络与临时性的那些
+const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+    "DownloadFailed",
+    "DependencyMissing",
+]);
+
 export function errorJson(error: unknown): Record<string, unknown> {
     const app = error instanceof AppError ? error : null;
     const code: ErrorCode = app?.code ?? "UnknownError";
@@ -168,7 +174,8 @@ export function errorJson(error: unknown): Record<string, unknown> {
             message: MESSAGES[code],
             detail,
             exit: EXIT_CODES[code],
-            ...(Object.keys(rest).length > 0 ? { context: rest } : {}),
+            retryable: RETRYABLE.has(code),
+            context: rest,
         },
     };
 }
