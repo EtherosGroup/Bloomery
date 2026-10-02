@@ -434,6 +434,45 @@ export async function resolveJavaFor(
     return chooseJava(await candidatesOf(setting, cached), major);
 }
 
+/**
+ * 详情与启动共用：实例或文件夹指定的路径优先，否则按主版本从清单里挑
+ *
+ * detail 是指定路径用不了时的详情：manualMissing 给原始输入，manualBroken 给落到的那条
+ */
+export type JavaPick =
+    | { readonly kind: "manual"; readonly info: JavaInfo }
+    | { readonly kind: "manualMissing"; readonly detail: string }
+    | { readonly kind: "manualBroken"; readonly detail: string }
+    | { readonly kind: "auto"; readonly info: JavaInfo; readonly fallback: boolean }
+    | { readonly kind: "autoMissing" };
+
+// javaPath 来自 launchOptionsOf，实例与文件夹的覆盖都在那里收口
+export async function resolveJavaPick(
+    setting: JavaSetting,
+    cached: Readonly<Record<string, JavaProbe>>,
+    javaPath: string | null,
+    major: number | undefined,
+): Promise<JavaPick> {
+    // 实例或文件夹指定了路径就以它为准
+    if (javaPath !== null) {
+        const path = await resolveJavaExecutable(javaPath);
+        if (path === undefined) {
+            return { kind: "manualMissing", detail: javaPath };
+        }
+        const info = await probeJava(path, "manual");
+        if (info === null) {
+            return { kind: "manualBroken", detail: path };
+        }
+        return { kind: "manual", info };
+    }
+
+    const choice = await resolveJavaFor(setting, cached, major);
+    if (choice === undefined) {
+        return { kind: "autoMissing" };
+    }
+    return { kind: "auto", info: choice.info, fallback: choice.fallback };
+}
+
 // 清单里能跑起来的那些，缺信息的按缓存或重探
 async function candidatesOf(
     setting: JavaSetting,

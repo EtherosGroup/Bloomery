@@ -7,6 +7,7 @@
  */
 
 import { loadSetting, saveSetting } from "../../config/index.ts";
+import { launchOptionsOf } from "../../launch/index.ts";
 import { print, versioned } from "../../output/index.ts";
 import { AppError } from "../../error/index.ts";
 import { pickFolder, readFolder } from "../../version/index.ts";
@@ -46,5 +47,12 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
         return;
     }
 
-    await printInstance(view.path, instance, ctx);
+    // 详情与启动取同一份 Java：覆盖来自 launchOptionsOf
+    const config = folder.instances.find((item) => item.id === instance.id);
+    await printInstance(
+        view.path,
+        instance,
+        ctx,
+        launchOptionsOf(setting, folder, config).javaPath,
+    );
 }

@@ -15,10 +15,12 @@ export {
     resolveJava,
     resolveJavaExecutable,
     resolveJavaFor,
+    resolveJavaPick,
     runtimeDirectory,
     scanJava,
     type JavaChoice,
     type JavaInfo,
+    type JavaPick,
     type JavaScan,
 } from "./java.ts";
 export {

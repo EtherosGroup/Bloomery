@@ -29,7 +29,7 @@ import { logger } from "../output/index.ts";
 import type { InstanceView } from "../version/index.ts";
 import { accountFor, type LaunchAccount } from "./account.ts";
 import { buildGameArguments, buildJvmArguments, type ArgumentContext } from "./arguments.ts";
-import { probeJava, resolveJavaExecutable, resolveJavaFor, type JavaInfo } from "./java.ts";
+import { resolveJavaPick, type JavaInfo } from "./java.ts";
 import { launchOptionsOf, type LaunchOptions } from "./options.ts";
 
 const log = logger("launch");
@@ -230,36 +230,36 @@ async function resolveLaunchJava(
     descriptor: NonNullable<InstanceView["descriptor"]>,
     warnings: string[],
 ): Promise<JavaInfo> {
-    // 实例或文件夹指定了路径就以它为准
-    if (options.javaPath !== null) {
-        const path = await resolveJavaExecutable(options.javaPath);
-        if (path === undefined) {
-            throw new AppError("launch", "JavaNotFound", { context: { detail: options.javaPath } });
-        }
-        const info = await probeJava(path, "manual");
-        if (info === null) {
-            throw new AppError("launch", "JavaBroken", { context: { detail: path } });
-        }
-        return info;
-    }
-
     const required = descriptor.javaVersion?.majorVersion ?? undefined;
-    const choice = await resolveJavaFor(input.setting.java, input.probes, required);
-    if (choice === undefined) {
-        throw new AppError("launch", "JavaNotFound", {
-            context: {
-                detail:
-                    required === undefined
-                        ? "清单里没有能用的 Java"
-                        : `需要 Java ${required} 或更新`,
-                hint: "运行 bloomery java scan",
-            },
-        });
+    const pick = await resolveJavaPick(
+        input.setting.java,
+        input.probes,
+        options.javaPath,
+        required,
+    );
+    switch (pick.kind) {
+        case "manual":
+            return pick.info;
+        case "auto":
+            if (pick.fallback) {
+                const message = `没有 Java ${required}，改用 Java ${pick.info.major ?? "未知"}`;
+                warnings.push(message);
+                log.warn("%s", message);
+            }
+            return pick.info;
+        case "manualMissing":
+            throw new AppError("launch", "JavaNotFound", { context: { detail: pick.detail } });
+        case "manualBroken":
+            throw new AppError("launch", "JavaBroken", { context: { detail: pick.detail } });
+        case "autoMissing":
+            throw new AppError("launch", "JavaNotFound", {
+                context: {
+                    detail:
+                        required === undefined
+                            ? "清单里没有能用的 Java"
+                            : `需要 Java ${required} 或更新`,
+                    hint: "运行 bloomery java scan",
+                },
+            });
     }
-    if (choice.fallback) {
-        const message = `没有 Java ${required}，改用 Java ${choice.info.major ?? "未知"}`;
-        warnings.push(message);
-        log.warn("%s", message);
-    }
-    return choice.info;
 }

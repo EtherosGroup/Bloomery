@@ -216,9 +216,17 @@ test("内存与窗口按三层取值", () => {
     // 实例没写 java，落到文件夹
     assert.equal(plain.javaPath, "/folder/java");
 
+    // 实例自己写了 java 就压过文件夹
+    const instanceJava = launchOptionsOf(withMemory, folder, {
+        ...instance,
+        java: "/instance/java",
+    });
+    assert.equal(instanceJava.javaPath, "/instance/java");
+
     // 开关打开就丢掉实例自己的值
     const global = launchOptionsOf(withMemory, folder, {
         ...instance,
+        java: "/instance/java",
         useGlobalSettings: {
             memory: true,
             window: true,
@@ -231,6 +239,8 @@ test("内存与窗口按三层取值", () => {
     assert.deepEqual(global.window, { width: 854, height: 480, fullscreen: false });
     assert.deepEqual(global.jvmArgs, ["-Dglobal=1"]);
     assert.deepEqual(global.gameArgs, ["--global"]);
+    // 丢掉实例的 java 后落回文件夹
+    assert.equal(global.javaPath, "/folder/java");
 });
 
 test("离线 UUID 与真实 Java 实现一致", () => {

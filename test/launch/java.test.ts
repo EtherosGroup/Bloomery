@@ -22,6 +22,7 @@ import {
     resolveJava,
     resolveJavaExecutable,
     resolveJavaFor,
+    resolveJavaPick,
     type JavaInfo,
 } from "../../src/launch/java.ts";
 import { JAVA_EXECUTABLE } from "../../src/platform/index.ts";
@@ -212,4 +213,66 @@ test("只有比要求旧的候选时挑不出来", () => {
 test("候选为空时挑不出来", () => {
     assert.equal(chooseJava([], 25), undefined);
     assert.equal(chooseJava([], undefined), undefined);
+});
+
+test("指定路径优先于清单", async (t) => {
+    const paths = await findJava(EMPTY);
+    const first = paths[0];
+    if (first === undefined) {
+        t.skip("本机没有 Java");
+        return;
+    }
+
+    // 清单是空的也照样用指定路径：覆盖不经过清单
+    const pick = await resolveJavaPick(EMPTY, {}, first, 21);
+    assert.ok(pick.kind === "manual", `应该走指定路径：${pick.kind}`);
+    assert.equal(pick.info.path, first);
+    assert.equal(pick.info.source, "manual");
+});
+
+test("指定路径不存在时给 manualMissing", async () => {
+    await inTemp(async (root) => {
+        const missing = join(root, "没有这个", JAVA_EXECUTABLE);
+        const pick = await resolveJavaPick(EMPTY, {}, missing, 21);
+        assert.ok(pick.kind === "manualMissing", `应该报路径不存在：${pick.kind}`);
+        assert.equal(pick.detail, missing);
+    });
+});
+
+test("指定路径跑不起来时给 manualBroken", async () => {
+    await inTemp(async (root) => {
+        const broken = join(root, JAVA_EXECUTABLE);
+        await writeFile(broken, "");
+        const pick = await resolveJavaPick(EMPTY, {}, broken, 21);
+        assert.ok(pick.kind === "manualBroken", `应该报跑不起来：${pick.kind}`);
+        assert.equal(pick.detail, broken);
+    });
+});
+
+test("没有指定路径时按清单挑", async (t) => {
+    const paths = await findJava(EMPTY);
+    const first = paths[0];
+    if (first === undefined) {
+        t.skip("本机没有 Java");
+        return;
+    }
+
+    const info = await probeJava(first, "manual");
+    assert.ok(info !== null);
+    const setting: JavaSetting = { ...EMPTY, list: [javaEntryOf(info)] };
+
+    const exact = await resolveJavaPick(setting, {}, null, info.major ?? undefined);
+    assert.ok(exact.kind === "auto", `应该走清单：${exact.kind}`);
+    assert.equal(exact.fallback, false);
+    assert.equal(exact.info.path, first);
+
+    // 主版本对不上就退到更新的，退让标记带出来
+    const lower = await resolveJavaPick(setting, {}, null, Math.max(1, (info.major ?? 1) - 1));
+    assert.ok(lower.kind === "auto");
+    assert.equal(lower.fallback, true);
+});
+
+test("没有指定路径且清单为空时给 autoMissing", async () => {
+    const pick = await resolveJavaPick(EMPTY, {}, null, 21);
+    assert.equal(pick.kind, "autoMissing");
 });

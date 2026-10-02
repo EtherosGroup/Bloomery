@@ -8,7 +8,7 @@
 
 import { loadSetting, loadState } from "../../config/index.ts";
 import { print, renderTable, versioned } from "../../output/index.ts";
-import { resolveJavaFor } from "../../launch/java.ts";
+import { resolveJavaPick } from "../../launch/java.ts";
 import type {
     FolderSummary,
     FolderView,
@@ -163,14 +163,20 @@ export function loaderText(instance: InstanceView): string {
     return version === null || version === undefined ? type : `${type} ${version}`;
 }
 
-// 详情与启动同源：清单加探测缓存，按实例要求的主版本挑，挑不到就是 null
-export async function resolvedJavaOf(instance: InstanceView): Promise<ResolvedJava | null> {
+// 详情与启动同源：同一个 javaPath 进同一条选取规则，指定路径用不了时详情给 null
+export async function resolvedJavaOf(
+    instance: InstanceView,
+    javaPath: string | null,
+): Promise<ResolvedJava | null> {
     const setting = await loadSetting();
     const state = await loadState();
     const required = instance.descriptor?.javaVersion?.majorVersion ?? undefined;
-    const choice = await resolveJavaFor(setting.java, state.javaProbe, required);
-    const info = choice?.info;
-    if (info === undefined || info.major === null) {
+    const pick = await resolveJavaPick(setting.java, state.javaProbe, javaPath, required);
+    if (pick.kind !== "manual" && pick.kind !== "auto") {
+        return null;
+    }
+    const info = pick.info;
+    if (info.major === null) {
         return null;
     }
     return { major: info.major, path: info.path };
@@ -180,8 +186,9 @@ export async function printInstance(
     folderPath: string,
     instance: InstanceView,
     ctx: Context,
+    javaPath: string | null,
 ): Promise<void> {
-    const resolved = await resolvedJavaOf(instance);
+    const resolved = await resolvedJavaOf(instance, javaPath);
     if (ctx.json) {
         print(
             JSON.stringify(
