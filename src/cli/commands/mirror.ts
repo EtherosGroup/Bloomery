@@ -127,7 +127,7 @@ async function update(
     await writeAtomic(mirrorListFile(), `${JSON.stringify(file, null, 4)}\n`);
 
     if (ctx.json) {
-        print(JSON.stringify(file, null, 4));
+        print(JSON.stringify(versioned(file), null, 4));
         return;
     }
     print(`镜像清单 ${entries.length} 条  ${url}`);

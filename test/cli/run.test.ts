@@ -1,16 +1,18 @@
 /**
- * CLI 编排：parse 层的失败也出信封
+ * CLI 编排：parse 层的失败也出信封，对象输出带 v
  * @author IsCibocaz
  * @since 1.9.0
  */
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { serve } from "../helpers/server.ts";
 
 const ENTRY = fileURLToPath(new URL("../../src/main.ts", import.meta.url));
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -21,20 +23,32 @@ interface Outcome {
     readonly stderr: string;
 }
 
-// stdout 走 fd 直写，进程内截不到，只能起子进程
 // 家目录指到临时目录，避免测试碰真实配置
-function cli(argv: readonly string[]): Outcome {
+function isolatedHome(extra: Readonly<Record<string, string>>): {
+    home: string;
+    env: NodeJS.ProcessEnv;
+} {
     const home = mkdtempSync(join(tmpdir(), "bloomery-run-"));
+    return {
+        home,
+        env: {
+            ...process.env,
+            HOME: home,
+            USERPROFILE: home,
+            XDG_CONFIG_HOME: join(home, ".config"),
+            ...extra,
+        },
+    };
+}
+
+// stdout 走 fd 直写，进程内截不到，只能起子进程
+function cli(argv: readonly string[], extra: Readonly<Record<string, string>> = {}): Outcome {
+    const { home, env } = isolatedHome(extra);
     try {
         const result = spawnSync(process.execPath, [ENTRY, ...argv], {
             cwd: ROOT,
             encoding: "utf8",
-            env: {
-                ...process.env,
-                HOME: home,
-                USERPROFILE: home,
-                XDG_CONFIG_HOME: join(home, ".config"),
-            },
+            env,
         });
         return {
             status: result.status,
@@ -44,6 +58,32 @@ function cli(argv: readonly string[]): Outcome {
     } finally {
         rmSync(home, { recursive: true, force: true });
     }
+}
+
+// spawnSync 会挡住测试进程的事件循环，本地服务应答不了，这类用例走异步
+function cliAsync(
+    argv: readonly string[],
+    extra: Readonly<Record<string, string>> = {},
+): Promise<Outcome> {
+    const { home, env } = isolatedHome(extra);
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, [ENTRY, ...argv], { cwd: ROOT, env });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+            stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+            stderr += chunk;
+        });
+        child.on("error", reject);
+        child.on("close", (status) => {
+            rmSync(home, { recursive: true, force: true });
+            resolve({ status, stdout, stderr });
+        });
+    });
 }
 
 test("parse 层的失败在 --json 时给信封，退出码仍是 2", () => {
@@ -100,4 +140,42 @@ test("字符串选项的取值写成 --json 时不当成旗标", () => {
     const outcome = cli(["--home", "--json", "no-such-command"]);
     assert.equal(outcome.status, 2);
     assert.equal(outcome.stdout, "");
+});
+
+test("--version --json 是对象输出，带 v", () => {
+    const outcome = cli(["--version", "--json"]);
+    assert.equal(outcome.status, 0);
+
+    const info = JSON.parse(outcome.stdout) as { v: number; version: string };
+    assert.equal(info.v, 1);
+    assert.match(info.version, /^\d+\.\d+\.\d+/);
+});
+
+test("mirror update --json 是对象输出，带 v", async () => {
+    const server = await serve(() => ({
+        status: 200,
+        body: JSON.stringify({
+            entries: [{ name: "testmirror", base: "https://mirror.example.com" }],
+        }),
+    }));
+    try {
+        // 本地服务直连，不受本机代理环境影响
+        const outcome = await cliAsync(
+            ["--json", "mirror", "update", "--from", `${server.url}/mirrors.json`],
+            { NO_PROXY: "*" },
+        );
+        assert.equal(outcome.status, 0, outcome.stderr);
+
+        const file = JSON.parse(outcome.stdout) as {
+            v: number;
+            from: string;
+            fetchedAt: string;
+            entries: unknown[];
+        };
+        assert.equal(file.v, 1);
+        assert.equal(file.from, `${server.url}/mirrors.json`);
+        assert.equal(file.entries.length, 1);
+    } finally {
+        await server.close();
+    }
 });

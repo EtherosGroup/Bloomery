@@ -253,12 +253,12 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `modpack <文件>`                   | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                 |
 | `mirror list`                      | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                         |
 | `mirror use <名字>`                | 对象   | 有   | `source`                                                                                                                                                                                 |
-| `mirror update`                    | 对象   | 无   | `from` `fetchedAt` `entries[]`                                                                                                                                                           |
+| `mirror update`                    | 对象   | 有   | `from` `fetchedAt` `entries[]`                                                                                                                                                           |
 | `view loader`                      | 对象   | 有   | `type` `loaders[]`（`name` `latest` `total`）                                                                                                                                            |
 | `view loader <名字>`               | 对象   | 有   | `loader` `type` `page` `pages` `perPage` `total` `versions[]`（`version` `gameVersion` `channel`）                                                                                       |
 | `view loader <名字> --game <版本>` | 对象   | 有   | 同上，多 `game`                                                                                                                                                                          |
 | `view loader <名字> --games`       | 对象   | 有   | `loader` `page` `pages` `perPage` `total` `versions[]`（字符串数组）                                                                                                                     |
-| `view game <版本>`                 | 对象   | 无   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                     |
+| `view game <版本>`                 | 对象   | 有   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                     |
 | `auth list`                        | 数组   | 无   | 元素：`id:string` `type:string` `name:string` `uuid:string\|null` `selected:boolean` `status:string`；微软账户多 `xuid:string\|null` `expiresAt:string\|null` `hasCredential:boolean`    |
 | `auth login <游戏名>`              | 对象   | 有   | 账户：`id` `type` `name` `uuid`                                                                                                                                                          |
 | `auth login --type microsoft`      | NDJSON | 每行 | 见[设备码登录流](#设备码登录流)                                                                                                                                                          |
@@ -269,7 +269,7 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `java which`                       | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                           |
 | `java install <主版本>`            | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                        |
 | 错误信封                           | 对象   | 有   | `error`                                                                                                                                                                                  |
-| `--version --json`                 | 对象   | 无   | `version`                                                                                                                                                                                |
+| `--version --json`                 | 对象   | 有   | `version`                                                                                                                                                                                |
 
 同一命令不同模式形状不同，读数前先认清是哪一种：
 
@@ -448,7 +448,7 @@ bloomery auth login --type microsoft
 ```bash
 npm run start -- <参数>     # 直接跑源码，Node 原生剥离类型
 npm run check               # tsc --noEmit
-npm test                    # node --test，203 项
+npm test                    # node --test，207 项
 npm run fmt                 # oxfmt 格式化
 npm run build               # 产物到 dist/
 ```

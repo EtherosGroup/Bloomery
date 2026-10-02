@@ -214,12 +214,12 @@ async function gameView(
     if (ctx.json) {
         print(
             JSON.stringify(
-                {
+                versioned({
                     ...pageJson({ game, type: channel ?? null }, page),
                     loaders: counts,
                     warnings,
                     versions: page.items,
-                },
+                }),
                 null,
                 4,
             ),
