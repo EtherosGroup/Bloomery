@@ -73,7 +73,7 @@ export const COMMANDS: CommandTable = {
             loader: {
                 type: "string",
                 value: "<名字@版本>",
-                summary: "同时装模组加载器，目前只有 fabric",
+                summary: "同时装模组加载器：fabric / forge / neoforge / quilt",
             },
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
             "no-assets": { type: "boolean", summary: "跳过资源对象，只装游戏本体" },

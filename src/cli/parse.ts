@@ -34,7 +34,7 @@ export interface InstallCommand {
     readonly version: string;
     /** 版本显示名，省略时按版本与加载器推导 */
     readonly displayName?: string;
-    /** <加载器>@<版本|latest>，目前只有 fabric */
+    /** <加载器>@<版本|latest>，四种加载器都支持 */
     readonly loader?: string;
     /** 省略时用当前文件夹 */
     readonly folder?: string;

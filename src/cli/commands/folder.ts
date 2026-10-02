@@ -172,17 +172,12 @@ async function scan(setting: Setting, target: string | undefined, ctx: Context):
     }
 
     const views: FolderView[] = [];
-    const folders: Folder[] = [];
     for (const folder of setting.folders) {
         if (!wanted.includes(folder)) {
-            folders.push(folder);
             continue;
         }
-        const view = await readFolder(folder);
-        views.push(view);
-        folders.push(reconcile(folder, view));
+        views.push(await readFolder(folder));
     }
-    await saveSetting({ ...setting, folders });
 
     if (ctx.json) {
         print(
