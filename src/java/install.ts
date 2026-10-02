@@ -18,6 +18,7 @@ import { AppError } from "../error/index.ts";
 import { downloadOne, fetchBuffer, type TransferOptions } from "../infra/download.ts";
 import { pathExists } from "../infra/fs.ts";
 import { readTar } from "../infra/tar.ts";
+import { listZip } from "../infra/zip.ts";
 import { extractZip } from "../infra/zip.ts";
 import { logger } from "../output/index.ts";
 import {
@@ -129,30 +130,41 @@ function reportOf(
     };
 }
 
-// 包内顶层目录名就是去掉后缀的文件名
-function topOf(name: string): string {
-    return name.replace(/\.(tar\.gz|zip)$/, "");
+// 包内的公共顶层目录：所有条目都以它开头才算，推不出来就原样解
+export function commonTop(names: readonly string[]): string {
+    const first = names[0];
+    if (first === undefined) {
+        return "";
+    }
+    const top = first.split("/")[0] ?? "";
+    if (top === "") {
+        return "";
+    }
+    return names.every((name) => name === top || name.startsWith(`${top}/`)) ? top : "";
 }
 
 async function unpack(archive: string, root: string, name: string): Promise<void> {
-    const top = topOf(name);
     await mkdir(root, { recursive: true });
 
     if (name.endsWith(".zip")) {
+        const top = commonTop((await listZip(archive)).map((entry) => entry.name));
         const written = await extractZip(archive, root, {
-            strip: (entry) => (entry.startsWith(`${top}/`) ? entry.slice(top.length + 1) : entry),
+            strip: (entry) =>
+                top !== "" && entry.startsWith(`${top}/`) ? entry.slice(top.length + 1) : entry,
         });
-        log.info("解压 zip：%d 个文件", written);
+        log.info("解压 zip：%d 个文件，顶层目录 %s", written, top);
         return;
     }
 
     const entries = readTar(await gunzipAsync(await readFile(archive)));
+    // Temurin 的 tar 里顶层目录叫 jdk-<版本>-jre，不能按文件名推
+    const top = commonTop(entries.map((entry) => entry.name));
     let written = 0;
     for (const entry of entries) {
-        if (!entry.name.startsWith(`${top}/`)) {
-            continue;
-        }
-        const relative = entry.name.slice(top.length + 1);
+        const relative =
+            top !== "" && entry.name.startsWith(`${top}/`)
+                ? entry.name.slice(top.length + 1)
+                : entry.name;
         if (relative === "") {
             continue;
         }
@@ -167,5 +179,5 @@ async function unpack(archive: string, root: string, name: string): Promise<void
         await chmod(target, entry.mode & 0o777);
         written++;
     }
-    log.info("解压 tar.gz：%d 个文件", written);
+    log.info("解压 tar.gz：%d 个文件，顶层目录 %s", written, top);
 }
