@@ -151,7 +151,7 @@ function detailOf(error: AppError): string {
 }
 
 // 机器可读的错误对象，--json 时给外壳用
-// 值得让外壳出「重试」按钮的码：只有网络与临时性的那些
+// 可重试的错误码：网络与临时性
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
     "DownloadFailed",
     "DependencyMissing",

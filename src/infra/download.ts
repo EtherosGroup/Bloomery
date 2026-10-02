@@ -98,7 +98,7 @@ export async function downloadAll(
     let skipped = 0;
     let bytes = 0;
 
-    // 大小都已知就按字节报，单个大文件也能有中间态；否则退回按个数
+    // 已知大小时报字节，未知时报个数
     const sized =
         tasks.length > 0 && tasks.every((task) => typeof task.size === "number" && task.size > 0);
     const totalBytes = tasks.reduce((sum, task) => sum + (task.size ?? 0), 0);

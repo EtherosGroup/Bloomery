@@ -295,7 +295,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
             request.destroy(new Error(`连接超时（${options.timeoutMs}ms）：${target.href}`));
         }, options.timeoutMs);
 
-        // 连上之后交给 socket 的空闲超时，它有动静就自动重置。
+        // 空闲超时交给 socket
         // 不要在 response 上挂 data 监听来重置：那会把与响应头同批到达的正文冲掉
         request.setTimeout(options.timeoutMs, () => {
             const error = new Error(`请求空闲超过 ${options.timeoutMs}ms：${target.href}`);

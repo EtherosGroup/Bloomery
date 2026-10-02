@@ -175,7 +175,7 @@ async function unpack(archive: string, root: string, name: string): Promise<void
         }
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, entry.data);
-        // 可执行位要还原，否则 bin/java 起不来
+        // 还原可执行位
         await chmod(target, entry.mode & 0o777);
         written++;
     }

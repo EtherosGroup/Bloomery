@@ -97,7 +97,7 @@ async function add(
         memory: null,
         instances: [],
     };
-    // dry-run 只返回能不能加与扫描结果，配置一个字都不写
+    // dry-run：只扫描不落盘
     if (command.dryRun === true) {
         printFolder(await readFolder(folder), ctx, null);
         return;

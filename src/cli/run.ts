@@ -20,7 +20,7 @@ export async function run(argv: readonly string[]): Promise<void> {
     const parsed = parse(argv, CLI_SPEC);
     setLevel(parsed.globals.level);
 
-    // --home 要在任何配置读取之前生效，否则 setting 已经落到系统家目录了
+    // --home 先于任何配置读取生效
     if (parsed.globals.home !== undefined && parsed.globals.home !== "") {
         setHome(parsed.globals.home);
     }
