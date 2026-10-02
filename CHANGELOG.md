@@ -1,5 +1,20 @@
 # 更新记录
 
+## 1.9.0
+
+- `--json` 的对象输出统一带 `v: 1`，数组不带（数组本身即 v1）
+- 错误信封加 `retryable`，`context` 恒存在
+- `folder list` 的实例数改为配置与磁盘的并集（`instanceCount`）
+- 实例 JSON 加 `java{required,resolved}` 与 `lastPlayed`；`version info` 的 `java.resolved` 与启动用同一条选取规则
+- 安装器 Java 按目标版本 json 的 `javaVersion` 挑（1.12.2 要 Java 8）
+- `java install <主版本>`：下 Adoptium 压缩包解压并登记，不运行安装程序；校验 sha256
+- `folder add --dry-run` 只校验并扫描，不落盘不改选中；`folder add --no-select` 登记但不设为当前
+- `folder scan` 改为纯只读
+- `java remove` 与 `folder remove` 只改配置，不删磁盘文件
+- `auth login --type microsoft --json` 的 stdout 改为 NDJSON：device / account / error 三类事件，失败时 error 是最后一行
+- `view loader <名字> --games` 去掉重复的 `games` 键
+- 注释与用户可见文案的语气清理
+
 ## 1.8.0
 
 - `--progress ndjson`：机器可读进度事件走 stderr，节流 100ms，新阶段与收尾必发，积压超 64KB 丢中间帧
