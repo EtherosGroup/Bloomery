@@ -39,6 +39,10 @@ export interface DeviceCodePrompt {
     readonly url: string;
     readonly code: string;
     readonly expiresIn: number;
+    /** verification_uri_complete，微软响应里没有时为 null */
+    readonly completeUrl: string | null;
+    /** 轮询间隔秒数 */
+    readonly interval: number;
 }
 
 // 传输层：默认走 infra/http，测试注入假实现
@@ -81,6 +85,8 @@ export async function loginMicrosoft(input: LoginInput): Promise<MicrosoftCreden
         url: device.verificationUri,
         code: device.userCode,
         expiresIn: device.expiresIn,
+        completeUrl: device.verificationUriComplete,
+        interval: device.intervalMs / 1000,
     });
 
     const oauth = await pollToken(transport, {
@@ -120,6 +126,7 @@ interface DeviceCode {
     readonly deviceCode: string;
     readonly userCode: string;
     readonly verificationUri: string;
+    readonly verificationUriComplete: string | null;
     readonly expiresIn: number;
     readonly intervalMs: number;
 }
@@ -165,6 +172,7 @@ async function requestDeviceCode(
         deviceCode,
         userCode,
         verificationUri: field(body, "verification_uri") ?? "https://microsoft.com/link",
+        verificationUriComplete: field(body, "verification_uri_complete") ?? null,
         expiresIn: number(body, "expires_in") ?? 900,
         intervalMs: (number(body, "interval") ?? 5) * 1000,
     };

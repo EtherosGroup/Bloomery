@@ -8,7 +8,7 @@
  * @since 1.0.0
  */
 
-import { loginMicrosoft } from "../../auth/index.ts";
+import { loginMicrosoft, type DeviceCodePrompt } from "../../auth/index.ts";
 import {
     accountId,
     loadAccounts,
@@ -21,6 +21,7 @@ import {
     type AccountType,
 } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
+import { errorJson } from "../../error/handler.ts";
 import { logger, print, printError, renderTable, versioned } from "../../output/index.ts";
 import type { AuthCommand, Context } from "../parse.ts";
 
@@ -110,7 +111,22 @@ async function login(username: string, ctx: Context): Promise<void> {
 }
 
 // 微软登录：设备码提示打到终端，浏览器里授权完这边接着换令牌
+// --json 时 stdout 走 NDJSON：device → account，失败时 error 收尾
 async function microsoftLogin(command: AuthCommand, ctx: Context): Promise<void> {
+    try {
+        await microsoftLoginFlow(command, ctx);
+    } catch (error) {
+        if (!ctx.json) {
+            throw error;
+        }
+        // error 是 stdout 的最后一行，编排层不再补信封
+        ctx.jsonErrorEmitted = true;
+        print(JSON.stringify(versioned({ event: "error", error: errorJson(error)["error"] })));
+        throw error;
+    }
+}
+
+async function microsoftLoginFlow(command: AuthCommand, ctx: Context): Promise<void> {
     if (command.username !== undefined) {
         throw new AppError("cli", "UsageError", {
             context: { detail: "微软登录的游戏名从账号里取，不用给 <username>" },
@@ -130,6 +146,9 @@ async function microsoftLogin(command: AuthCommand, ctx: Context): Promise<void>
         clientId,
         network: setting.network,
         prompt: (info) => {
+            if (ctx.json) {
+                print(JSON.stringify(versioned(deviceEvent(info))));
+            }
             const minutes = Math.max(1, Math.round(info.expiresIn / 60));
             const lines = [
                 "",
@@ -154,11 +173,32 @@ async function microsoftLogin(command: AuthCommand, ctx: Context): Promise<void>
     log.info("微软登录成功 %s", account.id);
 
     if (ctx.json) {
-        print(JSON.stringify(versioned(publicAccount(account)), null, 4));
+        print(JSON.stringify(versioned(accountEvent(account))));
         return;
     }
     print(`已添加 ${account.id}`);
     print(`  UUID  ${account.uuid}`);
+}
+
+// 设备码事件，字段名与 GUI 侧冻结的接口一致
+function deviceEvent(info: DeviceCodePrompt): Record<string, unknown> {
+    return {
+        event: "device",
+        verificationUri: info.url,
+        verificationUriComplete: info.completeUrl,
+        userCode: info.code,
+        expiresIn: info.expiresIn,
+        expiresAt: new Date(Date.now() + info.expiresIn * 1000).toISOString(),
+        interval: info.interval,
+        message: `在浏览器打开 ${info.url}，输入代码 ${info.code}`,
+    };
+}
+
+function accountEvent(account: Account): Record<string, unknown> {
+    return {
+        event: "account",
+        account: { name: account.name, uuid: account.uuid ?? null, type: account.type },
+    };
 }
 
 // 令牌不进 JSON 输出

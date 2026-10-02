@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { loginMicrosoft, refreshMicrosoft, type Transport } from "../../src/auth/index.ts";
+import type { DeviceCodePrompt } from "../../src/auth/index.ts";
 import { AppError } from "../../src/error/index.ts";
 import type { JsonResponse } from "../../src/infra/http.ts";
 
@@ -115,6 +116,56 @@ test("设备码登录兑换到游戏档案", async () => {
     assert.equal(callTo(calls, DEVICE_CODE_URL).encoding, "form");
     assert.equal(callTo(calls, TOKEN_URL).encoding, "form");
     assert.equal(callTo(calls, XBL_URL).encoding, undefined);
+});
+
+test("设备码提示带上完整网址与轮询间隔", async () => {
+    const prompts: DeviceCodePrompt[] = [];
+    await loginMicrosoft({
+        clientId: "client-1",
+        network: NETWORK,
+        transport: fake(
+            {
+                ...HAPPY,
+                [DEVICE_CODE_URL]: {
+                    status: 200,
+                    body: {
+                        device_code: "dev-1",
+                        user_code: "R8FBKQSA",
+                        verification_uri: "https://www.microsoft.com/link",
+                        verification_uri_complete: "https://www.microsoft.com/link?otc=R8FBKQSA",
+                        expires_in: 900,
+                        interval: 5,
+                    },
+                },
+            },
+            [],
+        ),
+        wait: async () => {},
+        prompt: (info) => prompts.push(info),
+    });
+
+    assert.deepEqual(prompts, [
+        {
+            url: "https://www.microsoft.com/link",
+            code: "R8FBKQSA",
+            expiresIn: 900,
+            completeUrl: "https://www.microsoft.com/link?otc=R8FBKQSA",
+            interval: 5,
+        },
+    ]);
+});
+
+test("微软没给 verification_uri_complete 时为 null", async () => {
+    const prompts: DeviceCodePrompt[] = [];
+    await loginMicrosoft({
+        clientId: "client-1",
+        network: NETWORK,
+        transport: fake(HAPPY, []),
+        wait: async () => {},
+        prompt: (info) => prompts.push(info),
+    });
+
+    assert.equal(prompts[0]?.completeUrl, null);
 });
 
 test("轮询：pending 与 slow_down 之后拿到令牌", async () => {

@@ -47,7 +47,8 @@ export async function run(argv: readonly string[]): Promise<void> {
         await dispatch(parsed.command, ctx);
     } catch (error) {
         // --json 时标准输出出一份机器可读的错误，人类可读的那份仍由上层写 stderr
-        if (parsed.globals.json) {
+        // 命令自己按 NDJSON 出过错误行时不再补信封，stdout 的最后一行留给它
+        if (parsed.globals.json && ctx.jsonErrorEmitted !== true) {
             print(JSON.stringify(versioned(errorJson(error)), null, 4));
         }
         throw error;

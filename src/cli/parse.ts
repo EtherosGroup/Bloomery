@@ -225,6 +225,8 @@ export interface Context {
     readonly home?: string;
     /** 命令行指定的进度样式，优先于设置 */
     readonly progress?: ProgressStyle;
+    /** 命令自己出过 --json 错误行，编排层不再补信封 */
+    jsonErrorEmitted?: boolean;
 }
 
 export interface GlobalOptions {
