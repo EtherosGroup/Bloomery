@@ -393,20 +393,17 @@ export interface JavaChoice {
     readonly fallback: boolean;
 }
 
-// 首选主版本相等；没有再退到不小于要求的最低版本，越接近要求越稳
-export async function resolveJavaFor(
-    setting: JavaSetting,
-    cached: Readonly<Record<string, JavaProbe>>,
+// 首选主版本相等；没有再退到不小于要求的最低版本，越接近要求越稳；只有更旧的不给
+export function chooseJava(
+    candidates: readonly JavaInfo[],
     major: number | undefined,
-): Promise<JavaChoice | undefined> {
-    const candidates = await candidatesOf(setting, cached);
+): JavaChoice | undefined {
     if (candidates.length === 0) {
         return undefined;
     }
 
     if (major === undefined) {
-        candidates.sort(byPreference);
-        const info = candidates[0];
+        const info = [...candidates].sort(byPreference)[0];
         return info === undefined ? undefined : { info, fallback: false };
     }
 
@@ -426,6 +423,15 @@ export async function resolveJavaFor(
     );
     const info = newer[0];
     return info === undefined ? undefined : { info, fallback: true };
+}
+
+// 启动与详情共用：先探清单里能跑起来的那些，再按主版本挑
+export async function resolveJavaFor(
+    setting: JavaSetting,
+    cached: Readonly<Record<string, JavaProbe>>,
+    major: number | undefined,
+): Promise<JavaChoice | undefined> {
+    return chooseJava(await candidatesOf(setting, cached), major);
 }
 
 // 清单里能跑起来的那些，缺信息的按缓存或重探

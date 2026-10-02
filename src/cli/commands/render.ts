@@ -6,16 +6,15 @@
  * @since 1.0.0
  */
 
-import { loadSetting } from "../../config/index.ts";
+import { loadSetting, loadState } from "../../config/index.ts";
 import { print, renderTable, versioned } from "../../output/index.ts";
-import { probeJava } from "../../launch/java.ts";
+import { resolveJavaFor } from "../../launch/java.ts";
 import type {
     FolderSummary,
     FolderView,
     InstanceState,
     InstanceView,
 } from "../../version/index.ts";
-import { officialJavaOf } from "../java-choice.ts";
 import type { Context } from "../parse.ts";
 
 const STATE: Record<InstanceState, string> = {
@@ -164,19 +163,17 @@ export function loaderText(instance: InstanceView): string {
     return version === null || version === undefined ? type : `${type} ${version}`;
 }
 
-// 详情才扫盘：设置里的登记项与探测结果一起按要求主版本挑，再探出实际主版本
+// 详情与启动同源：清单加探测缓存，按实例要求的主版本挑，挑不到就是 null
 export async function resolvedJavaOf(instance: InstanceView): Promise<ResolvedJava | null> {
     const setting = await loadSetting();
-    const required = instance.descriptor?.javaVersion?.majorVersion ?? null;
-    const path = await officialJavaOf(setting.java, required);
-    if (path === undefined) {
+    const state = await loadState();
+    const required = instance.descriptor?.javaVersion?.majorVersion ?? undefined;
+    const choice = await resolveJavaFor(setting.java, state.javaProbe, required);
+    const info = choice?.info;
+    if (info === undefined || info.major === null) {
         return null;
     }
-    const info = await probeJava(path);
-    if (info === null || info.major === null) {
-        return null;
-    }
-    return { major: info.major, path };
+    return { major: info.major, path: info.path };
 }
 
 export async function printInstance(

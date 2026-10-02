@@ -10,8 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import type { JavaSetting } from "../../src/config/types.ts";
+import type { JavaSetting, JavaSource } from "../../src/config/types.ts";
 import {
+    chooseJava,
     findJava,
     javaArchOf,
     javaEntryOf,
@@ -21,6 +22,7 @@ import {
     resolveJava,
     resolveJavaExecutable,
     resolveJavaFor,
+    type JavaInfo,
 } from "../../src/launch/java.ts";
 import { JAVA_EXECUTABLE } from "../../src/platform/index.ts";
 
@@ -162,4 +164,52 @@ test("主版本对不上时退到更新的", async (t) => {
 
     // 要求更高的版本：没有更新的可用
     assert.equal(await resolveJavaFor(setting, {}, info.major + 1), undefined);
+});
+
+// 探好的候选进选取规则，详情与启动共用这一条
+function jvm(path: string, major: number | null, source: JavaSource = "detected"): JavaInfo {
+    return {
+        path,
+        major,
+        arch: "x64",
+        vendor: null,
+        kind: "jdk",
+        home: null,
+        source,
+        probedAt: "2026-10-02T00:00:00.000Z",
+    };
+}
+
+test("主版本正好相等就选它", () => {
+    const candidates = [
+        jvm("/jvm/25/bin/java", 25),
+        jvm("/jvm/21/bin/java", 21),
+        jvm("/jvm/8/bin/java", 8),
+    ];
+    const choice = chooseJava(candidates, 21);
+    assert.equal(choice?.info.path, "/jvm/21/bin/java");
+    assert.equal(choice?.fallback, false);
+});
+
+test("没有相等的就取比要求大的里面最小的", () => {
+    const candidates = [
+        jvm("/jvm/25/bin/java", 25),
+        jvm("/jvm/21/bin/java", 21),
+        jvm("/jvm/8/bin/java", 8),
+    ];
+    const choice = chooseJava(candidates, 17);
+    assert.equal(choice?.info.path, "/jvm/21/bin/java");
+    assert.equal(choice?.fallback, true);
+});
+
+test("只有比要求旧的候选时挑不出来", () => {
+    // 启动会报 JavaNotFound，详情也不能报一个启动会拒绝的 Java
+    const onlyOlder = [jvm("/jvm/8/bin/java", 8), jvm("/jvm/11/bin/java", 11)];
+    assert.equal(chooseJava(onlyOlder, 25), undefined);
+    assert.equal(chooseJava(onlyOlder, 17), undefined);
+});
+
+test("候选为空时挑不出来", () => {
+    assert.equal(chooseJava([], 25), undefined);
+    assert.equal(chooseJava([], undefined), undefined);
 });
