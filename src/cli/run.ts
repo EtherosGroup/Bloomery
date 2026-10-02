@@ -11,13 +11,22 @@ import { logger, print, setLevel, versioned } from "../output/index.ts";
 import { setHome } from "../platform/index.ts";
 import { printHelp, printVersion } from "./help.ts";
 import { parse } from "./parse.ts";
-import type { Command, Context } from "./parse.ts";
+import type { CliSpec, Command, Context, ParsedCli } from "./parse.ts";
 import { CLI_SPEC } from "./spec.ts";
 
 const log = logger("cli");
 
 export async function run(argv: readonly string[]): Promise<void> {
-    const parsed = parse(argv, CLI_SPEC);
+    let parsed: ParsedCli;
+    try {
+        parsed = parse(argv, CLI_SPEC);
+    } catch (error) {
+        // parse 层失败时全局状态还没落地，--json 只能回到原始 argv 上认
+        if (jsonRequested(argv, CLI_SPEC)) {
+            print(JSON.stringify(versioned(errorJson(error)), null, 4));
+        }
+        throw error;
+    }
     setLevel(parsed.globals.level);
 
     // --home 先于任何配置读取生效
@@ -62,4 +71,39 @@ function dispatch(command: Command, ctx: Context): Promise<void> {
         ctx: Context,
     ) => Promise<void>;
     return handler(command, ctx);
+}
+
+/* ---------- --json 探测 ---------- */
+
+// parse 抛错时 globals 拿不到，只能在 argv 上按字面量认 --json
+// 字符串选项的下一个 token 是它的取值，跳过；-- 之后全是位置参数，不再算旗标
+// 命令名之后的 --json 也认：那种写法本身就是用法错误，信封里带着位置提示
+function jsonRequested(argv: readonly string[], spec: CliSpec): boolean {
+    const values = stringOptions(spec);
+    for (let i = 0; i < argv.length; i += 1) {
+        const token = argv[i];
+        if (token === undefined || token === "--") {
+            return false;
+        }
+        if (token === "--json") {
+            return true;
+        }
+        if (values.has(token)) {
+            i += 1;
+        }
+    }
+    return false;
+}
+
+// 命令层的字符串选项也算：命令名之后的 --json 可能紧跟在它们后面
+function stringOptions(spec: CliSpec): ReadonlySet<string> {
+    const names = new Set<string>();
+    for (const decls of [spec.globals, ...Object.values(spec.commands).map((one) => one.options)]) {
+        for (const [name, decl] of Object.entries(decls)) {
+            if (decl.type === "string") {
+                names.add(`--${name}`);
+            }
+        }
+    }
+    return names;
 }
