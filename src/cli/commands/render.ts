@@ -127,6 +127,7 @@ export function instanceJson(instance: InstanceView): unknown {
         configured: instance.configured,
         discovered: instance.discovered,
         problem: instance.problem,
+        lastPlayed: instance.lastPlayedAt ?? null,
         java: {
             required: { major: instance.descriptor?.javaVersion?.majorVersion ?? 0 },
             // 列表不扫盘，解析结果只在 version info 里给

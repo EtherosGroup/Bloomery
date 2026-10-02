@@ -11,7 +11,8 @@
 import { access, constants, readdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
-import type { Folder, Instance, Loader } from "../config/types.ts";
+import { loadState } from "../config/index.ts";
+import type { Folder, Instance, Loader, State } from "../config/types.ts";
 import { logger } from "../output/index.ts";
 import { expandHome, platform } from "../platform/index.ts";
 import {
@@ -50,6 +51,8 @@ export interface InstanceView {
     /** 磁盘上有、清单里没写 */
     readonly discovered: boolean;
     readonly problem: string | null;
+    /** state.json 里的上次启动时刻，RFC3339 UTC */
+    readonly lastPlayedAt?: string | null;
 }
 
 export interface FolderView {
@@ -128,9 +131,17 @@ export async function readFolder(folder: Folder): Promise<FolderView> {
         exists: info?.isDirectory() === true,
         writable,
         versionsDirectory: scan.directory,
-        instances: inferGameVersions(instances),
+        instances: withLastPlayed(inferGameVersions(instances), await loadState()),
         dropped,
     };
+}
+
+// 从 state.json 的实例统计里取上次启动时刻
+function withLastPlayed(views: readonly InstanceView[], state: State): InstanceView[] {
+    return views.map((view) => ({
+        ...view,
+        lastPlayedAt: state.instances[view.id]?.lastPlayedAt ?? null,
+    }));
 }
 
 // 认不出游戏版本的，拿客户端 jar 的 sha1 跟同目录里认得出的比：
