@@ -13,6 +13,7 @@ import { parseArgs } from "node:util";
 import type { ParseArgsOptionsConfig } from "node:util";
 
 import { AppError } from "../error/index.ts";
+import type { ProgressStyle } from "../output/index.ts";
 import type { LogLevel } from "../output/index.ts";
 
 /* ---------- 命令 ---------- */
@@ -194,15 +195,32 @@ export interface CliSpec {
 }
 
 /** 传给命令处理器的只读上下文，全局旗标的解析结果 */
+// 命令行给的进度样式，写错直接报用法
+function progressStyleOf(value: unknown): ProgressStyle | undefined {
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+    const text = String(value);
+    if (text === "bar" || text === "plain" || text === "off" || text === "ndjson") {
+        return text;
+    }
+    throw new AppError("cli", "UsageError", {
+        context: { detail: `进度样式只能是 bar / plain / off / ndjson：${text}` },
+    });
+}
+
 export interface Context {
     readonly json: boolean;
     readonly home?: string;
+    /** 命令行指定的进度样式，优先于设置 */
+    readonly progress?: ProgressStyle;
 }
 
 export interface GlobalOptions {
     readonly level: LogLevel;
     readonly json: boolean;
     readonly home?: string;
+    readonly progress?: ProgressStyle;
     readonly help: boolean;
     readonly version: boolean;
 }
@@ -223,6 +241,7 @@ export function parse(argv: readonly string[], spec: CliSpec): ParsedCli {
     const globals: GlobalOptions = {
         level: levelOf(global.values),
         json: global.values["json"] === true,
+        progress: progressStyleOf(global.values["progress"]),
         home: optionalString(global.values, "home"),
         help: global.values["help"] === true,
         version: global.values["version"] === true,

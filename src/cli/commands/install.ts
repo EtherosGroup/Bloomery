@@ -50,7 +50,9 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
             ? await officialJavaOf(setting.java)
             : undefined;
 
-    const progress = progressReporter(ctx.json ? "off" : setting.appearance.progress);
+    const progress = progressReporter(
+        ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
+    );
     const report = await installVersion({
         folderPath: resolveFolderPath(folder),
         versionId: command.version,

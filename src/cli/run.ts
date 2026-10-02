@@ -31,7 +31,11 @@ export async function run(argv: readonly string[]): Promise<void> {
     // 命令调用是日志文件的第一条，模块自己的 debug 默认被闸门挡着，不能指望它建文件
     log.info("命令 %s", JSON.stringify(parsed.command));
 
-    const ctx: Context = { json: parsed.globals.json, home: parsed.globals.home };
+    const ctx: Context = {
+        json: parsed.globals.json,
+        home: parsed.globals.home,
+        progress: parsed.globals.progress,
+    };
     await dispatch(parsed.command, ctx);
 }
 

@@ -19,6 +19,12 @@ const STEP = 256;
 /** 非交互且按字节报时，每百分之几报一次 */
 const PLAIN_STEP = 5;
 
+/** ndjson 事件的最小间隔，10 条/秒；消费端慢时靠背压再丢 */
+export const EMIT_INTERVAL_MS = 100;
+
+/** stderr 积压超过这么多字节就丢中间帧 */
+export const EMIT_BACKLOG = 64 * 1024;
+
 /** 条最少要留这么宽，标签太长也不会把条挤没 */
 const MIN_INNER = 10;
 
@@ -34,7 +40,7 @@ const MIN_WIDTH = 8;
 /** 已存在就什么都不用下，收尾时挂上这个后缀 */
 export const EXISTING_NOTE = "（已存在）";
 
-export type ProgressStyle = "bar" | "plain" | "off";
+export type ProgressStyle = "bar" | "plain" | "off" | "ndjson";
 
 export interface ProgressIo {
     readonly interactive: boolean;
@@ -46,6 +52,8 @@ export interface ProgressIo {
     write(text: string): void;
     /** 另起一行 */
     line(text: string): void;
+    /** 逐行事件走 stderr，返回 false 表示消费端慢、这一帧该丢；ndjson 用 */
+    emit?(text: string, force?: boolean): boolean;
 }
 
 export interface ProgressReporter {
@@ -68,6 +76,14 @@ export function terminalIo(): ProgressIo {
         },
         write: writeOut,
         line: print,
+        // 背压：消费端慢了就丢中间帧，收尾那条强制写
+        emit: (text: string, force = false): boolean => {
+            if (!force && process.stderr.writableLength > EMIT_BACKLOG) {
+                return false;
+            }
+            process.stderr.write(text);
+            return true;
+        },
     };
 }
 
@@ -101,6 +117,9 @@ export function progressReporter(
     const bar = style === "bar" && io.interactive;
     // 每条通道一行条，同时刷新；顺序按第一次出现的先后
     const lanes = new Map<string, { done: number; total: number; note: string; percent: number }>();
+    // 上一条 ndjson 事件的时刻，用来节流
+    let lastEmitAt = 0;
+
     // 上一帧每行的显示宽度；用当前列数重算折成几行，终端改大小时光标才对得上
     let drawnWidths: number[] = [];
 
@@ -123,11 +142,38 @@ export function progressReporter(
                 return;
             }
 
+            const first = !lanes.has(next);
             const lane = lanes.get(next) ?? { done: 0, total, note: "", percent: -1 };
             lane.done = done;
             lane.total = total;
             lane.note = existing ? EXISTING_NOTE : "";
             const percent = Math.floor((done * 100) / total);
+
+            // 机器可读：一行一个 JSON 事件，节流 + 背压，收尾与新阶段必发
+            if (style === "ndjson") {
+                lane.percent = percent;
+                lanes.set(next, lane);
+                const force = first || percent >= 100;
+                if (!force && Date.now() - lastEmitAt < EMIT_INTERVAL_MS) {
+                    return;
+                }
+                const payload = {
+                    v: 1,
+                    stage: next,
+                    done,
+                    total,
+                    bytes,
+                    ...(existing ? { existing: true } : {}),
+                };
+                if (io.emit === undefined) {
+                    return;
+                }
+                if (!io.emit(`${JSON.stringify(payload)}\n`, force) && !force) {
+                    return;
+                }
+                lastEmitAt = Date.now();
+                return;
+            }
 
             if (!bar) {
                 // 管道里只能逐条打印，各通道的进度会交错

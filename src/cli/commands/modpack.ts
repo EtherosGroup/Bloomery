@@ -28,7 +28,9 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
 
     // 包里要 forge / neoforge 时安装器要用 java；这里统一挑一个，只有那条路会用到
     const officialJava = await officialJavaOf(setting.java);
-    const progress = progressReporter(ctx.json ? "off" : setting.appearance.progress);
+    const progress = progressReporter(
+        ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
+    );
     const report = await importModpack({
         archive: command.file,
         folderPath: resolveFolderPath(folder),

@@ -19,19 +19,26 @@ import { displayWidth } from "../../src/output/text.ts";
 interface Fake extends ProgressIo {
     readonly writes: string[];
     readonly lines: string[];
+    readonly events: string[];
 }
 
 function fakeIo(overrides: Partial<ProgressIo> = {}): Fake {
     const writes: string[] = [];
     const lines: string[] = [];
+    const events: string[] = [];
     return {
         interactive: true,
         columns: 41,
         width: 40,
         write: (text) => writes.push(text),
         line: (text) => lines.push(text),
+        emit: (text) => {
+            events.push(text);
+            return true;
+        },
         writes,
         lines,
+        events,
         ...overrides,
     };
 }
@@ -40,6 +47,7 @@ function fakeIo(overrides: Partial<ProgressIo> = {}): Fake {
 function resizableIo(): { io: Fake; resize: (columns: number) => void } {
     const writes: string[] = [];
     const lines: string[] = [];
+    const events: string[] = [];
     let columns = 101;
     return {
         io: {
@@ -52,8 +60,13 @@ function resizableIo(): { io: Fake; resize: (columns: number) => void } {
             },
             write: (text) => writes.push(text),
             line: (text) => lines.push(text),
+            emit: (text) => {
+                events.push(text);
+                return true;
+            },
             writes,
             lines,
+            events,
         },
         resize: (next) => {
             columns = next;
@@ -294,4 +307,59 @@ test("off 什么都不输出", () => {
     bar.close();
     assert.deepEqual(io.writes, []);
     assert.deepEqual(io.lines, []);
+});
+
+test("ndjson：一行一事件，节流但收尾必发", () => {
+    const io = fakeIo();
+    const reporter = progressReporter("ndjson", io);
+
+    reporter.update("库", 0, 100);
+    reporter.update("库", 1, 100); // 同一节流窗口内，丢掉
+    reporter.update("库", 100, 100); // 收尾必发
+
+    assert.equal(io.events.length, 2);
+    assert.deepEqual(JSON.parse(io.events[0] ?? ""), {
+        v: 1,
+        stage: "库",
+        done: 0,
+        total: 100,
+        bytes: false,
+    });
+    assert.equal(JSON.parse(io.events.at(-1) ?? "").done, 100);
+    // 终端那条通道不受影响
+    assert.deepEqual(io.writes, []);
+});
+
+test("ndjson：新阶段立即发，不写终端", () => {
+    const io = fakeIo();
+    const reporter = progressReporter("ndjson", io);
+    reporter.update("客户端 jar", 0, 10, true);
+    reporter.update("库", 0, 10);
+    assert.equal(io.events.length, 2);
+    assert.equal(JSON.parse(io.events[0] ?? "").bytes, true);
+    assert.equal(JSON.parse(io.events[1] ?? "").stage, "库");
+});
+
+test("ndjson：背压时丢中间帧，收尾强制写", () => {
+    const io = fakeIo();
+    let blocked = false;
+    const events: string[] = [];
+    const reporter = progressReporter("ndjson", {
+        ...io,
+        emit: (text, force) => {
+            if (blocked && force !== true) {
+                return false;
+            }
+            events.push(text);
+            return true;
+        },
+    });
+
+    reporter.update("资源", 0, 100);
+    blocked = true;
+    reporter.update("资源", 50, 100); // 被背压丢掉
+    reporter.update("资源", 100, 100); // 收尾强制写
+
+    assert.equal(events.length, 2);
+    assert.equal(JSON.parse(events.at(-1) ?? "").done, 100);
 });

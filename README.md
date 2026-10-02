@@ -190,11 +190,22 @@ bloomery mirror update                           # 不给 --from 就用上次的
 -v, --verbose     输出调试日志
 -q, --quiet       只输出警告与错误
     --json        以 JSON 输出结果
+    --progress <style>  进度输出：bar / plain / off / ndjson
 -h, --help        显示帮助
 -V, --version     显示版本号
 ```
 
+全局选项写在命令名之前：`bloomery --json install 1.20.6`。
+
 `--json` 下标准输出只有一份 JSON，过程提示静默。
+
+`--progress ndjson` 把进度写成机器可读事件到 **stderr**（标准输出不受影响），供外壳读取：
+
+```json
+{ "v": 1, "stage": "库", "done": 12, "total": 47, "bytes": true }
+```
+
+节流 100ms 一条；新阶段与收尾必发；stderr 积压超过 64KB 时丢中间帧（收尾那条仍强制写），因此消费端再慢也不会拖慢下载。
 
 ## 加载器
 

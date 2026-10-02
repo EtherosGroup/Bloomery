@@ -30,6 +30,11 @@ import {
 export const GLOBAL_OPTIONS: OptionDecls = {
     verbose: { type: "boolean", short: "v", summary: "输出调试日志" },
     quiet: { type: "boolean", short: "q", summary: "只输出警告与错误" },
+    progress: {
+        type: "string",
+        value: "<style>",
+        summary: "进度输出：bar / plain / off / ndjson（ndjson 走 stderr）",
+    },
     json: { type: "boolean", summary: "以 JSON 输出结果" },
     home: { type: "string", value: "<dir>", summary: "指定数据目录" },
     help: { type: "boolean", short: "h", summary: "显示帮助" },
