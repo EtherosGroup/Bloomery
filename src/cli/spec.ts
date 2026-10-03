@@ -99,7 +99,8 @@ export const COMMANDS: CommandTable = {
             type: {
                 type: "string",
                 value: "<name>",
-                summary: "账号类型：offline（离线，默认）/ microsoft（微软）",
+                summary:
+                    "账号类型：offline（离线）/ microsoft（微软）；login 省略按离线，logout 省略按游戏名",
             },
             "client-id": {
                 type: "string",

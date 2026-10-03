@@ -5,6 +5,7 @@
  */
 export {
     accountId,
+    accountsNamed,
     accountsReadOnly,
     loadAccounts,
     microsoftAccount,

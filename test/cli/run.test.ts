@@ -31,22 +31,37 @@ interface Outcome {
     readonly stderr: string;
 }
 
+// HOME / USERPROFILE / XDG_CONFIG_HOME 都指到同一个家目录
+function environment(
+    home: string,
+    extra: Readonly<Record<string, string>> = {},
+): NodeJS.ProcessEnv {
+    return {
+        ...process.env,
+        HOME: home,
+        USERPROFILE: home,
+        XDG_CONFIG_HOME: join(home, ".config"),
+        ...extra,
+    };
+}
+
 // 家目录指到临时目录，避免测试碰真实配置
 function isolatedHome(extra: Readonly<Record<string, string>>): {
     home: string;
     env: NodeJS.ProcessEnv;
 } {
     const home = mkdtempSync(join(tmpdir(), "bloomery-run-"));
-    return {
-        home,
-        env: {
-            ...process.env,
-            HOME: home,
-            USERPROFILE: home,
-            XDG_CONFIG_HOME: join(home, ".config"),
-            ...extra,
-        },
-    };
+    return { home, env: environment(home, extra) };
+}
+
+// 家目录复用调用方准备好的那个：里面已经放了 accounts.json 之类
+function cliAt(home: string, argv: readonly string[]): Outcome {
+    const result = spawnSync(process.execPath, [ENTRY, ...argv], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env: environment(home),
+    });
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
 // stdout 走 fd 直写，进程内截不到，只能起子进程
@@ -240,5 +255,170 @@ test("mirror update --json 是对象输出，带 v", async () => {
         assert.equal(file.entries.length, 1);
     } finally {
         await server.close();
+    }
+});
+
+/* ---------- auth ---------- */
+
+const OFFLINE = { id: "cibocaz@offline", type: "offline", name: "cibocaz", uuid: null };
+const MICROSOFT = {
+    id: "XiangYuanHuLian@microsoft",
+    type: "microsoft",
+    name: "XiangYuanHuLian",
+    uuid: "8a466271-61ee-4edc-837f-bf80f1587ea4",
+    xuid: null,
+    refreshToken: "refresh",
+    accessToken: "access",
+    expiresAt: "2030-01-01T00:00:00.000Z",
+    clientId: "client",
+};
+// 与上面那条微软账户同名：登出时只给名字就分不出来
+const MICROSOFT_OFFLINE_TWIN = {
+    id: "XiangYuanHuLian@offline",
+    type: "offline",
+    name: "XiangYuanHuLian",
+    uuid: null,
+};
+
+// 预置 accounts.json 与 setting.json 的家目录
+function authHome(accounts: readonly unknown[], selected: string | null): string {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-auth-"));
+    const config = join(home, ".config", "bloomery");
+    mkdirSync(config, { recursive: true });
+    writeFileSync(
+        join(config, "accounts.json"),
+        JSON.stringify({ schemaVersion: 1, accounts }, null, 4),
+    );
+    writeFileSync(
+        join(config, "setting.json"),
+        JSON.stringify({ schemaVersion: 1, selectedAccount: selected, folders: [] }, null, 4),
+    );
+    return home;
+}
+
+function accountIds(home: string): string[] {
+    const file = JSON.parse(
+        readFileSync(join(home, ".config", "bloomery", "accounts.json"), "utf8"),
+    ) as { accounts: { id: string }[] };
+    return file.accounts.map((account) => account.id);
+}
+
+function selectedAccount(home: string): string | null {
+    const file = JSON.parse(
+        readFileSync(join(home, ".config", "bloomery", "setting.json"), "utf8"),
+    ) as { selectedAccount: string | null };
+    return file.selectedAccount;
+}
+
+test("auth login 不给 --type 时仍按离线", () => {
+    const home = authHome([MICROSOFT], null);
+    try {
+        const outcome = cliAt(home, ["--home", home, "--json", "auth", "login", "cibocaz"]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        assert.deepEqual(accountIds(home), ["XiangYuanHuLian@microsoft", "cibocaz@offline"]);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("auth logout 不给 --type 时按游戏名找，微软账户也删得掉", () => {
+    const home = authHome([OFFLINE, MICROSOFT], MICROSOFT.id);
+    try {
+        const outcome = cliAt(home, [
+            "--home",
+            home,
+            "--json",
+            "auth",
+            "logout",
+            "XiangYuanHuLian",
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        assert.deepEqual(JSON.parse(outcome.stdout), {
+            v: 1,
+            removed: "XiangYuanHuLian@microsoft",
+        });
+        assert.deepEqual(accountIds(home), ["cibocaz@offline"]);
+        // 删掉的正是当前账户，选中要清空
+        assert.equal(selectedAccount(home), null);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("auth logout 同名多条时报用法错误，detail 列出类型", () => {
+    const home = authHome([OFFLINE, MICROSOFT, MICROSOFT_OFFLINE_TWIN], MICROSOFT.id);
+    try {
+        const outcome = cliAt(home, [
+            "--home",
+            home,
+            "--json",
+            "auth",
+            "logout",
+            "XiangYuanHuLian",
+        ]);
+        assert.equal(outcome.status, 2, outcome.stderr);
+        const envelope = JSON.parse(outcome.stdout) as { error: { code: string; detail: string } };
+        assert.equal(envelope.error.code, "UsageError");
+        assert.match(envelope.error.detail, /microsoft/);
+        assert.match(envelope.error.detail, /offline/);
+        // 用法错误不落盘
+        assert.deepEqual(accountIds(home), [
+            "cibocaz@offline",
+            "XiangYuanHuLian@microsoft",
+            "XiangYuanHuLian@offline",
+        ]);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("auth logout 带 --type 只认那一条", () => {
+    const home = authHome([OFFLINE, MICROSOFT, MICROSOFT_OFFLINE_TWIN], MICROSOFT.id);
+    try {
+        const outcome = cliAt(home, [
+            "--home",
+            home,
+            "--json",
+            "auth",
+            "logout",
+            "XiangYuanHuLian",
+            "--type",
+            "microsoft",
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        assert.deepEqual(accountIds(home), ["cibocaz@offline", "XiangYuanHuLian@offline"]);
+        assert.equal(selectedAccount(home), null);
+
+        // 类型对不上时还是 AccountNotFound，不碰同名的那条
+        const missing = cliAt(home, [
+            "--home",
+            home,
+            "--json",
+            "auth",
+            "logout",
+            "cibocaz",
+            "--type",
+            "microsoft",
+        ]);
+        assert.equal(missing.status, 1, missing.stderr);
+        const envelope = JSON.parse(missing.stdout) as { error: { code: string; detail: string } };
+        assert.equal(envelope.error.code, "AccountNotFound");
+        assert.equal(envelope.error.detail, "cibocaz@microsoft");
+        assert.deepEqual(accountIds(home), ["cibocaz@offline", "XiangYuanHuLian@offline"]);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("auth logout 找不到时按名字报 AccountNotFound", () => {
+    const home = authHome([OFFLINE], null);
+    try {
+        const outcome = cliAt(home, ["--home", home, "--json", "auth", "logout", "没有这个人"]);
+        assert.equal(outcome.status, 1, outcome.stderr);
+        const envelope = JSON.parse(outcome.stdout) as { error: { code: string; detail: string } };
+        assert.equal(envelope.error.code, "AccountNotFound");
+        assert.equal(envelope.error.detail, "没有这个人");
+    } finally {
+        rmSync(home, { recursive: true, force: true });
     }
 });

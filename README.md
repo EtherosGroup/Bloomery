@@ -92,6 +92,8 @@ bloomery auth logout cibocaz
 
 离线账户立即可用。`auth login --type microsoft --json` 的 stdout 是 NDJSON 事件流，见[设备码登录流](#设备码登录流)。
 
+`auth logout <游戏名>` 不给 `--type` 时按游戏名在全部账户里找；同名有多条（离线与微软各一条）时报用法错误，detail 列出匹配到的类型。给了 `--type` 就按 `<游戏名>@<类型>` 认。
+
 ### mod
 
 从 Modrinth 检索与安装 MOD。

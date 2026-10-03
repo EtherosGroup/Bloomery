@@ -9,6 +9,7 @@
 - 资源对象只在本地已有该版本的资源索引时才算缺件
 - 补全失败按类型报错：网络类 `DependencyMissing` 可重试，sha1 校验不过 `InstallBroken` 不可重试
 - 下载四类通道与客户端 jar 落点各收到一处，install、启动规划与补全共用
+- `auth logout` 不给 `--type` 时按游戏名在全部账户里找，同名多条报用法错误并列出类型；原来按 offline 找，删微软账户会误报 `AccountNotFound`
 
 ## 1.9.0
 

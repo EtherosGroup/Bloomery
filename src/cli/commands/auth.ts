@@ -2,6 +2,7 @@
  * auth 命令：账户的增删查
  *
  * 账号 id 是 <游戏名>@<类型>，与显示名分开；同一个游戏名可以同时有离线与微软两条
+ * 登出不给 --type 时按游戏名在全部账户里找，同名多条报用法错误
  * 微软登录走设备码授权：终端给网址与代码，浏览器里授权完这边接着换令牌
  * client id 优先取 --client-id，其次 BLOOMERY_CLIENT_ID；登进来后按账号存下来给续期用
  * @author IsCibocaz
@@ -11,6 +12,7 @@
 import { loginMicrosoft, type DeviceCodePrompt } from "../../auth/index.ts";
 import {
     accountId,
+    accountsNamed,
     loadAccounts,
     loadSetting,
     microsoftAccount,
@@ -38,13 +40,13 @@ export const DEFAULT_CLIENT_ID = "77af6809-5d9c-432f-b0cb-7b42b8761e3c";
 
 export async function runAuth(command: AuthCommand, ctx: Context): Promise<void> {
     const type = typeOf(command.type);
-    log.debug("action=%s type=%s", command.action, type);
+    log.debug("action=%s type=%s", command.action, type ?? "any");
 
     switch (command.action) {
         case "list":
             return list(ctx);
         case "login":
-            return type === "microsoft"
+            return (type ?? "offline") === "microsoft"
                 ? microsoftLogin(command, ctx)
                 : login(required(command.username, "username"), ctx);
         case "logout":
@@ -217,12 +219,13 @@ function publicAccount(account: Account): Record<string, unknown> {
     return out;
 }
 
-async function logout(username: string, type: AccountType, ctx: Context): Promise<void> {
+async function logout(
+    username: string,
+    type: AccountType | undefined,
+    ctx: Context,
+): Promise<void> {
     const accounts = await loadAccounts();
-    const id = accountId(username, type);
-    if (!accounts.accounts.some((account) => account.id === id)) {
-        throw new AppError("cli", "AccountNotFound", { context: { detail: id } });
-    }
+    const id = targetId(accounts.accounts, username, type);
 
     await saveAccounts({
         ...accounts,
@@ -241,10 +244,37 @@ async function logout(username: string, type: AccountType, ctx: Context): Promis
     print(`已移除 ${id}`);
 }
 
-// 没给类型按离线；给错类型是用法问题，直接列出来
-function typeOf(value: string | undefined): AccountType {
+// 给了类型按 id 认；没给类型按游戏名找，同名多条时把类型列出来
+function targetId(list: readonly Account[], name: string, type: AccountType | undefined): string {
+    if (type !== undefined) {
+        const id = accountId(name, type);
+        if (!list.some((account) => account.id === id)) {
+            throw new AppError("cli", "AccountNotFound", { context: { detail: id } });
+        }
+        return id;
+    }
+
+    const found = accountsNamed(list, name);
+    const only = found[0];
+    if (only === undefined) {
+        throw new AppError("cli", "AccountNotFound", { context: { detail: name } });
+    }
+    if (found.length > 1) {
+        throw new AppError("cli", "UsageError", {
+            context: {
+                detail: `${name} 有 ${found.length} 条同名账户，--type 指明类型：${found
+                    .map((account) => account.type)
+                    .join(" / ")}`,
+            },
+        });
+    }
+    return only.id;
+}
+
+// 没给类型返回 undefined：登出要按游戏名在全部类型里找
+function typeOf(value: string | undefined): AccountType | undefined {
     if (value === undefined) {
-        return "offline";
+        return undefined;
     }
     if ((TYPES as readonly string[]).includes(value)) {
         return value as AccountType;

@@ -124,6 +124,11 @@ export function accountId(name: string, type: AccountType): string {
     return `${name}@${type}`;
 }
 
+// 按游戏名找账户：同一个游戏名可以同时有离线与微软两条
+export function accountsNamed(list: readonly Account[], name: string): Account[] {
+    return list.filter((account) => account.name === name);
+}
+
 export function offlineAccount(name: string, uuid: string | null = null): OfflineAccount {
     return { id: accountId(name, "offline"), type: "offline", name, uuid };
 }

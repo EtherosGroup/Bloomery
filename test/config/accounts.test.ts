@@ -1,5 +1,5 @@
 /**
- * 账号 id 与构造
+ * 账号 id、构造与按名字查找
  * @author IsCibocaz
  * @since 1.0.0
  */
@@ -7,7 +7,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { accountId, microsoftAccount, offlineAccount } from "../../src/config/accounts.ts";
+import {
+    accountId,
+    accountsNamed,
+    microsoftAccount,
+    offlineAccount,
+} from "../../src/config/accounts.ts";
+import type { Account } from "../../src/config/types.ts";
+
+test("按游戏名找账户，同名跨类型都算", () => {
+    const list: Account[] = [
+        offlineAccount("cibocaz"),
+        offlineAccount("Alex"),
+        microsoftAccount("Alex", "client-id-1", {
+            uuid: "5c103697-2f61-3499-8df5-6c1e4c671e80",
+            xuid: null,
+            refreshToken: "refresh-1",
+            accessToken: "access-1",
+            expiresAt: "2030-01-01T00:00:00.000Z",
+        }),
+    ];
+
+    assert.deepEqual(
+        accountsNamed(list, "cibocaz").map((account) => account.id),
+        ["cibocaz@offline"],
+    );
+    assert.deepEqual(
+        accountsNamed(list, "Alex").map((account) => account.id),
+        ["Alex@offline", "Alex@microsoft"],
+    );
+    assert.deepEqual(accountsNamed(list, "没有这个人"), []);
+});
 
 test("账号 id 是 <游戏名>@<类型>", () => {
     assert.equal(accountId("cibocaz", "offline"), "cibocaz@offline");
