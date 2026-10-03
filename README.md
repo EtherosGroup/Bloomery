@@ -106,9 +106,29 @@ bloomery mod install sodium --version 1.20.6-fabric
 bloomery mod install sodium-extra --deps         # 连必需依赖
 bloomery mod install sodium --no-deps
 bloomery mod install sodium --dry-run            # 只算不装
+bloomery mod install sodium --async              # 只入队，交给 download run
 ```
 
 目标实例省略时同 `launch` 的规则。文件落在该实例自己的 `mods/` 下，同名文件已存在时跳过。目前只接 Modrinth。
+
+`--async` 把任务写进下载队列后立刻返回，目标实例与落点在入队时定死；装不上的实例（非加载器版本、认不出游戏版本）当场报错，不入队。
+
+### download
+
+下载队列：装 MOD 这类活可以排到后台按顺序跑。
+
+```bash
+bloomery download info                           # 队列总览：任务 / 状态 / 目标 / 进度
+bloomery download info 0f3a1b2c                  # 单个任务详情，失败时给错误码与 detail
+bloomery download run                            # 处理等待中的任务，跑完退出
+bloomery download cancel 0f3a1b2c                # 等待中的直接标记，跑着的递中止请求
+bloomery download retry 0f3a1b2c                 # 失败的重新排队
+bloomery download clear                          # 清掉已完成与已取消的记录
+```
+
+队列是文件不是服务：任务清单在 `<数据目录>/downloads.json`，worker 是前台进程，一次一个任务。`info` 只读队列文件，是否真有 worker 在跑看 pid 锁（`downloads.lock`），所以「卡住」与「在跑」不会混。已有 worker 在跑时再起 `download run` 会被拒绝；上次没跑完的任务下次启动时标为失败，重跑由 `download retry` 决定。
+
+进度写盘节流（状态变化必写，进度最多每秒一次）；跑 `download run` 时加 `--progress ndjson` 能把实时进度流到 stderr，事件里带 `taskId`。
 
 ### modpack
 
@@ -260,6 +280,13 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `install <version>`                | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                           |
 | `mod search <关键词>`              | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                  |
 | `mod install <关键词>`             | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                            |
+| `mod install <关键词> --async`     | 对象   | 有   | 队列任务：`id` `type` `target` `state` `params` `attempts` `created` `started` `finished` `progress` `error`                                                                             |
+| `download info`                    | 对象   | 有   | `worker:number\|null` `tasks[]`（队列任务，同上）                                                                                                                                        |
+| `download info <id>`               | 对象   | 有   | `worker` `task`（单个队列任务）                                                                                                                                                          |
+| `download run`                     | 对象   | 有   | `recovered:string[]` `tasks[]`（`id` `type` `target` `state` `error`）`done` `failed` `cancelled`                                                                                        |
+| `download cancel <id>`             | 对象   | 有   | `id` `outcome`（`cancelled` 或 `aborting`）`task`                                                                                                                                        |
+| `download retry <id>`              | 对象   | 有   | 队列任务                                                                                                                                                                                 |
+| `download clear`                   | 对象   | 有   | `removed:number`                                                                                                                                                                         |
 | `modpack <文件>`                   | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                 |
 | `mirror list`                      | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                         |
 | `mirror use <名字>`                | 对象   | 有   | `source`                                                                                                                                                                                 |
@@ -288,6 +315,17 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 - `launch [id]` 与 `launch [id] --dry-run` 形状相同，区别只在有没有真的启动，以及 `repair` 有没有值
 - `launch [id] --repair` 只给 `version` `directory` `missing` `repair` 四项，不带启动计划
 - `java scan` 会把清单写回 `setting.json`，`java list` 只读
+
+队列任务出现在 `--async`、`download info` 与 `download retry` 的输出里：
+
+```
+id:string  type:string  target:string  state:string  params  attempts:number
+created:string  started:string|null  finished:string|null  progress  error
+```
+
+`state` 取值 `pending` `running` `done` `failed` `cancelled`，时间戳是 RFC3339 UTC。`progress` 为 `null` 或 `{stage:string,done:number,total:number,bytes:boolean,at:string}`；`error` 为 `null` 或 `{code:string,message:string,detail:string,retryable:boolean}`。`params` 在入队时定死（`query` `modsDirectory` `gameVersion` `loader` `withDependencies` `dryRun`），跑的时候只补上当前的网络设置。
+
+`download info` 的 `worker` 是拿着 pid 锁的进程号，没有活的 worker 时为 `null`；队列文件里的 `running` 不等于有进程在跑，判断以 `worker` 为准。
 
 `launch` 的 `missing` 是这次检查的结果：
 

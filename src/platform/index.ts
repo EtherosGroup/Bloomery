@@ -20,6 +20,9 @@ export { requiresShell } from "./process.ts";
 export {
     accountsFile,
     configDirectory,
+    downloadCancelFile,
+    downloadLockFile,
+    downloadQueueFile,
     expandHome,
     homeDirectory,
     logDirectory,

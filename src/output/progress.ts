@@ -113,6 +113,7 @@ export function liveColumns(stream: TerminalStream = process.stdout): number | n
 export function progressReporter(
     style: ProgressStyle,
     io: ProgressIo = terminalIo(),
+    taskId?: string,
 ): ProgressReporter {
     const bar = style === "bar" && io.interactive;
     // 每条通道一行条，同时刷新；顺序按第一次出现的先后
@@ -164,6 +165,8 @@ export function progressReporter(
                     total,
                     bytes,
                     ...(existing ? { existing: true } : {}),
+                    // 队列 worker 跑任务时带上任务 id，消费端据此归属事件
+                    ...(taskId === undefined ? {} : { taskId }),
                 };
                 if (io.emit === undefined) {
                     return;

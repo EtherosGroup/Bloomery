@@ -35,6 +35,8 @@ const MESSAGES: Record<ErrorCode, string> = {
     JavaDuplicate: "这个 Java 已经在清单里",
     DependencyMissing: "依赖文件缺失",
     DownloadFailed: "下载失败",
+    TaskNotFound: "找不到这个下载任务",
+    WorkerBusy: "已有下载进程在运行",
     AccountNotFound: "找不到可用的账户",
     AccountExists: "这个账号已经在清单里",
     AccountExpired: "账户凭据需要刷新",
@@ -66,6 +68,8 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     JavaDuplicate: 1,
     DependencyMissing: 1,
     DownloadFailed: 1,
+    TaskNotFound: 1,
+    WorkerBusy: 1,
     AccountNotFound: 1,
     AccountExists: 1,
     AccountExpired: 1,
@@ -97,6 +101,8 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     ModUnsupported: "用 bloomery install <版本> --loader fabric 装一个加载器版本再试",
     VersionExists: "使用 --name <name> 指定新的版本名称",
     DownloadFailed: "检查网络，或设置里的下载源与代理",
+    TaskNotFound: "运行 bloomery download info 查看队列里的任务",
+    WorkerBusy: "运行 bloomery download info 看进度，等它结束再跑 download run",
 };
 
 export function handleError(error: unknown, logPath?: string): number {
@@ -156,6 +162,16 @@ const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
     "DownloadFailed",
     "DependencyMissing",
 ]);
+
+/** 错误码对应的中文短语，队列把失败记进文件时也要一份 */
+export function errorMessage(code: ErrorCode): string {
+    return MESSAGES[code];
+}
+
+/** 错误码是否值得重试 */
+export function errorRetryable(code: ErrorCode): boolean {
+    return RETRYABLE.has(code);
+}
 
 export function errorJson(error: unknown): Record<string, unknown> {
     const app = error instanceof AppError ? error : null;

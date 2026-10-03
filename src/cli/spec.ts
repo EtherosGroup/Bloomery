@@ -7,6 +7,7 @@
  */
 
 import { runAuth } from "./commands/auth.ts";
+import { runDownload } from "./commands/download.ts";
 import { runFolder } from "./commands/folder.ts";
 import { runInstall } from "./commands/install.ts";
 import { runJava } from "./commands/java.ts";
@@ -133,7 +134,7 @@ export const COMMANDS: CommandTable = {
 
     mod: {
         summary: "MOD 检索与安装",
-        usage: "mod <search|install> <query> [--version <id>] [--folder <id>] [--dry-run] [--deps|--no-deps] [--limit <n>]",
+        usage: "mod <search|install> <query> [--version <id>] [--folder <id>] [--dry-run] [--deps|--no-deps] [--async] [--limit <n>]",
         options: {
             version: {
                 type: "string",
@@ -144,6 +145,7 @@ export const COMMANDS: CommandTable = {
             "dry-run": { type: "boolean", summary: "只算不装" },
             deps: { type: "boolean", summary: "连必需依赖一起装" },
             "no-deps": { type: "boolean", summary: "只装这一个，不动依赖" },
+            async: { type: "boolean", summary: "只入队，交给 download run 下载" },
             limit: { type: "string", value: "<n>", summary: "搜索结果条数，默认 10" },
         },
         positionals: { names: ["action", "query"], required: 2 },
@@ -159,9 +161,27 @@ export const COMMANDS: CommandTable = {
             folder: optionalString(values, "folder"),
             dryRun: values["dry-run"] === true,
             deps: values["deps"] === true ? true : values["no-deps"] === true ? false : undefined,
+            async: values["async"] === true,
             limit: optionalInteger(values, "limit"),
         }),
         run: runMod,
+    },
+
+    download: {
+        summary: "下载队列",
+        usage: "download <info|run|cancel|retry|clear> [id]",
+        options: {},
+        positionals: { names: ["action", "id"], required: 1 },
+        toCommand: (_values, positionals) => ({
+            name: "download",
+            action: requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["info", "run", "cancel", "retry", "clear"] as const,
+                "action",
+            ),
+            id: optionalPositional(positionals, 1, "id"),
+        }),
+        run: runDownload,
     },
 
     mirror: {

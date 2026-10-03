@@ -79,10 +79,11 @@ export interface ModInstallInput {
     readonly download?: typeof downloadOne;
 }
 
-export async function installMod(input: ModInstallInput): Promise<ModInstallReport> {
-    const api: ModrinthInput = { network: input.network, transport: input.transport };
-    const loader = input.loader;
-    const gameVersion = input.gameVersion;
+/** MOD 只能装到加载器实例上，加载器与游戏版本都认出来才算 */
+export function requireModTarget(
+    loader: string | null | undefined,
+    gameVersion: string | null | undefined,
+): { loader: string; gameVersion: string } {
     if (loader === null || loader === undefined) {
         throw new AppError("mod", "ModUnsupported", {
             context: { detail: "这个版本不是加载器版本，MOD 装进去不会加载" },
@@ -93,6 +94,12 @@ export async function installMod(input: ModInstallInput): Promise<ModInstallRepo
             context: { detail: "认不出这个实例对应的游戏版本" },
         });
     }
+    return { loader, gameVersion };
+}
+
+export async function installMod(input: ModInstallInput): Promise<ModInstallReport> {
+    const api: ModrinthInput = { network: input.network, transport: input.transport };
+    const { loader, gameVersion } = requireModTarget(input.loader, input.gameVersion);
 
     const project = await resolveProject(input.query, api);
     const version = await matchVersion(project.id, { loader, gameVersion }, api);

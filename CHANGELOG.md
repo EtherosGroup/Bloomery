@@ -1,5 +1,17 @@
 # 更新记录
 
+## 1.11.0
+
+- 新增下载队列：`mod install --async` 只入队并立刻返回，下载交给 `download run`
+- 新增 `download info [id]`：队列总览与单任务详情，含状态、进度、错误码与 detail
+- 新增 `download run` / `cancel` / `retry` / `clear`；`clear` 只清终态记录，pending 与 running 不动
+- 队列是文件不是服务：任务清单在 `<数据目录>/downloads.json`，写入原子
+- worker 一次一个任务，pid 锁保证只有一个；已有存活 worker 时再起 `download run` 报 `WorkerBusy`
+- 上次没跑完的 `running` 任务在下次启动时回收为失败，重跑由 `download retry` 决定
+- 进度写盘节流：状态变化必写，进度最多每秒一次；`download run` 的 ndjson 进度事件带 `taskId`
+- `mod install --async` 对装不上的实例（非加载器版本、认不出游戏版本）当场报错，不入队
+- MOD 目标校验收到 `requireModTarget` 一处，入队与安装共用同一份报错
+
 ## 1.10.0
 
 - `java install` 新增 `--provider mojang`：按 Mojang 的 Java 运行时索引挑组件（非 snapshot 优先），按该平台清单逐文件下载并校验 sha1，还原可执行位与符号链接，先校验清单自身的 sha1；Mojang 只有 jre 组件

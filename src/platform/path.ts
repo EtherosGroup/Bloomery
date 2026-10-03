@@ -59,3 +59,18 @@ export function expandHome(path: string): string {
 export function mirrorListFile(): string {
     return join(configDirectory(), "mirrors.json");
 }
+
+// 下载队列：任务清单
+export function downloadQueueFile(): string {
+    return join(configDirectory(), "downloads.json");
+}
+
+// 下载队列：worker 的 pid 锁
+export function downloadLockFile(): string {
+    return join(configDirectory(), "downloads.lock");
+}
+
+// 下载队列：中止请求，跨进程写给运行中的 worker
+export function downloadCancelFile(): string {
+    return join(configDirectory(), "downloads.cancel");
+}

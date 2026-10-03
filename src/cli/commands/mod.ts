@@ -11,10 +11,16 @@ import { join } from "node:path";
 
 import { loadSetting, loadState } from "../../config/index.ts";
 import type { DownloadSetting, Network, Setting } from "../../config/types.ts";
+import { enqueue, type DownloadTask } from "../../download/index.ts";
 import { AppError } from "../../error/index.ts";
 import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
-import { installMod, searchMods, type ModInstallReport } from "../../mod/index.ts";
+import {
+    installMod,
+    requireModTarget,
+    searchMods,
+    type ModInstallReport,
+} from "../../mod/index.ts";
 import { logger, print, renderTable, versioned } from "../../output/index.ts";
 import { chooseInstance, pickFolder, readFolder } from "../../version/index.ts";
 import type { Context, ModCommand } from "../parse.ts";
@@ -92,11 +98,34 @@ async function install(
     }
 
     const modsDirectory = join(instance.directory, "mods");
+    const loader = instance.loader.type === "vanilla" ? null : instance.loader.type;
+
+    // --async 只入队：目标实例与落点在这里定死，下载交给 download run
+    if (command.async === true) {
+        // 装不上的实例不入队：排队之后必然失败，不如当场报
+        requireModTarget(loader, instance.gameVersion);
+        const task = await enqueue({
+            type: "mod-install",
+            target: command.query,
+            params: {
+                query: command.query,
+                modsDirectory,
+                gameVersion: instance.gameVersion,
+                loader,
+                withDependencies: command.deps ?? setting.mod.installDependencies,
+                dryRun: command.dryRun === true,
+            },
+        });
+        log.info("mod install %s 入队 %s", command.query, task.id);
+        queued(task, instance.id, ctx);
+        return;
+    }
+
     const report = await installMod({
         query: command.query,
         modsDirectory,
         gameVersion: instance.gameVersion,
-        loader: instance.loader.type === "vanilla" ? null : instance.loader.type,
+        loader,
         network,
         withDependencies: command.deps ?? setting.mod.installDependencies,
         dryRun: command.dryRun,
@@ -104,6 +133,16 @@ async function install(
     log.info("mod install %s -> %s", report.project.slug, modsDirectory);
 
     show(report, instance.id, modsDirectory, command, ctx, pick.source === "selected");
+}
+
+function queued(task: DownloadTask, instanceId: string, ctx: Context): void {
+    if (ctx.json) {
+        print(JSON.stringify(versioned(task), null, 4));
+        return;
+    }
+    print(`已加入下载队列 ${task.id}（${instanceId}）`);
+    print("查看进度：bloomery download info");
+    print("开始下载：bloomery download run");
 }
 
 function show(

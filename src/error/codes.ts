@@ -22,6 +22,8 @@ export type ErrorCode =
     | "JavaDuplicate"
     | "DependencyMissing"
     | "DownloadFailed"
+    | "TaskNotFound"
+    | "WorkerBusy"
     | "AccountNotFound"
     | "AccountExists"
     | "AccountExpired"

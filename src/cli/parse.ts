@@ -69,6 +69,15 @@ export interface ModCommand {
     readonly deps?: boolean;
     /** search 用：返回条数 */
     readonly limit?: number;
+    /** install 用：只入队，交给 download run 处理 */
+    readonly async?: boolean;
+}
+
+export interface DownloadCommand {
+    readonly name: "download";
+    readonly action: "info" | "run" | "cancel" | "retry" | "clear";
+    /** info 可选，cancel 与 retry 必给 */
+    readonly id?: string;
 }
 
 export interface MirrorCommand {
@@ -156,7 +165,8 @@ export type Command =
     | ModpackCommand
     | FolderCommand
     | VersionCommand
-    | JavaCommand;
+    | JavaCommand
+    | DownloadCommand;
 
 export type CommandName = Command["name"];
 

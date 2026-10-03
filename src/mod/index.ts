@@ -23,6 +23,7 @@ export {
 } from "./modrinth.ts";
 export {
     installMod,
+    requireModTarget,
     type DependencyNote,
     type InstalledFile,
     type ModInstallInput,
