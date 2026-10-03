@@ -431,6 +431,8 @@ MOD、配置、存档都在实例目录下，互不影响。
 
 下载源、代理与并发在 `setting.json` 的 `network` 段（`concurrency` 默认 8，四类文件按任务数分配）。
 
+代理也可用环境变量 `HTTPS_PROXY` / `HTTP_PROXY`；`network.proxy` 有值时优先于环境变量，`NO_PROXY` 命中的地址直连
+
 ## 微软登录
 
 内置应用 id 已通过 Mojang 审核，直接登录：

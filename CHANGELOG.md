@@ -16,6 +16,7 @@
 - `auth login --type microsoft --json` 的 stdout 改为 NDJSON：device / account / error 三类事件，失败时 error 是最后一行
 - `view loader <名字> --games` 去掉重复的 `games` 键
 - `--home` 时日志落点也跟随，不再写默认配置目录
+- 日志落点写失败时 stderr 不再打整段堆栈，只留一行原因（带落点文件）
 - 注释与用户可见文案的语气清理
 
 ## 1.8.0
