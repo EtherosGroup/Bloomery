@@ -44,3 +44,13 @@ export {
     type WorkerOptions,
     type WorkerReport,
 } from "./worker.ts";
+export {
+    NO_WORKER_ENV,
+    startWorker,
+    WORKER_LOG_FILE,
+    type DetachedChild,
+    type SpawnDetached,
+    type StartWorkerOptions,
+    type WorkerOutcome,
+    type WorkerStart,
+} from "./spawn.ts";

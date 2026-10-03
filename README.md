@@ -106,12 +106,12 @@ bloomery mod install sodium --version 1.20.6-fabric
 bloomery mod install sodium-extra --deps         # 连必需依赖
 bloomery mod install sodium --no-deps
 bloomery mod install sodium --dry-run            # 只算不装
-bloomery mod install sodium --async              # 只入队，交给 download run
+bloomery mod install sodium --async              # 入队并后台下载，立刻返回
 ```
 
 目标实例省略时同 `launch` 的规则。文件落在该实例自己的 `mods/` 下，同名文件已存在时跳过。目前只接 Modrinth。
 
-`--async` 把任务写进下载队列后立刻返回，目标实例与落点在入队时定死；装不上的实例（非加载器版本、认不出游戏版本）当场报错，不入队。
+`--async` 把任务写进下载队列后立刻返回，目标实例与落点在入队时定死；装不上的实例（非加载器版本、认不出游戏版本）当场报错，不入队。入队之后分离拉起一个后台 worker 接着下载：进程 detach 加 unref，父命令退出与终端 Ctrl+C 不影响子进程；子进程的 stdout 与 stderr 追加到 `<日志目录>/worker.log`，每次拉起写一行抬头。已有存活 worker 时不再拉起，新任务由它接走（每跑完一个任务重读队列）。入口不可用或进程创建失败时任务留在队列里，用 `download run` 手动跑。`BLOOMERY_NO_WORKER=1` 时只入队。
 
 ### download
 
@@ -126,7 +126,7 @@ bloomery download retry 0f3a1b2c                 # 失败的重新排队
 bloomery download clear                          # 清掉已完成与已取消的记录
 ```
 
-队列是文件不是服务：任务清单在 `<数据目录>/downloads.json`，worker 是前台进程，一次一个任务。`info` 只读队列文件，是否真有 worker 在跑看 pid 锁（`downloads.lock`），所以「卡住」与「在跑」不会混。已有 worker 在跑时再起 `download run` 会被拒绝；上次没跑完的任务下次启动时标为失败，重跑由 `download retry` 决定。
+队列是文件不是服务：任务清单在 `<数据目录>/downloads.json`，worker 一次一个任务，可以前台跑 `download run`，也可以由 `mod install --async` 分离拉起。`info` 只读队列文件，是否真有 worker 在跑看 pid 锁（`downloads.lock`），所以「卡住」与「在跑」不会混。已有 worker 在跑时再起 `download run` 会被拒绝；上次没跑完的任务下次启动时标为失败，重跑由 `download retry` 决定。后台 worker 的正文落在 `<日志目录>/worker.log`（追加写，每次拉起一行抬头），队列与进程的实况看 `download info`。
 
 进度写盘节流（状态变化必写，进度最多每秒一次）；跑 `download run` 时加 `--progress ndjson` 能把实时进度流到 stderr，事件里带 `taskId`。
 
@@ -262,52 +262,52 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 
 顶层是对象时带 `"v": 1`；顶层是数组时不带 `v`，数组本身即 v1。缺失的标量用 `null`，不用空串。字段顺序不作保证，消费方按名字取。
 
-| 命令                               | 顶层   | `v`  | 字段                                                                                                                                                                                     |
-| ---------------------------------- | ------ | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `folder list`                      | 数组   | 无   | 元素：`id:string` `name:string` `path:string` `exists:boolean` `writable:boolean` `instanceCount:number` `selected:boolean`                                                              |
-| `folder scan [id]`                 | 数组   | 无   | 元素：FolderView `id:string` `selectedInstance:string\|null` `name:string` `path:string` `exists:boolean` `writable:boolean` `versionsDirectory:string` `dropped:string[]` `instances[]` |
-| `folder add <path>`                | 对象   | 有   | `id` `path` `versionCount`                                                                                                                                                               |
-| `folder add <path> --dry-run`      | 对象   | 有   | FolderView，含 `instances[]`                                                                                                                                                             |
-| `folder add <path> --no-select`    | 对象   | 有   | 同 `folder add <path>`，只是不改当前文件夹                                                                                                                                               |
-| `folder remove <id>`               | 对象   | 有   | `removed`                                                                                                                                                                                |
-| `folder select <id>`               | 对象   | 有   | `selected` `path`                                                                                                                                                                        |
-| `version list`                     | 对象   | 有   | 同 `folder scan` 的元素（FolderView）                                                                                                                                                    |
-| `version info <id>`                | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                 |
-| `version select <id>`              | 对象   | 有   | `selected` `folder`                                                                                                                                                                      |
-| `launch [id]`                      | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `missing` `repair`                                                  |
-| `launch [id] --dry-run`            | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair` 恒为 `null`                                                                                                                                       |
-| `launch [id] --repair`             | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                   |
-| `install <version>`                | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                           |
-| `mod search <关键词>`              | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                  |
-| `mod install <关键词>`             | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                            |
-| `mod install <关键词> --async`     | 对象   | 有   | 队列任务：`id` `type` `target` `state` `params` `attempts` `created` `started` `finished` `progress` `error`                                                                             |
-| `download info`                    | 对象   | 有   | `worker:number\|null` `tasks[]`（队列任务，同上）                                                                                                                                        |
-| `download info <id>`               | 对象   | 有   | `worker` `task`（单个队列任务）                                                                                                                                                          |
-| `download run`                     | 对象   | 有   | `recovered:string[]` `tasks[]`（`id` `type` `target` `state` `error`）`done` `failed` `cancelled`                                                                                        |
-| `download cancel <id>`             | 对象   | 有   | `id` `outcome`（`cancelled` 或 `aborting`）`task`                                                                                                                                        |
-| `download retry <id>`              | 对象   | 有   | 队列任务                                                                                                                                                                                 |
-| `download clear`                   | 对象   | 有   | `removed:number`                                                                                                                                                                         |
-| `modpack <文件>`                   | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                 |
-| `mirror list`                      | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                         |
-| `mirror use <名字>`                | 对象   | 有   | `source`                                                                                                                                                                                 |
-| `mirror update`                    | 对象   | 有   | `from` `fetchedAt` `entries[]`                                                                                                                                                           |
-| `view loader`                      | 对象   | 有   | `type` `loaders[]`（`name` `latest` `total`）                                                                                                                                            |
-| `view loader <名字>`               | 对象   | 有   | `loader` `type` `page` `pages` `perPage` `total` `versions[]`（`version` `gameVersion` `channel`）                                                                                       |
-| `view loader <名字> --game <版本>` | 对象   | 有   | 同上，多 `game`                                                                                                                                                                          |
-| `view loader <名字> --games`       | 对象   | 有   | `loader` `page` `pages` `perPage` `total` `versions[]`（字符串数组）                                                                                                                     |
-| `view game <版本>`                 | 对象   | 有   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                     |
-| `auth list`                        | 数组   | 无   | 元素：`id:string` `type:string` `name:string` `uuid:string\|null` `selected:boolean` `status:string`；微软账户多 `xuid:string\|null` `expiresAt:string\|null` `hasCredential:boolean`    |
-| `auth login <游戏名>`              | 对象   | 有   | 账户：`id` `type` `name` `uuid`                                                                                                                                                          |
-| `auth login --type microsoft`      | NDJSON | 每行 | 见[设备码登录流](#设备码登录流)                                                                                                                                                          |
-| `auth logout <游戏名>`             | 对象   | 有   | `removed`                                                                                                                                                                                |
-| `java list` / `java scan`          | 数组   | 无   | 元素：`path:string` `major:number\|null` `kind:string` `arch:string\|null` `vendor:string\|null` `source:string` `present:boolean`                                                       |
-| `java add <path>`                  | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source`                                                                                                                                           |
-| `java remove <path>`               | 对象   | 有   | `removed`                                                                                                                                                                                |
-| `java which`                       | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                           |
-| `java install <主版本>`            | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                        |
-| `java install --provider mojang`   | 对象   | 有   | `provider` `component` `version` `platform` `url` `root` `java` `files` `bytes` `directories` `links` `registered`                                                                       |
-| 错误信封                           | 对象   | 有   | `error`                                                                                                                                                                                  |
-| `--version --json`                 | 对象   | 有   | `version`                                                                                                                                                                                |
+| 命令                               | 顶层   | `v`  | 字段                                                                                                                                                                                                  |
+| ---------------------------------- | ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folder list`                      | 数组   | 无   | 元素：`id:string` `name:string` `path:string` `exists:boolean` `writable:boolean` `instanceCount:number` `selected:boolean`                                                                           |
+| `folder scan [id]`                 | 数组   | 无   | 元素：FolderView `id:string` `selectedInstance:string\|null` `name:string` `path:string` `exists:boolean` `writable:boolean` `versionsDirectory:string` `dropped:string[]` `instances[]`              |
+| `folder add <path>`                | 对象   | 有   | `id` `path` `versionCount`                                                                                                                                                                            |
+| `folder add <path> --dry-run`      | 对象   | 有   | FolderView，含 `instances[]`                                                                                                                                                                          |
+| `folder add <path> --no-select`    | 对象   | 有   | 同 `folder add <path>`，只是不改当前文件夹                                                                                                                                                            |
+| `folder remove <id>`               | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `folder select <id>`               | 对象   | 有   | `selected` `path`                                                                                                                                                                                     |
+| `version list`                     | 对象   | 有   | 同 `folder scan` 的元素（FolderView）                                                                                                                                                                 |
+| `version info <id>`                | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                              |
+| `version select <id>`              | 对象   | 有   | `selected` `folder`                                                                                                                                                                                   |
+| `launch [id]`                      | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `missing` `repair`                                                               |
+| `launch [id] --dry-run`            | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair` 恒为 `null`                                                                                                                                                    |
+| `launch [id] --repair`             | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                |
+| `install <version>`                | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                                        |
+| `mod search <关键词>`              | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                               |
+| `mod install <关键词>`             | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                                         |
+| `mod install <关键词> --async`     | 对象   | 有   | 队列任务：`id` `type` `target` `state` `params` `attempts` `created` `started` `finished` `progress` `error`；另给 `spawn:{outcome:string,pid:number\|null,log:string}`（这次拉起后台 worker 的结果） |
+| `download info`                    | 对象   | 有   | `worker:number\|null` `tasks[]`（队列任务，同上）                                                                                                                                                     |
+| `download info <id>`               | 对象   | 有   | `worker` `task`（单个队列任务）                                                                                                                                                                       |
+| `download run`                     | 对象   | 有   | `recovered:string[]` `tasks[]`（`id` `type` `target` `state` `error`）`done` `failed` `cancelled`                                                                                                     |
+| `download cancel <id>`             | 对象   | 有   | `id` `outcome`（`cancelled` 或 `aborting`）`task`                                                                                                                                                     |
+| `download retry <id>`              | 对象   | 有   | 队列任务                                                                                                                                                                                              |
+| `download clear`                   | 对象   | 有   | `removed:number`                                                                                                                                                                                      |
+| `modpack <文件>`                   | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                              |
+| `mirror list`                      | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                                      |
+| `mirror use <名字>`                | 对象   | 有   | `source`                                                                                                                                                                                              |
+| `mirror update`                    | 对象   | 有   | `from` `fetchedAt` `entries[]`                                                                                                                                                                        |
+| `view loader`                      | 对象   | 有   | `type` `loaders[]`（`name` `latest` `total`）                                                                                                                                                         |
+| `view loader <名字>`               | 对象   | 有   | `loader` `type` `page` `pages` `perPage` `total` `versions[]`（`version` `gameVersion` `channel`）                                                                                                    |
+| `view loader <名字> --game <版本>` | 对象   | 有   | 同上，多 `game`                                                                                                                                                                                       |
+| `view loader <名字> --games`       | 对象   | 有   | `loader` `page` `pages` `perPage` `total` `versions[]`（字符串数组）                                                                                                                                  |
+| `view game <版本>`                 | 对象   | 有   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                                  |
+| `auth list`                        | 数组   | 无   | 元素：`id:string` `type:string` `name:string` `uuid:string\|null` `selected:boolean` `status:string`；微软账户多 `xuid:string\|null` `expiresAt:string\|null` `hasCredential:boolean`                 |
+| `auth login <游戏名>`              | 对象   | 有   | 账户：`id` `type` `name` `uuid`                                                                                                                                                                       |
+| `auth login --type microsoft`      | NDJSON | 每行 | 见[设备码登录流](#设备码登录流)                                                                                                                                                                       |
+| `auth logout <游戏名>`             | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `java list` / `java scan`          | 数组   | 无   | 元素：`path:string` `major:number\|null` `kind:string` `arch:string\|null` `vendor:string\|null` `source:string` `present:boolean`                                                                    |
+| `java add <path>`                  | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source`                                                                                                                                                        |
+| `java remove <path>`               | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `java which`                       | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                                        |
+| `java install <主版本>`            | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                                     |
+| `java install --provider mojang`   | 对象   | 有   | `provider` `component` `version` `platform` `url` `root` `java` `files` `bytes` `directories` `links` `registered`                                                                                    |
+| 错误信封                           | 对象   | 有   | `error`                                                                                                                                                                                               |
+| `--version --json`                 | 对象   | 有   | `version`                                                                                                                                                                                             |
 
 同一命令不同模式形状不同，读数前先认清是哪一种：
 
@@ -326,6 +326,8 @@ created:string  started:string|null  finished:string|null  progress  error
 `state` 取值 `pending` `running` `done` `failed` `cancelled`，时间戳是 RFC3339 UTC。`progress` 为 `null` 或 `{stage:string,done:number,total:number,bytes:boolean,at:string}`；`error` 为 `null` 或 `{code:string,message:string,detail:string,retryable:boolean}`。`params` 在入队时定死（`query` `modsDirectory` `gameVersion` `loader` `withDependencies` `dryRun`），跑的时候只补上当前的网络设置。
 
 `download info` 的 `worker` 是拿着 pid 锁的进程号，没有活的 worker 时为 `null`；队列文件里的 `running` 不等于有进程在跑，判断以 `worker` 为准。
+
+`mod install --json --async` 在队列任务之外多给 `spawn`：这次拉起后台 worker 的结果。`outcome` 取值 `started`（已起进程）`busy`（下载进程已存在，任务自动入队）`disabled`（设了 `BLOOMERY_NO_WORKER=1`）`unavailable`（入口路径不可用）`failed`（子进程创建失败）；`pid` 只有 `started` 有值，其余为 `null`；`log` 是子进程的日志落点，恒有值。已有 worker 的 pid 看 `download info` 的 `worker`。
 
 `launch` 的 `missing` 是这次检查的结果：
 
@@ -513,7 +515,7 @@ bloomery auth login --type microsoft
 ```bash
 npm run start -- <参数>     # 直接跑源码，Node 原生剥离类型
 npm run check               # tsc --noEmit
-npm test                    # node --test，222 项
+npm test                    # node --test，270 项
 npm run fmt                 # oxfmt 格式化
 npm run build               # 产物到 dist/
 ```

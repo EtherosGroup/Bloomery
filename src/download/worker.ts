@@ -1,6 +1,7 @@
 /**
  * 队列 worker：一次一个 pending 任务
  *
+ * 前台由 `download run` 跑，或由 `mod install --async` 分离拉起
  * 启动先抢 pid 锁，已有存活 worker 时拒绝
  * 上一次留下的 running 任务先标 failed，再从头找 pending
  * 任务内部沿用各自的下载逻辑，进度节流写回队列文件

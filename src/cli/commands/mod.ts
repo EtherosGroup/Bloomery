@@ -11,7 +11,13 @@ import { join } from "node:path";
 
 import { loadSetting, loadState } from "../../config/index.ts";
 import type { DownloadSetting, Network, Setting } from "../../config/types.ts";
-import { enqueue, type DownloadTask } from "../../download/index.ts";
+import {
+    enqueue,
+    NO_WORKER_ENV,
+    startWorker,
+    type DownloadTask,
+    type WorkerStart,
+} from "../../download/index.ts";
 import { AppError } from "../../error/index.ts";
 import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
@@ -100,9 +106,9 @@ async function install(
     const modsDirectory = join(instance.directory, "mods");
     const loader = instance.loader.type === "vanilla" ? null : instance.loader.type;
 
-    // --async 只入队：目标实例与落点在这里定死，下载交给 download run
+    // --async 入队后分离拉起 worker：目标实例与落点在这里定死
     if (command.async === true) {
-        // 装不上的实例不入队：排队之后必然失败，不如当场报
+        // 装不上的实例不入队
         requireModTarget(loader, instance.gameVersion);
         const task = await enqueue({
             type: "mod-install",
@@ -117,7 +123,8 @@ async function install(
             },
         });
         log.info("mod install %s 入队 %s", command.query, task.id);
-        queued(task, instance.id, ctx);
+        const start = await startWorker({ home: ctx.home, task: task.id });
+        queued(task, instance.id, ctx, start);
         return;
     }
 
@@ -135,14 +142,48 @@ async function install(
     show(report, instance.id, modsDirectory, command, ctx, pick.source === "selected");
 }
 
-function queued(task: DownloadTask, instanceId: string, ctx: Context): void {
+function queued(task: DownloadTask, instanceId: string, ctx: Context, start: WorkerStart): void {
     if (ctx.json) {
-        print(JSON.stringify(versioned(task), null, 4));
+        print(
+            JSON.stringify(
+                versioned({
+                    ...task,
+                    spawn: { outcome: start.outcome, pid: start.pid, log: start.log },
+                }),
+                null,
+                4,
+            ),
+        );
         return;
     }
     print(`已加入下载队列 ${task.id}（${instanceId}）`);
-    print("查看进度：bloomery download info");
-    print("开始下载：bloomery download run");
+    for (const line of workerLines(start)) {
+        print(line);
+    }
+}
+
+// 后台 worker 拉起结果
+function workerLines(start: WorkerStart): readonly string[] {
+    switch (start.outcome) {
+        case "started":
+            return [
+                `后台下载已开始 pid ${start.pid ?? "未知"}`,
+                "进度：bloomery download info",
+                `日志：${start.log}`,
+            ];
+        case "busy":
+            return [
+                `下载进程已存在 pid ${start.worker ?? "未知"}，下载任务自动加入队列`,
+                "进度：bloomery download info",
+            ];
+        case "disabled":
+            return [`后台下载跳过：${NO_WORKER_ENV}=1`, "手动启动下载队列：bloomery download run"];
+        default:
+            return [
+                `后台下载失败：${start.detail ?? "未知错误"}`,
+                "手动启动下载队列：bloomery download run",
+            ];
+    }
 }
 
 function show(

@@ -2,9 +2,13 @@
 
 ## 1.11.0
 
-- 新增下载队列：`mod install --async` 只入队并立刻返回，下载交给 `download run`
-- 新增 `download info [id]`：队列总览与单任务详情，含状态、进度、错误码与 detail
-- 新增 `download run` / `cancel` / `retry` / `clear`；`clear` 只清终态记录，pending 与 running 不动
+- 新增下载队列：`mod install --async` 入队并立刻返回，`download info` / `run` / `cancel` / `retry` / `clear` 管理与查看
+- `--async` 入队后分离拉起后台 worker：进程 detach 加 unref，父命令退出与终端 Ctrl+C 不影响子进程，stdout 与 stderr 追加到 `<日志目录>/worker.log`
+- 已有存活 worker 时 `--async` 不再拉起，新任务由它接走；入口不可用或进程创建失败时任务留在队列里，用 `download run` 手动跑
+- `mod install --async` 的输出与 JSON 多一个 `spawn`：拉起结果 `outcome`（`started` / `busy` / `disabled` / `unavailable` / `failed`）`pid` `log`
+- `BLOOMERY_NO_WORKER=1` 时 `--async` 只入队（脚本与测试）
+- `download info [id]` 给队列总览与单任务详情：状态、进度、错误码与 detail
+- `download clear` 只清终态记录，pending 与 running 不动
 - 队列是文件不是服务：任务清单在 `<数据目录>/downloads.json`，写入原子
 - worker 一次一个任务，pid 锁保证只有一个；已有存活 worker 时再起 `download run` 报 `WorkerBusy`
 - 上次没跑完的 `running` 任务在下次启动时回收为失败，重跑由 `download retry` 决定

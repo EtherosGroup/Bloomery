@@ -145,7 +145,7 @@ export const COMMANDS: CommandTable = {
             "dry-run": { type: "boolean", summary: "只算不装" },
             deps: { type: "boolean", summary: "连必需依赖一起装" },
             "no-deps": { type: "boolean", summary: "只装这一个，不动依赖" },
-            async: { type: "boolean", summary: "只入队，交给 download run 下载" },
+            async: { type: "boolean", summary: "入队并拉起后台 worker，立刻返回" },
             limit: { type: "string", value: "<n>", summary: "搜索结果条数，默认 10" },
         },
         positionals: { names: ["action", "query"], required: 2 },

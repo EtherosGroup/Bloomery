@@ -1,7 +1,7 @@
 /**
  * download 命令：下载队列
  *
- * 队列是文件，worker 是前台进程，一次一个任务
+ * 队列是文件，worker 一次一个任务：可以前台跑 run，也可以由 --async 分离拉起
  * info 只读队列文件，worker 存活与否看 pid 锁
  * @author IsCibocaz
  * @since 1.11.0
