@@ -448,7 +448,7 @@ bloomery auth login --type microsoft
 ```bash
 npm run start -- <参数>     # 直接跑源码，Node 原生剥离类型
 npm run check               # tsc --noEmit
-npm test                    # node --test，208 项
+npm test                    # node --test，210 项
 npm run fmt                 # oxfmt 格式化
 npm run build               # 产物到 dist/
 ```

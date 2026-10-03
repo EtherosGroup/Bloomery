@@ -2,7 +2,9 @@
 
 ## 1.9.0
 
+- https 请求改用会调 `createConnection` 的 `https.Agent` 子类，`network.proxy` 与 `HTTPS_PROXY` 恢复生效
 - `--json` 的对象输出统一带 `v: 1`，数组不带（数组本身即 v1）
+- 补上 `mirror update` / `view game` / `--version --json` 三处漏掉的 `v: 1`
 - 错误信封加 `retryable`，`context` 恒存在
 - `folder list` 的实例数改为配置与磁盘的并集（`instanceCount`）
 - 实例 JSON 加 `java{required,resolved}` 与 `lastPlayed`；`version info` 的 `java.resolved` 与启动用同一条选取规则
@@ -13,6 +15,7 @@
 - `java remove` 与 `folder remove` 只改配置，不删磁盘文件
 - `auth login --type microsoft --json` 的 stdout 改为 NDJSON：device / account / error 三类事件，失败时 error 是最后一行
 - `view loader <名字> --games` 去掉重复的 `games` 键
+- `--home` 时日志落点也跟随，不再写默认配置目录
 - 注释与用户可见文案的语气清理
 
 ## 1.8.0
