@@ -47,7 +47,7 @@ bloomery [全局选项] <命令> [命令选项] [参数]
 
 启动游戏。省略版本时按序取：当前选中 → 上次启动 → 第一个可用。
 
-启动前先查启动文件，缺的走 install 那四类通道补回来，补不齐不起进程。检查覆盖客户端 jar、库、natives；资源对象只在本地已有该版本的资源索引时才算缺件（缺几个补几个）。
+启动前先查启动文件，缺的走 install 那四类通道补回来，补不齐不起进程。检查覆盖客户端 jar、库、natives 与资源：索引在本地时按索引数缺几个对象，索引整份不在而版本 json 给了地址时连索引一起下，待下载大小取版本 json 的 `totalSize` 与索引自身。
 
 ```bash
 bloomery launch                            # 启动默认实例，缺文件先补
@@ -58,7 +58,7 @@ bloomery launch --account cibocaz          # 指定账户
 bloomery launch --folder mc                # 指定文件夹
 ```
 
-启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
+启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。索引整份不在时 `--dry-run` 给一行「资源 索引缺失，需下载索引与全部资源约 X MB」，数字来自版本 json。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
 
 ### install
 
@@ -287,11 +287,13 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 `launch` 的 `missing` 是这次检查的结果：
 
 ```
-clientJar:boolean  libraries:number  natives:number  assets:{total:number,present:number,missing:number}|null
-total:number  files:string[]
+clientJar:boolean  libraries:number  natives:number  total:number  files:string[]
+assets:{index:string,present:number,total:number|null,missing:number|null,size:number|null}|null
 ```
 
-`assets` 为 `null` 表示本地没有该版本的资源索引，资源不计入 `total`。`files` 是缺件路径，客户端 jar、库、natives 依次在前，最多 8 条。
+`assets` 是资源那类缺件：`index` 是索引 id，`present` 是本地已有的对象数，`total` 是索引里的对象数，`size` 是要下的字节数（版本 json 的 `totalSize` 加索引 json 自身）。索引整份不在本地时 `total` 与 `missing` 为 `null`（条数要等索引取回），`size` 只由版本 json 给出；这时的 `missing.total` 按一项（索引本身）计数。版本 json 里没有索引 id、或索引没有下载地址时 `assets` 为 `null`，这部分不补、不计入 `missing.total`。`files` 是缺件路径，客户端 jar、库、natives 依次在前，最多 8 条。
+
+`launch` 顶层的 `assets` 是规划时的统计，形状与 `missing.assets` 相同（索引不在本地时为 `null`）。
 
 `launch` 的 `repair` 为 `null` 表示这次没补（没有缺件，或 `--dry-run`）；补过时给 `clientJar` `libraries` `natives` `assets` 四类的下载报告（形状同 `install` 的对应字段，`downloaded` 是新下的个数，`skipped` 是已有的个数）、`timing` 与 `warnings[]`。
 

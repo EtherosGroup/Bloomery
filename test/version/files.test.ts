@@ -31,13 +31,13 @@ const NATIVE = `d.e:f:1.0:${CLASSIFIER}`;
 const HASH_A = "a".repeat(40);
 const HASH_B = "b".repeat(40);
 
-function versionJson(): unknown {
+function versionJson(assetIndex: Record<string, unknown> = { id: "32", url: null }): unknown {
     return {
         id: "t",
         type: "release",
         mainClass: "com.example.Main",
         assets: "32",
-        assetIndex: { id: "32", url: null },
+        assetIndex,
         downloads: {
             client: { sha1: "", size: 0, url: "https://example.com/client.jar" },
         },
@@ -92,14 +92,16 @@ interface Fixture {
 }
 
 // 齐的实例：客户端 jar、一个库、一个 natives jar 都在
-async function setup(): Promise<Fixture> {
+async function setup(
+    assetIndex: Record<string, unknown> = { id: "32", url: null },
+): Promise<Fixture> {
     const root = await mkdtemp(join(tmpdir(), "bloomery-files-"));
     const directory = join(root, "versions", "t");
     await mkdir(directory, { recursive: true });
     const jsonPath = join(directory, "t.json");
-    await writeFile(jsonPath, JSON.stringify(versionJson()));
+    await writeFile(jsonPath, JSON.stringify(versionJson(assetIndex)));
 
-    const descriptor = parseDescriptor(versionJson(), jsonPath, "t", jsonPath);
+    const descriptor = parseDescriptor(versionJson(assetIndex), jsonPath, "t", jsonPath);
     assert.ok(descriptor !== undefined);
     const instance: InstanceFiles = {
         id: "t",
@@ -166,14 +168,67 @@ test("缺客户端 jar、库、natives 都算缺件", async () => {
     }
 });
 
-test("资源索引不在本地就不数资源对象", async () => {
+test("版本 json 没给索引地址时不报资源缺件", async () => {
     const fixture = await setup();
     try {
         const missing = await missingLaunchFiles({
             folderPath: fixture.root,
             instance: fixture.instance,
         });
+        // 补不了的那类不报，报出来只会拦住启动
         assert.equal(missing.assets, null);
+        assert.equal(missing.total, 0);
+    } finally {
+        await close(fixture);
+    }
+});
+
+test("索引整份不在时按版本 json 报待下载大小", async () => {
+    const fixture = await setup({
+        id: "32",
+        url: "https://example.com/32.json",
+        size: 1000,
+        totalSize: 4000,
+    });
+    try {
+        const missing = await missingLaunchFiles({
+            folderPath: fixture.root,
+            instance: fixture.instance,
+        });
+
+        // 条数要等索引取回，大小是 totalSize 加索引自身
+        assert.deepEqual(missing.assets, {
+            index: "32",
+            total: null,
+            present: 0,
+            missing: null,
+            size: 5000,
+        });
+        // 总数只算索引本身一项
+        assert.equal(missing.total, 1);
+        assert.equal(firstMissing(missing), "资源索引 32");
+    } finally {
+        await close(fixture);
+    }
+});
+
+test("索引文件在但读不出来时不报资源缺件", async () => {
+    const fixture = await setup({
+        id: "32",
+        url: "https://example.com/32.json",
+        size: 1000,
+        totalSize: 4000,
+    });
+    try {
+        // 文件在时补不动（下载会跳过已存在的落点），报成缺件只会拦住启动
+        await write(join(fixture.root, "assets", "indexes", "32.json"), "不是 json");
+
+        const missing = await missingLaunchFiles({
+            folderPath: fixture.root,
+            instance: fixture.instance,
+        });
+        assert.equal(missing.assets, null);
+        assert.equal(missing.total, 0);
     } finally {
         await close(fixture);
     }
@@ -189,7 +244,13 @@ test("索引在本地时把缺的资源对象算进缺件", async () => {
             folderPath: fixture.root,
             instance: fixture.instance,
         });
-        assert.deepEqual(missing.assets, { total: 1, present: 1, missing: 0 });
+        assert.deepEqual(missing.assets, {
+            index: "32",
+            total: 1,
+            present: 1,
+            missing: 0,
+            size: 0,
+        });
         assert.equal(missing.total, 0);
 
         await writeIndex(fixture.root, [HASH_A, HASH_B]);
@@ -197,7 +258,14 @@ test("索引在本地时把缺的资源对象算进缺件", async () => {
             folderPath: fixture.root,
             instance: fixture.instance,
         });
-        assert.deepEqual(missing.assets, { total: 2, present: 1, missing: 1 });
+        // 缺的那个 size 是 3
+        assert.deepEqual(missing.assets, {
+            index: "32",
+            total: 2,
+            present: 1,
+            missing: 1,
+            size: 3,
+        });
         assert.equal(missing.total, 1);
         assert.equal(firstMissing(missing), "1 个资源对象");
     } finally {

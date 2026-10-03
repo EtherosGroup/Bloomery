@@ -2,7 +2,8 @@
  * 启动文件的落点与缺失检测
  *
  * 客户端 jar、库、natives 齐了才谈得上启动，判据与规划启动用的是同一套
- * 资源索引不在本地说明这份实例没按带资源的布局装，那时资源不算缺件
+ * 资源索引在本地时按索引数对象；索引整份不在时按版本 json 的 totalSize 报待下载大小，条数要等索引取回
+ * 版本 json 里连索引地址都没有的资源不计入缺件：补不了的部分报出来只会拦住启动
  * @author IsCibocaz
  * @since 1.10.0
  */
@@ -10,6 +11,7 @@
 import { join } from "node:path";
 
 import {
+    assetIndexFile,
     classpathOf,
     countAssets,
     nativeJars,
@@ -19,6 +21,7 @@ import {
     type RuleContext,
 } from "../dependency/index.ts";
 import { AppError } from "../error/index.ts";
+import { pathExists } from "../infra/fs.ts";
 import type { Descriptor } from "./descriptor.ts";
 
 /** JSON 里最多列出这么多条缺件路径 */
@@ -29,9 +32,9 @@ export interface MissingFiles {
     readonly clientJar: string | null;
     readonly libraries: readonly string[];
     readonly natives: readonly string[];
-    /** 索引在本地时才有，含 total / present / missing */
+    /** 资源缺件；版本 json 没点名索引、或索引没有下载地址时为 null */
     readonly assets: AssetStat | null;
-    /** 四类缺件总数 */
+    /** 几类缺件总数；索引不在本地时条数未知，只算索引本身一项 */
     readonly total: number;
     /** 缺件路径，客户端 jar、库、natives 依次在前，最多 FILE_SAMPLE 条 */
     readonly files: readonly string[];
@@ -108,7 +111,8 @@ export function missingOf(parts: MissingParts): MissingFiles {
         libraries: parts.libraries,
         natives: parts.natives,
         assets: parts.assets,
-        total: files.length + (parts.assets?.missing ?? 0),
+        // 索引不在本地时条数要等索引取回，这里只算索引本身一项
+        total: files.length + (parts.assets === null ? 0 : (parts.assets.missing ?? 1)),
         files: files.slice(0, FILE_SAMPLE),
     };
 }
@@ -132,8 +136,12 @@ export async function missingLaunchFiles(input: MissingInput): Promise<MissingFi
         librariesRoot,
         clientJar,
     });
-    const index = await readAssetIndex(assetsRoot, assetIndexIdOf(descriptor));
-    const assets = index === null ? null : await countAssets(assetsRoot, index);
+    const indexId = assetIndexIdOf(descriptor);
+    const index = await readAssetIndex(assetsRoot, indexId);
+    const assets =
+        index !== null
+            ? await countAssets(assetsRoot, index)
+            : await missingIndexAssets(assetsRoot, descriptor, indexId);
 
     return missingOf({
         clientJar: { path: clientJar, present: classpath.clientJarPresent },
@@ -141,6 +149,30 @@ export async function missingLaunchFiles(input: MissingInput): Promise<MissingFi
         natives: natives.missing,
         assets,
     });
+}
+
+// 索引整份不在本地：条数要等索引取回，大小取版本 json 的 totalSize 与索引自身
+// 文件在但读不出来时不报：下载会跳过已存在的落点，补不动
+async function missingIndexAssets(
+    assetsRoot: string,
+    descriptor: Descriptor,
+    id: string,
+): Promise<AssetStat | null> {
+    const declared = descriptor.assetIndex;
+    if (declared === null || declared.url === null || declared.url === "") {
+        return null;
+    }
+    if (await pathExists(assetIndexFile(assetsRoot, id))) {
+        return null;
+    }
+    const totalSize = declared.totalSize;
+    return {
+        index: id,
+        total: null,
+        present: 0,
+        missing: null,
+        size: totalSize === null ? null : totalSize + (declared.size ?? 0),
+    };
 }
 
 /** 缺件的第一处，用于定位 */
@@ -156,8 +188,14 @@ export function firstMissing(missing: MissingFiles): string | null {
     if (native !== undefined) {
         return `natives ${native}`;
     }
-    if (missing.assets !== null && missing.assets.missing > 0) {
-        return `${missing.assets.missing} 个资源对象`;
+    const assets = missing.assets;
+    if (assets !== null) {
+        if (assets.missing === null) {
+            return `资源索引 ${assets.index}`;
+        }
+        if (assets.missing > 0) {
+            return `${assets.missing} 个资源对象`;
+        }
     }
     return null;
 }

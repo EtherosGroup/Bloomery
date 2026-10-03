@@ -6,7 +6,8 @@
 - 新增 `launch <实例> --repair`：只做检查与补全就退出，不启动游戏，也不更新启动统计
 - `launch --dry-run` 把缺件数写进结果，人类可读输出给一行提示
 - `launch` 的 JSON 加 `missing` 与 `repair`，补过的四类各自给下载报告
-- 资源对象只在本地已有该版本的资源索引时才算缺件
+- 资源索引整份不在本地时也算缺件：`--repair` 与普通启动连索引一起下，`--dry-run` 按版本 json 的 `totalSize` 报出待下载大小
+- `launch` 的 `missing.assets` 加 `index` 与 `size`：索引不在本地时 `total` 与 `missing` 为 `null`，`size` 由版本 json 给出
 - 补全失败按类型报错：网络类 `DependencyMissing` 可重试，sha1 校验不过 `InstallBroken` 不可重试
 - 下载四类通道与客户端 jar 落点各收到一处，install、启动规划与补全共用
 - `auth logout` 不给 `--type` 时按游戏名在全部账户里找，同名多条报用法错误并列出类型；原来按 offline 找，删微软账户会误报 `AccountNotFound`

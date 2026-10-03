@@ -46,7 +46,7 @@ export interface LaunchPlan {
     readonly account: LaunchAccount;
     readonly classpath: Classpath;
     readonly natives: { readonly jars: number; readonly files: number };
-    readonly assets: (AssetStat & { readonly index: string }) | null;
+    readonly assets: AssetStat | null;
     readonly options: LaunchOptions;
     readonly versionName: string;
     /** 缺件提示，不影响预览 */
@@ -173,8 +173,9 @@ export async function planLaunch(
     if (index === null) {
         log.warn("%s 里没有资源索引 %s，游戏可能缺材质与声音", assetsRoot, assetIndex);
     }
+    // 索引名用请求的那个：assetIndex.id 与 assets 字段可以不同，启动参数认的是前者
     const assets =
-        index === null ? null : { index: assetIndex, ...(await countAssets(assetsRoot, index)) };
+        index === null ? null : { ...(await countAssets(assetsRoot, index)), index: assetIndex };
 
     const context: ArgumentContext = {
         versionName: descriptor.id,

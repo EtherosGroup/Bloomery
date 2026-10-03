@@ -257,6 +257,24 @@ test("资源对象缺了也补", async () => {
     }
 });
 
+test("资源索引整份不在时连索引一起补", async () => {
+    const fixture = await setup();
+    try {
+        await install(fixture);
+        const descriptor = await readDescriptorOf(fixture);
+        await rm(join(fixture.root, "assets"), { recursive: true, force: true });
+
+        const report = await repairVersion(repairInput(fixture, descriptor, true));
+
+        assert.equal(report.assets?.index.downloaded, 1);
+        assert.equal(report.assets?.objects.downloaded, 1);
+        assert.equal(await pathExists(join(fixture.root, "assets", "indexes", "t.json")), true);
+        assert.equal(await readFile(join(fixture.root, ASSET), "utf8"), "asset-bytes");
+    } finally {
+        await close(fixture);
+    }
+});
+
 test("库下不下来时报 DependencyMissing，可重试", async () => {
     const fixture = await setup();
     try {

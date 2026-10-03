@@ -28,9 +28,16 @@ export interface AssetIndex {
 }
 
 export interface AssetStat {
-    readonly total: number;
+    /** 索引 id */
+    readonly index: string;
+    /** 索引里的对象数；索引不在本地时为 null */
+    readonly total: number | null;
+    /** 本地已有的对象数 */
     readonly present: number;
-    readonly missing: number;
+    /** 缺的对象数；索引不在本地时为 null */
+    readonly missing: number | null;
+    /** 要下的字节数，索引不在本地时含索引自身；大小未知时为 null */
+    readonly size: number | null;
 }
 
 export function assetIndexFile(assetsRoot: string, id: string): string {
@@ -75,22 +82,35 @@ export async function readAssetIndex(assetsRoot: string, id: string): Promise<As
 }
 
 // 按批并发，几万个 stat 不堆在一起
+// size 只累加缺失的那部分：同一个哈希可能挂在多个名字下，先按哈希去重
 export async function countAssets(assetsRoot: string, index: AssetIndex): Promise<AssetStat> {
-    const hashes = [...new Set(Object.values(index.objects).map((entry) => entry.hash))];
+    const objects = new Map<string, number>();
+    for (const entry of Object.values(index.objects)) {
+        objects.set(entry.hash, entry.size);
+    }
+    const hashes = [...objects.keys()];
     const batch = 128;
     let present = 0;
+    let size = 0;
 
     for (let at = 0; at < hashes.length; at += batch) {
         const slice = hashes.slice(at, at + batch);
         const found = await Promise.all(
             slice.map((hash) => pathExists(assetObjectFile(assetsRoot, hash))),
         );
-        present += found.filter(Boolean).length;
+        found.forEach((exists, offset) => {
+            if (exists) {
+                present++;
+                return;
+            }
+            size += objects.get(slice[offset] ?? "") ?? 0;
+        });
     }
 
-    const stat = { total: hashes.length, present, missing: hashes.length - present };
-    if (stat.missing > 0) {
-        log.warn("资源对象缺 %d 个，共 %d 个", stat.missing, stat.total);
+    const total = hashes.length;
+    const missing = total - present;
+    if (missing > 0) {
+        log.warn("资源对象缺 %d 个，共 %d 个", missing, total);
     }
-    return stat;
+    return { index: index.id, total, present, missing, size };
 }

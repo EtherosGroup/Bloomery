@@ -262,9 +262,7 @@ function report(
                 : `（缺 ${plan.classpath.missing.length} 个：${plan.classpath.missing[0] ?? ""}）`
         }`,
         `  natives   ${plan.natives.jars} 个 jar 解出 ${plan.natives.files} 个文件`,
-        plan.assets === null
-            ? "  资源      索引不在，材质与声音可能缺失"
-            : `  资源      ${plan.assets.index}：${plan.assets.present}/${plan.assets.total}`,
+        assetsLine(plan, missing, dryRun),
     );
     if (missing.total > 0) {
         lines.push(
@@ -388,6 +386,22 @@ function repairText(repaired: RepairReport | null): string {
 
 function laneText(report: RepairReport["libraries"]): string {
     return `新下 ${report.downloaded}，已有 ${report.skipped}，失败 ${report.failures.length}`;
+}
+
+// 规划里的资源那行：索引在本地报条数，整份不在且版本 json 给了地址时报待下载大小
+function assetsLine(plan: LaunchPlan, missing: MissingFiles, dryRun: boolean): string {
+    if (plan.assets !== null) {
+        return `  资源      ${plan.assets.index}：${plan.assets.present}/${plan.assets.total}`;
+    }
+    if (dryRun && missing.assets !== null && missing.assets.missing === null) {
+        return `  资源      索引缺失，需下载索引与全部资源${sizeText(missing.assets.size)}`;
+    }
+    return "  资源      索引不在，材质与声音可能缺失";
+}
+
+// 大小未知时留空，不写数字
+function sizeText(bytes: number | null): string {
+    return bytes === null ? "" : `约 ${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function laneReports(repaired: RepairReport): RepairReport["libraries"][] {
