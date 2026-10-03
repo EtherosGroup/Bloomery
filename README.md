@@ -2,6 +2,11 @@
 
 Minecraft 启动器命令行。TypeScript 编写，Node ≥ 20，零运行时依赖。
 
+> [BloomeryGUI](https://github.com/EtherosGroup/BloomeryGUI) 现已推出！
+- 使用Go语言编写
+- 支持 Windows/Linux/macOS
+- 无内嵌浏览器内核
+
 ## 安装
 
 ```bash
