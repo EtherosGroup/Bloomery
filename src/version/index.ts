@@ -48,10 +48,30 @@ export {
 } from "./folder.ts";
 export { readVersion, scanVersions, type LocalVersion, type VersionScan } from "./store.ts";
 export {
+    assetIndexIdOf,
+    clientJarOf,
+    descriptorOf,
+    firstMissing,
+    missingLaunchFiles,
+    missingOf,
+    type InstanceFiles,
+    type MissingFiles,
+    type MissingInput,
+    type MissingParts,
+} from "./files.ts";
+export {
+    downloadFiles,
+    fileFailures,
     installVersion,
+    repairVersion,
+    type DownloadFilesInput,
+    type DownloadFilesReport,
+    type FailureSource,
     type InstallInput,
     type InstallProgress,
     type InstallReport,
+    type RepairInput,
+    type RepairReport,
 } from "./installer.ts";
 export {
     fetchManifest,

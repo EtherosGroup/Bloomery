@@ -23,6 +23,9 @@ import type { Source } from "./source.ts";
 
 const log = logger("download");
 
+/** sha1 不符的报错前缀，调用方按它区分网络失败与校验失败 */
+export const VERIFY_MISMATCH = "sha1 不符";
+
 export interface DownloadTask {
     readonly url: string;
     readonly target: string;
@@ -254,7 +257,7 @@ function check(task: DownloadTask, digest: string, verify: TransferOptions["veri
     if (digest === task.sha1) {
         return;
     }
-    const complaint = `sha1 不符：${task.target} 期望 ${task.sha1} 实得 ${digest}`;
+    const complaint = `${VERIFY_MISMATCH}：${task.target} 期望 ${task.sha1} 实得 ${digest}`;
     if (verify === "strict") {
         throw new Error(complaint);
     }

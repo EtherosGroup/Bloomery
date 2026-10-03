@@ -27,6 +27,8 @@ export interface LaunchCommand {
     readonly folder?: string;
     /** 只打印启动命令，不真的起进程 */
     readonly dryRun?: boolean;
+    /** 只做检查与补全，不启动游戏 */
+    readonly repair?: boolean;
 }
 
 export interface InstallCommand {

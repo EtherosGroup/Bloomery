@@ -44,10 +44,11 @@ export const GLOBAL_OPTIONS: OptionDecls = {
 export const COMMANDS: CommandTable = {
     launch: {
         summary: "启动游戏",
-        usage: "launch [version] [--account <name>] [--folder <id>] [--dry-run]",
+        usage: "launch [version] [--account <name>] [--folder <id>] [--repair] [--dry-run]",
         options: {
             account: { type: "string", value: "<name>", summary: "使用指定账户" },
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
+            repair: { type: "boolean", summary: "补全缺失文件后退出，不启动游戏" },
             "dry-run": { type: "boolean", summary: "只打印启动命令，不真的启动" },
         },
         positionals: { names: ["version"], required: 0 },
@@ -57,6 +58,7 @@ export const COMMANDS: CommandTable = {
             account: optionalString(values, "account"),
             folder: optionalString(values, "folder"),
             dryRun: values["dry-run"] === true,
+            repair: values["repair"] === true,
         }),
         run: runLaunch,
     },

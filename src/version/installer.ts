@@ -42,6 +42,7 @@ import {
     type DownloadTask,
     type Progress,
     type TransferOptions,
+    VERIFY_MISMATCH,
 } from "../infra/download.ts";
 import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
@@ -128,11 +129,12 @@ interface BodyResult {
     readonly assets: InstallReport["assets"];
 }
 
-export async function installVersion(input: InstallInput): Promise<InstallReport> {
-    const warnings: string[] = [];
-    const installStartedAt = Date.now();
-    const loader = input.loader ?? null;
-    const options: TransferOptions = {
+// 传输参数由设置里的网络与下载两项合成，install 与 repair 共用
+function transferOptionsOf(input: {
+    readonly network: Network;
+    readonly download: DownloadSetting;
+}): TransferOptions {
+    return {
         timeoutMs: input.network.timeoutMs,
         retries: input.network.retries,
         proxy: input.network.proxy ?? null,
@@ -141,6 +143,13 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         concurrency: input.network.concurrency,
         sources: sourcesOf(input.download),
     };
+}
+
+export async function installVersion(input: InstallInput): Promise<InstallReport> {
+    const warnings: string[] = [];
+    const installStartedAt = Date.now();
+    const loader = input.loader ?? null;
+    const options = transferOptionsOf(input);
 
     // 加载器版本要先解出来：目录名里带的是具体版本号，不是 latest
     // forge 与 neoforge 没有 meta，版本号要么用户给、要么从清单挑最新的正式版
@@ -363,24 +372,78 @@ async function installBody(
     options: TransferOptions,
     warnings: string[],
 ): Promise<BodyResult> {
-    const versionDir = dirname(jsonPath);
     const startedAt = Date.now();
-    let downloadMs = 0;
+    const files = await downloadFiles({
+        folderPath: input.folderPath,
+        versionDirectory: dirname(jsonPath),
+        clientJar: join(dirname(jsonPath), `${name}.jar`),
+        descriptor,
+        assets: input.assets !== false,
+        context: platformContext(),
+        options,
+        warnings,
+        onProgress: input.onProgress,
+    });
+
+    return {
+        clientJar: descriptor.downloads["client"] !== undefined,
+        libraries: files.libraries,
+        natives: files.natives,
+        assets: files.assets,
+        timing: {
+            downloadMs: files.downloadMs,
+            finishMs: Date.now() - startedAt - files.downloadMs,
+        },
+    };
+}
+
+export interface DownloadFilesInput {
+    readonly folderPath: string;
+    /** 版本目录，natives 解到这里 */
+    readonly versionDirectory: string;
+    /** 客户端 jar 落点；null 表示这份版本不带客户端 jar */
+    readonly clientJar: string | null;
+    readonly descriptor: Descriptor;
+    /** false 时跳过资源对象 */
+    readonly assets: boolean;
+    /** false 时只下 natives jar，不解压；启动前的准备自己会解 */
+    readonly extractNatives?: boolean | undefined;
+    readonly context: RuleContext;
+    readonly options: TransferOptions;
+    readonly warnings: string[];
+    readonly onProgress?: InstallProgress | undefined;
+}
+
+export interface DownloadFilesReport {
+    readonly clientJar: DownloadReport;
+    readonly libraries: DownloadReport;
+    readonly natives: {
+        readonly jars: number;
+        readonly files: number;
+        readonly report: DownloadReport;
+    };
+    readonly assets: { readonly index: DownloadReport; readonly objects: DownloadReport } | null;
+    /** 四类下载用的时间 */
+    readonly downloadMs: number;
+}
+
+// 四类通道的唯一下载实现：install 与 repair 都走这里
+export async function downloadFiles(input: DownloadFilesInput): Promise<DownloadFilesReport> {
     const librariesRoot = join(input.folderPath, "libraries");
     const assetsRoot = join(input.folderPath, "assets");
-    const context = platformContext();
 
     // 资源索引是唯一的硬前置：对象清单要先拿到，索引本身很小
-    const assetPlan =
-        input.assets === false
-            ? null
-            : await prepareAssets(descriptor, assetsRoot, options, warnings);
+    const assetPlan = input.assets
+        ? await prepareAssets(input.descriptor, assetsRoot, input.options, input.warnings)
+        : null;
 
-    const hasClientEntry = descriptor.downloads["client"] !== undefined;
-    const client = await clientJarTask(descriptor, join(versionDir, `${name}.jar`), warnings);
+    const client =
+        input.clientJar === null
+            ? null
+            : await clientJarTask(input.descriptor, input.clientJar, input.warnings);
     const { libraries: libraryTasks, natives: nativeTasks } = splitTasks(
-        descriptor,
-        context,
+        input.descriptor,
+        input.context,
         librariesRoot,
     );
 
@@ -397,7 +460,7 @@ async function installBody(
     const budget = new Map(active.map(([label]) => [label, 1]));
     const largest = [...active].sort((left, right) => right[1].length - left[1].length)[0];
     if (largest !== undefined) {
-        budget.set(largest[0], Math.max(1, options.concurrency - (active.length - 1)));
+        budget.set(largest[0], Math.max(1, input.options.concurrency - (active.length - 1)));
     }
     log.debug("并发分配 %s", [...budget].map(([label, count]) => `${label}=${count}`).join(" "));
 
@@ -406,7 +469,7 @@ async function installBody(
             ? Promise.resolve(EMPTY_REPORT)
             : downloadAll(
                   tasks,
-                  { ...options, concurrency: budget.get(label) ?? 1 },
+                  { ...input.options, concurrency: budget.get(label) ?? 1 },
                   stage(input.onProgress, label),
               );
 
@@ -417,7 +480,7 @@ async function installBody(
         lane("natives", nativeTasks),
         lane("资源", assetPlan?.tasks ?? []),
     ]);
-    downloadMs = Date.now() - downloadStartedAt;
+    const downloadMs = Date.now() - downloadStartedAt;
     log.info("四类下载用了 %d ms", downloadMs);
 
     // 客户端 jar 缺了整个版本都起不来，单独拦下来
@@ -428,11 +491,14 @@ async function installBody(
     }
 
     const selection = await nativeJars({
-        libraries: descriptor.libraries,
-        context,
+        libraries: input.descriptor.libraries,
+        context: input.context,
         librariesRoot,
     });
-    const files = await extractNatives(selection.jars, join(versionDir, "natives"));
+    const files =
+        input.extractNatives === false
+            ? 0
+            : await extractNatives(selection.jars, join(input.versionDirectory, "natives"));
 
     if (assetPlan !== null) {
         if (assetPlan.parsed.virtual) {
@@ -440,17 +506,111 @@ async function installBody(
             log.info("索引 %s 是 virtual 的，另铺了 %d 个对象", assetPlan.id, linked);
         }
         if (assetPlan.parsed.mapToResources) {
-            warnings.push(`索引 ${assetPlan.id} 要 map_to_resources，这一版还没处理`);
+            input.warnings.push(`索引 ${assetPlan.id} 要 map_to_resources，这一版还没处理`);
         }
     }
 
     return {
-        clientJar: hasClientEntry,
+        clientJar: clientReport,
         libraries,
         natives: { jars: selection.jars.length, files, report: nativeReport },
         assets: assetPlan === null ? null : { index: assetPlan.index, objects: assetObjects },
-        timing: { downloadMs, finishMs: Date.now() - downloadStartedAt - downloadMs },
+        downloadMs,
     };
+}
+
+export interface RepairInput {
+    readonly folderPath: string;
+    /** 实例名，只进日志与结果 */
+    readonly name: string;
+    /** 版本目录，natives 解到这里 */
+    readonly versionDirectory: string;
+    readonly descriptor: Descriptor;
+    /** 客户端 jar 落点；null 表示这份版本不带客户端 jar */
+    readonly clientJar: string | null;
+    /** 资源索引在本地时才补资源对象 */
+    readonly assets: boolean;
+    readonly context?: RuleContext | undefined;
+    readonly network: Network;
+    readonly download: DownloadSetting;
+    readonly onProgress?: InstallProgress | undefined;
+}
+
+export interface RepairReport {
+    readonly name: string;
+    readonly clientJar: DownloadReport;
+    readonly libraries: DownloadReport;
+    readonly natives: {
+        readonly jars: number;
+        readonly files: number;
+        readonly report: DownloadReport;
+    };
+    readonly assets: { readonly index: DownloadReport; readonly objects: DownloadReport } | null;
+    readonly timing: { readonly downloadMs: number; readonly finishMs: number };
+    readonly warnings: readonly string[];
+}
+
+// 补一个已有实例缺的文件：走 install 那四类通道，已存在的文件跳过
+export async function repairVersion(input: RepairInput): Promise<RepairReport> {
+    const warnings: string[] = [];
+    const startedAt = Date.now();
+    const files = await downloadFiles({
+        folderPath: input.folderPath,
+        versionDirectory: input.versionDirectory,
+        clientJar: input.clientJar,
+        descriptor: input.descriptor,
+        assets: input.assets,
+        extractNatives: false,
+        context: input.context ?? platformContext(),
+        options: transferOptionsOf(input),
+        warnings,
+        onProgress: input.onProgress,
+    });
+
+    // 补不齐就在这里停下：网络类可重试，校验类不可重试
+    const failures = fileFailures(files);
+    const first = failures[0];
+    if (first !== undefined) {
+        const verify = failures.every((item) => item.error.startsWith(VERIFY_MISMATCH));
+        throw new AppError("install", verify ? "InstallBroken" : "DependencyMissing", {
+            context: {
+                detail: verify
+                    ? `文件校验不过：${first.target}`
+                    : `${failures.length} 个文件没下下来`,
+                first: `${first.target}：${first.error}`,
+            },
+        });
+    }
+
+    log.info("补全 %s", input.name);
+    return {
+        name: input.name,
+        clientJar: files.clientJar,
+        libraries: files.libraries,
+        natives: files.natives,
+        assets: files.assets,
+        timing: {
+            downloadMs: files.downloadMs,
+            finishMs: Date.now() - startedAt - files.downloadMs,
+        },
+        warnings,
+    };
+}
+
+export interface FailureSource {
+    readonly libraries: DownloadReport;
+    readonly natives: { readonly report: DownloadReport };
+    readonly assets: { readonly index: DownloadReport; readonly objects: DownloadReport } | null;
+}
+
+// 四类里没下下来的项，带落点与原因
+export function fileFailures(source: FailureSource): DownloadFailure[] {
+    const reports = [
+        source.libraries,
+        source.natives.report,
+        ...(source.assets === null ? [] : [source.assets.index, source.assets.objects]),
+    ];
+    return reports.flatMap((report) => [...report.failures]);
 }
 
 // 加载器版本靠 inheritsFrom 指向基础版本，基础版本不在就先按原版装一份

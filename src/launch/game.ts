@@ -26,7 +26,7 @@ import {
 import { AppError } from "../error/index.ts";
 import { packageVersion } from "../infra/package.ts";
 import { logger } from "../output/index.ts";
-import type { InstanceView } from "../version/index.ts";
+import { clientJarOf, type InstanceView } from "../version/index.ts";
 import { accountFor, type LaunchAccount } from "./account.ts";
 import { buildGameArguments, buildJvmArguments, type ArgumentContext } from "./arguments.ts";
 import { resolveJavaPick, type JavaInfo } from "./java.ts";
@@ -102,11 +102,7 @@ export async function planLaunch(
     const assetsRoot = join(input.folder.path, "assets");
 
     // 客户端 jar：继承型用基础版本那份，自带的就在自己目录里
-    // 不能用 descriptor.inheritsFrom 判断：descriptor 是合并过的，那里永远是 null
-    const jarId =
-        descriptor.jar ??
-        (input.instance.chain.length > 1 ? input.instance.target : input.instance.id);
-    const clientJar = join(input.folder.path, "versions", jarId, `${jarId}.jar`);
+    const clientJar = clientJarOf(input.folder.path, descriptor, input.instance);
 
     const rules = platformContext({
         is_demo_user: false,

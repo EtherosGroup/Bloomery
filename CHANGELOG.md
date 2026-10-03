@@ -1,5 +1,15 @@
 # 更新记录
 
+## 1.10.0
+
+- `launch` 启动前自动补全缺失文件：客户端 jar、库、natives 走 install 那四类通道与进度事件，补不齐不起进程
+- 新增 `launch <实例> --repair`：只做检查与补全就退出，不启动游戏，也不更新启动统计
+- `launch --dry-run` 把缺件数写进结果，人类可读输出给一行提示
+- `launch` 的 JSON 加 `missing` 与 `repair`，补过的四类各自给下载报告
+- 资源对象只在本地已有该版本的资源索引时才算缺件
+- 补全失败按类型报错：网络类 `DependencyMissing` 可重试，sha1 校验不过 `InstallBroken` 不可重试
+- 下载四类通道与客户端 jar 落点各收到一处，install、启动规划与补全共用
+
 ## 1.9.0
 
 - https 请求改用会调 `createConnection` 的 `https.Agent` 子类，`network.proxy` 与 `HTTPS_PROXY` 恢复生效

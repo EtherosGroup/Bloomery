@@ -47,15 +47,18 @@ bloomery [全局选项] <命令> [命令选项] [参数]
 
 启动游戏。省略版本时按序取：当前选中 → 上次启动 → 第一个可用。
 
+启动前先查启动文件，缺的走 install 那四类通道补回来，补不齐不起进程。检查覆盖客户端 jar、库、natives；资源对象只在本地已有该版本的资源索引时才算缺件（缺几个补几个）。
+
 ```bash
-bloomery launch                            # 启动默认实例
+bloomery launch                            # 启动默认实例，缺文件先补
 bloomery launch 1.20.6-fabric-0.19.5       # 指定实例 id
-bloomery launch --dry-run                  # 只打印启动计划
+bloomery launch --repair                   # 只检查与补全，不启动
+bloomery launch --dry-run                  # 只打印启动计划，缺件数写在计划里
 bloomery launch --account cibocaz          # 指定账户
 bloomery launch --folder mc                # 指定文件夹
 ```
 
-启动当前选中实例时，首行给出提示。
+启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
 
 ### install
 
@@ -245,8 +248,9 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `version list`                     | 对象   | 有   | 同 `folder scan` 的元素（FolderView）                                                                                                                                                    |
 | `version info <id>`                | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                 |
 | `version select <id>`              | 对象   | 有   | `selected` `folder`                                                                                                                                                                      |
-| `launch [id]`                      | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance`                                                                     |
-| `launch [id] --dry-run`            | 对象   | 有   | 同上，`--dry-run` 不启动进程                                                                                                                                                             |
+| `launch [id]`                      | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `missing` `repair`                                                  |
+| `launch [id] --dry-run`            | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair` 恒为 `null`                                                                                                                                       |
+| `launch [id] --repair`             | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                   |
 | `install <version>`                | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                           |
 | `mod search <关键词>`              | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                  |
 | `mod install <关键词>`             | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                            |
@@ -274,8 +278,20 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 同一命令不同模式形状不同，读数前先认清是哪一种：
 
 - `folder add <path>` 给摘要对象 `{id,path,versionCount}`，`folder add <path> --dry-run` 给 FolderView（含 `instances[]`）
-- `launch [id]` 与 `launch [id] --dry-run` 形状相同，区别只在有没有真的启动
+- `launch [id]` 与 `launch [id] --dry-run` 形状相同，区别只在有没有真的启动，以及 `repair` 有没有值
+- `launch [id] --repair` 只给 `version` `directory` `missing` `repair` 四项，不带启动计划
 - `java scan` 会把清单写回 `setting.json`，`java list` 只读
+
+`launch` 的 `missing` 是这次检查的结果：
+
+```
+clientJar:boolean  libraries:number  natives:number  assets:{total:number,present:number,missing:number}|null
+total:number  files:string[]
+```
+
+`assets` 为 `null` 表示本地没有该版本的资源索引，资源不计入 `total`。`files` 是缺件路径，客户端 jar、库、natives 依次在前，最多 8 条。
+
+`launch` 的 `repair` 为 `null` 表示这次没补（没有缺件，或 `--dry-run`）；补过时给 `clientJar` `libraries` `natives` `assets` 四类的下载报告（形状同 `install` 的对应字段，`downloaded` 是新下的个数，`skipped` 是已有的个数）、`timing` 与 `warnings[]`。
 
 实例对象出现在 `folder scan` 元素的 `instances[]`、`version list` 的 `instances[]` 与 `version info` 里：
 
@@ -360,7 +376,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 { "v": 1, "stage": "库", "done": 4617, "total": 59288230, "bytes": true }
 ```
 
-- `stage`：阶段名，安装时是 `客户端 jar` / `库` / `natives` / `资源` 四条通道
+- `stage`：阶段名，`install` 与 `launch` 的补全都是 `客户端 jar` / `库` / `natives` / `资源` 四条通道
 - `done` / `total`：`bytes` 为 `true` 时是字节数，否则是个数
 - `bytes`：布尔，说明前两个字段的单位
 
@@ -450,7 +466,7 @@ bloomery auth login --type microsoft
 ```bash
 npm run start -- <参数>     # 直接跑源码，Node 原生剥离类型
 npm run check               # tsc --noEmit
-npm test                    # node --test，210 项
+npm test                    # node --test，222 项
 npm run fmt                 # oxfmt 格式化
 npm run build               # 产物到 dist/
 ```

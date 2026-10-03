@@ -30,3 +30,14 @@ test("--version 认 --json", () => {
 test("没给命令也没给旗标就是帮助", () => {
     assert.equal(parse([], CLI_SPEC).kind, "help");
 });
+
+test("launch 的 --repair 与 --dry-run 各自落位", () => {
+    const parsed = parse(["launch", "26.2", "--repair", "--dry-run"], CLI_SPEC);
+    assert.equal(parsed.kind, "command");
+    if (parsed.kind !== "command" || parsed.command.name !== "launch") {
+        assert.fail("应该是 launch 命令");
+    }
+    assert.equal(parsed.command.version, "26.2");
+    assert.equal(parsed.command.repair, true);
+    assert.equal(parsed.command.dryRun, true);
+});

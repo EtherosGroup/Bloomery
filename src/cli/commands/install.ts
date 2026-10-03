@@ -12,6 +12,7 @@ import { AppError } from "../../error/index.ts";
 import { logger, print, progressReporter, versioned } from "../../output/index.ts";
 import { officialJavaOf, requiredJavaIn } from "../java-choice.ts";
 import {
+    fileFailures,
     installVersion,
     parseLoaderSpec,
     pickFolder,
@@ -77,12 +78,13 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         print(render(report));
     }
 
-    const failures = collectFailures(report);
+    const failures = fileFailures(report);
     if (failures.length > 0) {
+        const first = failures[0];
         throw new AppError("cli", "DependencyMissing", {
             context: {
                 detail: `${failures.length} 个文件没下下来`,
-                first: failures[0] ?? "",
+                first: first === undefined ? "" : `${first.target}：${first.error}`,
             },
         });
     }
@@ -137,18 +139,4 @@ function describe(name: string, report: InstallReport["libraries"]): string {
 function counts(report: InstallReport["libraries"]): string {
     const megabytes = (report.bytes / 1024 / 1024).toFixed(1);
     return `新下 ${report.downloaded}，已有 ${report.skipped}，失败 ${report.failures.length}，${megabytes} MB`;
-}
-
-function collectFailures(report: InstallReport): string[] {
-    const failures: string[] = [];
-    for (const target of [
-        report.libraries,
-        report.natives.report,
-        ...(report.assets === null ? [] : [report.assets.index, report.assets.objects]),
-    ]) {
-        for (const failure of target.failures) {
-            failures.push(`${failure.target}：${failure.error}`);
-        }
-    }
-    return failures;
 }
