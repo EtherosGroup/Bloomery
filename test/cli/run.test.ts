@@ -6,7 +6,15 @@
 
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    symlinkSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -160,6 +168,47 @@ test("--home 之后日志落在该目录", () => {
 
         const log = readFileSync(join(home, ".config", "bloomery", "logs", "latest.log"), "utf8");
         assert.match(log, /\[cli\] 命令/);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("落点写不下去时 stderr 只有一行，不带栈", () => {
+    // logs 处放一个普通文件，建目录必然失败；比 chmod 稳，root 也挡得住
+    const home = mkdtempSync(join(tmpdir(), "bloomery-sink-"));
+    mkdirSync(join(home, ".config", "bloomery"), { recursive: true });
+    writeFileSync(join(home, ".config", "bloomery", "logs"), "");
+    try {
+        const outcome = cli(["--home", home, "--json", "folder", "list"]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        assert.deepEqual(JSON.parse(outcome.stdout), []);
+
+        const lines = outcome.stderr.split("\n").filter((line) => line !== "");
+        assert.equal(lines.length, 1, outcome.stderr);
+        // 一行里留住原因与落点路径
+        assert.match(lines[0] ?? "", /落点写入失败/);
+        assert.match(lines[0] ?? "", /logs'/);
+        assert.doesNotMatch(outcome.stderr, /^\s+at /m);
+        assert.doesNotMatch(outcome.stderr, /errno/);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+// /dev/full 写到饱都失败，write 类错误的消息里不带路径
+test("写满磁盘时失败原因里带落点路径", { skip: !existsSync("/dev/full") }, () => {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-full-"));
+    const logs = join(home, ".config", "bloomery", "logs");
+    mkdirSync(logs, { recursive: true });
+    symlinkSync("/dev/full", join(logs, "latest.log"));
+    try {
+        const outcome = cli(["--home", home, "--json", "folder", "list"]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+
+        const lines = outcome.stderr.split("\n").filter((line) => line !== "");
+        assert.equal(lines.length, 1, outcome.stderr);
+        assert.match(lines[0] ?? "", /落点写入失败 ENOSPC/);
+        assert.match(lines[0] ?? "", /latest\.log$/);
     } finally {
         rmSync(home, { recursive: true, force: true });
     }

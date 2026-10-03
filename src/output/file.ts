@@ -102,13 +102,18 @@ export function addFileSink(options: FileSinkOptions = {}): FileSink {
         if (closed) {
             return;
         }
-        const file = await openOnce();
-        const chunk = `${record.line}\n`;
-        written += Buffer.byteLength(chunk, "utf8");
-        if (written > MAX_BYTES) {
-            throw new Error(`日志超过 ${MAX_BYTES} 字节，已停止写入 ${path}`);
+        try {
+            const file = await openOnce();
+            const chunk = `${record.line}\n`;
+            written += Buffer.byteLength(chunk, "utf8");
+            if (written > MAX_BYTES) {
+                throw new Error(`日志超过 ${MAX_BYTES} 字节，已停止写入 ${path}`);
+            }
+            await file.write(chunk, undefined, "utf8");
+        } catch (error) {
+            // 路径还没定下来时退回目录
+            throw located(error, path === "" ? directory() : path);
         }
-        await file.write(chunk, undefined, "utf8");
     };
 
     const unregister = addSink(sink);
@@ -131,6 +136,12 @@ export function addFileSink(options: FileSinkOptions = {}): FileSink {
             }
         },
     };
+}
+
+// write 类系统错误只有 syscall，消息里补上落点路径
+function located(error: unknown, target: string): unknown {
+    const detail = error instanceof Error ? error.message : String(error);
+    return detail.includes(target) ? error : new Error(`${detail} ${target}`);
 }
 
 // 抢锁：写进自己的 pid；锁在但占用者已经不在，就清掉再抢一次

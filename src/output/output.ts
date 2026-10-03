@@ -152,8 +152,19 @@ function reportSinkFailure(error: unknown): void {
     sinkFailed = true;
     writeLine(
         STDERR,
-        `${formatNow(Date.now())} [${LABEL.Error}][output] 落点写入失败 ${format(error)}`,
+        `${formatNow(Date.now())} [${LABEL.Error}][output] 落点写入失败 ${reasonOf(error)}`,
     );
+}
+
+// 单行原因：Error 的 stack 首行之后全是框架栈帧
+function reasonOf(error: unknown): string {
+    if (error instanceof Error) {
+        const [first = ""] = error.message.split("\n");
+        const line = first.trim();
+        return line === "" ? error.name : line;
+    }
+    const flat = format(error).replace(/\s+/g, " ").trim();
+    return flat === "" ? "未知错误" : flat;
 }
 
 // 写不进去的 fd，后续写入丢弃
