@@ -2,6 +2,8 @@
 
 ## 1.10.0
 
+- `java install` 新增 `--provider mojang`：按 Mojang 的 Java 运行时索引挑组件（非 snapshot 优先），按该平台清单逐文件下载并校验 sha1，还原可执行位与符号链接，先校验清单自身的 sha1；Mojang 只有 jre 组件
+- `java install <主版本> --provider mojang --dry-run` 预览组件、平台、文件数与总大小
 - `launch` 启动前自动补全缺失文件：客户端 jar、库、natives 走 install 那四类通道与进度事件，补不齐不起进程
 - 新增 `launch <实例> --repair`：只做检查与补全就退出，不启动游戏，也不更新启动统计
 - `launch --dry-run` 把缺件数写进结果，人类可读输出给一行提示

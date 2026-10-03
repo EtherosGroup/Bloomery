@@ -178,9 +178,13 @@ bloomery java remove /path/to/java
 bloomery java install 21                         # 下压缩包解压并登记
 bloomery java install 21 --image jdk --arch x64 --path /opt/java
 bloomery java install 21 --dry-run               # 只查地址，不下载
+bloomery java install 21 --provider mojang       # 换 Mojang 官方运行时，按清单逐文件下载
+bloomery java install 21 --provider mojang --dry-run   # 预览组件、平台、文件数与总大小
 ```
 
 `java install <主版本>` 从 Adoptium 下压缩包就地解压，不运行安装程序；校验 sha256，装完自动登记（`--no-register` 关掉，目标已存在时 `--force` 重装）。`java remove` 只改配置，不删磁盘上的 Java 目录。
+
+`--provider mojang` 改用 Mojang 的 Java 运行时索引：按 `version.name` 的主版本挑组件（非 snapshot 优先），按该平台的逐文件清单并发下载并逐个校验 sha1，按 `executable` 还原可执行位、按 `link` 还原符号链接；清单本身也对照索引里的 sha1 校验。Mojang 只发 jre 组件，`--image jdk` 报用法错误。安装根是 `<path>/<组件名>-<版本>`。
 
 `--major` 只对 `java which` 生效，`java list` 列出清单里的全部条目。
 
@@ -274,6 +278,7 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `java remove <path>`               | 对象   | 有   | `removed`                                                                                                                                                                                |
 | `java which`                       | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                           |
 | `java install <主版本>`            | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                        |
+| `java install --provider mojang`   | 对象   | 有   | `provider` `component` `version` `platform` `url` `root` `java` `files` `bytes` `directories` `links` `registered`                                                                       |
 | 错误信封                           | 对象   | 有   | `error`                                                                                                                                                                                  |
 | `--version --json`                 | 对象   | 有   | `version`                                                                                                                                                                                |
 

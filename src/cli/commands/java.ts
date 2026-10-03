@@ -11,7 +11,8 @@ import { resolve } from "node:path";
 
 import { runtimeDirectory } from "../../launch/java.ts";
 import { loadSetting, loadState, saveSetting, updateState } from "../../config/index.ts";
-import { installJavaRuntime } from "../../java/install.ts";
+import { installJavaRuntime, type JavaInstallReport } from "../../java/install.ts";
+import { installMojangRuntime, type MojangInstallReport } from "../../java/mojang.ts";
 import type { TransferOptions } from "../../infra/download.ts";
 import { sourcesOf } from "../../infra/source.ts";
 import type { JavaEntry, JavaSource, Setting } from "../../config/types.ts";
@@ -25,7 +26,7 @@ import {
     resolveJavaExecutable,
     scanJava,
 } from "../../launch/index.ts";
-import { logger, print, renderTable, versioned } from "../../output/index.ts";
+import { logger, print, progressReporter, renderTable, versioned } from "../../output/index.ts";
 import { expandHome } from "../../platform/index.ts";
 import type { Context, JavaCommand } from "../parse.ts";
 
@@ -59,7 +60,7 @@ export async function runJava(command: JavaCommand, ctx: Context): Promise<void>
     }
 }
 
-// 下载解压 Java 运行时并登记；不跑任何安装程序
+// 下载 Java 运行时并登记；不跑任何安装程序
 async function install(command: JavaCommand, ctx: Context): Promise<void> {
     const setting = await loadSetting();
     const raw = command.target ?? (command.major === undefined ? "" : String(command.major));
@@ -70,16 +71,54 @@ async function install(command: JavaCommand, ctx: Context): Promise<void> {
         });
     }
 
+    const provider = command.provider ?? "adoptium";
     const image = command.image ?? "jre";
-    const report = await installJavaRuntime({
-        major,
-        image,
-        root: command.path ?? runtimeDirectory(setting.java),
-        arch: command.arch,
-        options: transferOf(setting),
-        dryRun: command.dryRun,
-        force: command.force,
-    });
+    if (provider === "mojang" && command.image === "jdk") {
+        throw new AppError("cli", "UsageError", {
+            context: { detail: "mojang 来源只有 jre 组件" },
+        });
+    }
+
+    const root = command.path ?? runtimeDirectory(setting.java);
+    const options = transferOf(setting);
+    const progress =
+        provider === "mojang" && command.dryRun !== true
+            ? progressReporter(ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress))
+            : undefined;
+
+    let report: JavaInstallReport | MojangInstallReport;
+    let componentLines: string[] = [];
+    try {
+        if (provider === "mojang") {
+            const mojang = await installMojangRuntime({
+                major,
+                root,
+                arch: command.arch,
+                options,
+                dryRun: command.dryRun,
+                force: command.force,
+                onProgress: progress?.update,
+            });
+            report = mojang;
+            componentLines = [
+                `  组件     ${mojang.component} ${mojang.version}`,
+                `  平台     ${mojang.platform}`,
+                `  文件     ${mojang.files} 个 / ${sizeText(mojang.bytes)}`,
+            ];
+        } else {
+            report = await installJavaRuntime({
+                major,
+                image,
+                root,
+                arch: command.arch,
+                options,
+                dryRun: command.dryRun,
+                force: command.force,
+            });
+        }
+    } finally {
+        progress?.close();
+    }
 
     let registered = false;
     if (command.dryRun !== true && command.noRegister !== true) {
@@ -99,10 +138,11 @@ async function install(command: JavaCommand, ctx: Context): Promise<void> {
     print(
         [
             `安装 java ${major} ${image}`,
-            `  来源     adoptium`,
+            `  来源     ${provider}`,
             `  地址     ${report.url}`,
             `  安装根   ${report.root}`,
             `  可执行   ${report.java}`,
+            ...componentLines,
             command.dryRun === true
                 ? "  预览     未下载"
                 : `  已登记   ${registered ? "是" : "否"}`,
@@ -292,6 +332,12 @@ function describe(entry: JavaEntry): string {
         parts.push(entry.vendor);
     }
     return parts.join(" · ");
+}
+
+function sizeText(value: number): string {
+    return value >= 1024 * 1024
+        ? `${(value / 1024 / 1024).toFixed(1)}MB`
+        : `${Math.round(value / 1024)}KB`;
 }
 
 function required(value: string | undefined, name: string): string {

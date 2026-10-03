@@ -13,6 +13,7 @@ import { parseArgs } from "node:util";
 import type { ParseArgsOptionsConfig } from "node:util";
 
 import { AppError } from "../error/index.ts";
+import type { JavaProvider } from "../java/providers.ts";
 import type { ProgressStyle } from "../output/index.ts";
 import type { LogLevel } from "../output/index.ts";
 
@@ -138,6 +139,8 @@ export interface JavaCommand {
     readonly path?: string;
     readonly image?: "jre" | "jdk";
     readonly arch?: string;
+    /** install 的来源，省略按 adoptium */
+    readonly provider?: JavaProvider;
     readonly dryRun?: boolean;
     readonly noRegister?: boolean;
     readonly force?: boolean;

@@ -307,12 +307,17 @@ export const COMMANDS: CommandTable = {
 
     java: {
         summary: "Java 运行时管理",
-        usage: "java <list|scan|add|remove|which|install> [path|版本] [--major <版本>] [--image <jre|jdk>] [--path <目录>] [--arch <架构>] [--dry-run] [--no-register] [--force]",
+        usage: "java <list|scan|add|remove|which|install> [path|版本] [--major <版本>] [--image <jre|jdk>] [--path <目录>] [--arch <架构>] [--provider <adoptium|mojang>] [--dry-run] [--no-register] [--force]",
         options: {
             major: { type: "string", value: "<版本>", summary: "限定 Java 主版本" },
             image: { type: "string", value: "<jre|jdk>", summary: "install 要哪种包，默认 jre" },
             path: { type: "string", value: "<目录>", summary: "install 的安装位置" },
             arch: { type: "string", value: "<x64|arm64>", summary: "install 的目标架构，默认本机" },
+            provider: {
+                type: "string",
+                value: "<来源>",
+                summary: "install 的来源：adoptium / mojang，默认 adoptium",
+            },
             "dry-run": { type: "boolean", summary: "只查地址，不下载" },
             "no-register": { type: "boolean", summary: "装完不写进 java 清单" },
             force: { type: "boolean", summary: "目标已存在时也重装" },
@@ -328,6 +333,7 @@ export const COMMANDS: CommandTable = {
                 action === "add" || action === "remove"
                     ? requirePositional(positionals, 1, "path")
                     : optionalPositional(positionals, 1, "target");
+            const provider = optionalString(values, "provider");
             return {
                 name: "java",
                 action,
@@ -341,6 +347,10 @@ export const COMMANDS: CommandTable = {
                           : undefined,
                 path: optionalString(values, "path"),
                 arch: optionalString(values, "arch"),
+                provider:
+                    provider === undefined
+                        ? undefined
+                        : requireChoice(provider, ["adoptium", "mojang"] as const, "provider"),
                 dryRun: values["dry-run"] === true,
                 noRegister: values["no-register"] === true,
                 force: values["force"] === true,
