@@ -7,6 +7,8 @@
  */
 
 import { runAuth } from "./commands/auth.ts";
+import { runConfig } from "./commands/config.ts";
+import { runStatus } from "./commands/status.ts";
 import { runDownload } from "./commands/download.ts";
 import { runFolder } from "./commands/folder.ts";
 import { runInstall } from "./commands/install.ts";
@@ -17,6 +19,7 @@ import { runModpack } from "./commands/modpack.ts";
 import { runVersion } from "./commands/version.ts";
 import { runMirror } from "./commands/mirror.ts";
 import { runView } from "./commands/view.ts";
+import { AppError } from "../error/index.ts";
 import {
     optionalInteger,
     optionalPositional,
@@ -45,12 +48,15 @@ export const GLOBAL_OPTIONS: OptionDecls = {
 export const COMMANDS: CommandTable = {
     launch: {
         summary: "启动游戏",
-        usage: "launch [version] [--account <name>] [--folder <id>] [--repair] [--dry-run]",
+        usage: "launch [version] [--account <name>] [--folder <id>] [--repair] [--dry-run] [--memory <mb>] [--wait-for-exit | --detach]",
         options: {
             account: { type: "string", value: "<name>", summary: "使用指定账户" },
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
             repair: { type: "boolean", summary: "补全缺失文件后退出，不启动游戏" },
             "dry-run": { type: "boolean", summary: "只打印启动命令，不真的启动" },
+            memory: { type: "string", value: "<mb>", summary: "本次启动的内存上限，不写进配置" },
+            "wait-for-exit": { type: "boolean", summary: "等游戏退出，退出码原样带出去" },
+            detach: { type: "boolean", summary: "起完就返回，不等游戏退出" },
         },
         positionals: { names: ["version"], required: 0 },
         toCommand: (values, positionals) => ({
@@ -60,6 +66,9 @@ export const COMMANDS: CommandTable = {
             folder: optionalString(values, "folder"),
             dryRun: values["dry-run"] === true,
             repair: values["repair"] === true,
+            memory: optionalInteger(values, "memory"),
+            waitForExit: values["wait-for-exit"] === true,
+            detach: values["detach"] === true,
         }),
         run: runLaunch,
     },
@@ -95,13 +104,13 @@ export const COMMANDS: CommandTable = {
 
     auth: {
         summary: "账户管理",
-        usage: "auth <login|logout|list> [username] [--type <name>] [--client-id <id>]",
+        usage: "auth <login|logout|list|use> [username] [--type <name>] [--client-id <id>]",
         options: {
             type: {
                 type: "string",
                 value: "<name>",
                 summary:
-                    "账号类型：offline（离线）/ microsoft（微软）；login 省略按离线，logout 省略按游戏名",
+                    "账号类型：offline（离线）/ microsoft（微软）；login 省略按离线，logout 与 use 省略按游戏名",
             },
             "client-id": {
                 type: "string",
@@ -113,12 +122,12 @@ export const COMMANDS: CommandTable = {
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["login", "logout", "list"] as const,
+                ["login", "logout", "list", "use"] as const,
                 "action",
             );
-            // 游戏名：list 不用，logout 必给，登录只有离线要（微软的游戏名从账号里取）
+            // 游戏名：list 不用，logout 与 use 必给，登录只有离线要（微软的游戏名从账号里取）
             const username =
-                action === "logout"
+                action === "logout" || action === "use"
                     ? requirePositional(positionals, 1, "username")
                     : optionalPositional(positionals, 1, "username");
             return {
@@ -304,18 +313,29 @@ export const COMMANDS: CommandTable = {
     },
 
     version: {
-        summary: "列出、查看与选中版本",
-        usage: "version <list|info|select> [id] [--folder <id>]",
+        summary: "列出、查看、选中与改名版本",
+        usage: "version <list|info|select|rename> [id] [新名字] [--folder <id>] [--dry-run]",
         options: {
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
+            "dry-run": { type: "boolean", summary: "rename 只算不改" },
         },
-        positionals: { names: ["action", "id"], required: 1 },
+        positionals: { names: ["action", "id", "新名字"], required: 1 },
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["list", "info", "select"] as const,
+                ["list", "info", "select", "rename"] as const,
                 "action",
             );
+            if (action === "rename") {
+                return {
+                    name: "version",
+                    action,
+                    id: requirePositional(positionals, 1, "id"),
+                    renameTo: requirePositional(positionals, 2, "新名字"),
+                    folder: optionalString(values, "folder"),
+                    dryRun: values["dry-run"] === true,
+                };
+            }
             const id =
                 action === "info" || action === "select"
                     ? requirePositional(positionals, 1, "id")
@@ -377,6 +397,51 @@ export const COMMANDS: CommandTable = {
             };
         },
         run: runJava,
+    },
+    config: {
+        summary: "读写配置",
+        usage: "config <get|set|unset> [键] [值] [--folder <id>] [--instance <id>] [--string]",
+        options: {
+            string: { type: "boolean", summary: "set 时把值当普通字符串" },
+            folder: { type: "string", value: "<id>", summary: "作用域：文件夹 id，可含点号" },
+            instance: {
+                type: "string",
+                value: "<id>",
+                summary: "作用域：实例 id，可含点号，要配 --folder",
+            },
+        },
+        positionals: { names: ["action", "key", "value"], required: 1 },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
+                requirePositional(positionals, 0, "action"),
+                ["get", "set", "unset"] as const,
+                "action",
+            );
+            if (positionals.length > 3) {
+                throw new AppError("cli", "UsageError", {
+                    context: { detail: `多余的参数 ${positionals[3] ?? ""}` },
+                });
+            }
+            return {
+                name: "config",
+                action,
+                key: positionals[1],
+                value: positionals[2],
+                asString: values["string"] === true,
+                folder: optionalString(values, "folder"),
+                instance: optionalString(values, "instance"),
+            };
+        },
+        run: runConfig,
+    },
+
+    status: {
+        summary: "环境快照",
+        usage: "status",
+        options: {},
+        positionals: { names: [], required: 0 },
+        toCommand: () => ({ name: "status" }),
+        run: runStatus,
     },
 };
 

@@ -46,7 +46,7 @@ import {
 } from "../infra/download.ts";
 import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
-import { logger, print } from "../output/index.ts";
+import { logger, print, PROGRESS_STAGES, type ProgressStage } from "../output/index.ts";
 import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
 import { installWithOfficial, type OfficialInstallReport } from "./official.ts";
 import {
@@ -59,6 +59,7 @@ import {
     type LoaderSpec,
 } from "./loader.ts";
 import { fetchManifest, findVersion } from "./manifest.ts";
+import { mergeManifests } from "./merge.ts";
 
 const log = logger("install");
 
@@ -73,7 +74,7 @@ const EMPTY_REPORT: DownloadReport = {
 };
 
 export interface InstallProgress {
-    (stage: string, done: number, total: number, bytes: boolean, existing: boolean): void;
+    (stage: ProgressStage, done: number, total: number, bytes: boolean, existing: boolean): void;
 }
 
 export interface InstallInput {
@@ -200,8 +201,15 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         }
         json = await readVersionJson(join(input.folderPath, "versions", name, `${name}.json`));
     } else {
-        base = await ensureBase(input, options, warnings);
-        json = await fetchLoaderProfile(loader, input.versionId, loaderVersion ?? "", options);
+        // 合并型：两层并成一份自包含 json，不再建基础版本目录
+        json = mergeManifests({
+            base: await fetchVanillaJson(input.versionId, options),
+            loader: await fetchLoaderProfile(loader, input.versionId, loaderVersion ?? "", options),
+            name,
+            gameVersion: input.versionId,
+            loaderType: loader.name,
+            loaderVersion: loaderVersion ?? "",
+        });
     }
 
     const versionDir = join(input.folderPath, "versions", name);
@@ -450,35 +458,38 @@ export async function downloadFiles(input: DownloadFilesInput): Promise<Download
     // 四类各跑一个队列、同时进行；每条通道自己报进度，终端上就是四行条各走各的
     // 并发不能平均分：资源动辄几千个文件，平均分只给它 2 个连接，会慢成瓶颈
     // 每类保底 1 个，剩下的名额全给任务最多的那类，总数仍等于设置里的并发数
-    const lanes: Array<readonly [string, readonly DownloadTask[]]> = [
-        ["客户端 jar", client === null ? [] : [client]],
-        ["库", libraryTasks],
-        ["natives", nativeTasks],
-        ["资源", assetPlan?.tasks ?? []],
+    const lanes: Array<readonly [ProgressStage, readonly DownloadTask[]]> = [
+        [PROGRESS_STAGES.clientJar, client === null ? [] : [client]],
+        [PROGRESS_STAGES.library, libraryTasks],
+        [PROGRESS_STAGES.natives, nativeTasks],
+        [PROGRESS_STAGES.assets, assetPlan?.tasks ?? []],
     ];
     const active = lanes.filter(([, tasks]) => tasks.length > 0);
-    const budget = new Map(active.map(([label]) => [label, 1]));
+    const budget = new Map(active.map(([channel]) => [channel.label, 1]));
     const largest = [...active].sort((left, right) => right[1].length - left[1].length)[0];
     if (largest !== undefined) {
-        budget.set(largest[0], Math.max(1, input.options.concurrency - (active.length - 1)));
+        budget.set(largest[0].label, Math.max(1, input.options.concurrency - (active.length - 1)));
     }
     log.debug("并发分配 %s", [...budget].map(([label, count]) => `${label}=${count}`).join(" "));
 
-    const lane = (label: string, tasks: readonly DownloadTask[]): Promise<DownloadReport> =>
+    const lane = (
+        channel: ProgressStage,
+        tasks: readonly DownloadTask[],
+    ): Promise<DownloadReport> =>
         tasks.length === 0
             ? Promise.resolve(EMPTY_REPORT)
             : downloadAll(
                   tasks,
-                  { ...input.options, concurrency: budget.get(label) ?? 1 },
-                  stage(input.onProgress, label),
+                  { ...input.options, concurrency: budget.get(channel.label) ?? 1 },
+                  stage(input.onProgress, channel),
               );
 
     const downloadStartedAt = Date.now();
     const [clientReport, libraries, nativeReport, assetObjects] = await Promise.all([
-        lane("客户端 jar", client === null ? [] : [client]),
-        lane("库", libraryTasks),
-        lane("natives", nativeTasks),
-        lane("资源", assetPlan?.tasks ?? []),
+        lane(PROGRESS_STAGES.clientJar, client === null ? [] : [client]),
+        lane(PROGRESS_STAGES.library, libraryTasks),
+        lane(PROGRESS_STAGES.natives, nativeTasks),
+        lane(PROGRESS_STAGES.assets, assetPlan?.tasks ?? []),
     ]);
     const downloadMs = Date.now() - downloadStartedAt;
     log.info("四类下载用了 %d ms", downloadMs);
@@ -886,8 +897,12 @@ async function layoutVirtual(assetsRoot: string, index: AssetIndex): Promise<num
 
 /* ---------- 小工具 ---------- */
 
-function stage(onProgress: InstallProgress | undefined, name: string): Progress | undefined {
+function stage(
+    onProgress: InstallProgress | undefined,
+    channel: ProgressStage,
+): Progress | undefined {
     return onProgress === undefined
         ? undefined
-        : (done, total, bytes, _target, existing) => onProgress(name, done, total, bytes, existing);
+        : (done, total, bytes, _target, existing) =>
+              onProgress(channel, done, total, bytes, existing);
 }

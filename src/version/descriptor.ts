@@ -114,6 +114,11 @@ export interface Descriptor {
     readonly minimumLauncherVersion: number | null;
     readonly time: string | null;
     readonly releaseTime: string | null;
+    /** bloomery 标记键里的游戏版本；合并型实例没有 inheritsFrom，只能靠它 */
+    readonly declaredGameVersion: string | null;
+    readonly declaredLoader: Loader | null;
+    /** merged 表示这份 json 是安装时合并出来的自包含版本 */
+    readonly layout: "merged" | null;
     /** 版本 json 所在目录，隔离后的游戏文件也在这里 */
     readonly directory: string;
     readonly json: string;
@@ -165,6 +170,7 @@ export function parseDescriptor(
     const javaVersion = r.object("javaVersion");
     const logging = r.object("logging");
     const argumentsReader = r.object("arguments");
+    const mark = readMark(raw["bloomery"]);
 
     return {
         id: r.string("id", id),
@@ -184,10 +190,42 @@ export function parseDescriptor(
         minimumLauncherVersion: r.optionalInteger("minimumLauncherVersion", 0) ?? null,
         time: r.nullableString("time", null),
         releaseTime: r.nullableString("releaseTime", null),
+        declaredGameVersion: mark.gameVersion,
+        declaredLoader: mark.loader,
+        layout: mark.layout,
         directory: dirname(json),
         json,
     };
 }
+
+// 安装时写的标记键：游戏版本与加载器是自包含 json 里认这两样的唯一依据
+function readMark(value: unknown): {
+    layout: "merged" | null;
+    gameVersion: string | null;
+    loader: Loader | null;
+} {
+    const raw = object(value, "bloomery");
+    if (raw === undefined) {
+        return { layout: null, gameVersion: null, loader: null };
+    }
+    const gameVersion = typeof raw["gameVersion"] === "string" ? raw["gameVersion"] : null;
+    const loaderRaw = object(raw["loader"], "bloomery.loader");
+    const type = loaderRaw?.["type"];
+    const version = loaderRaw?.["version"];
+    return {
+        layout: raw["layout"] === "merged" ? "merged" : null,
+        gameVersion: gameVersion === "" ? null : gameVersion,
+        loader:
+            typeof type === "string" && LOADER_TYPES.includes(type as LoaderType)
+                ? {
+                      type: type as LoaderType,
+                      version: typeof version === "string" && version !== "" ? version : null,
+                  }
+                : null,
+    };
+}
+
+const LOADER_TYPES: readonly LoaderType[] = ["vanilla", "fabric", "forge", "neoforge", "quilt"];
 
 function readAssetIndex(r: Reader): AssetIndex {
     return {
@@ -367,6 +405,9 @@ export function mergeDescriptors(parent: Descriptor, child: Descriptor): Descrip
         minimumLauncherVersion: child.minimumLauncherVersion ?? parent.minimumLauncherVersion,
         time: child.time ?? parent.time,
         releaseTime: child.releaseTime ?? parent.releaseTime,
+        declaredGameVersion: child.declaredGameVersion ?? parent.declaredGameVersion,
+        declaredLoader: child.declaredLoader ?? parent.declaredLoader,
+        layout: child.layout ?? parent.layout,
         directory: child.directory,
         json: child.json,
     };
@@ -431,6 +472,10 @@ const LOADER_KEYWORDS: ReadonlyArray<readonly [LoaderType, RegExp]> = [
 ];
 
 export function loaderOf(descriptor: Descriptor): Loader {
+    // 合并型实例的库是两层的并集，靠库坐标认加载器会认错，标记键优先
+    if (descriptor.declaredLoader !== null) {
+        return descriptor.declaredLoader;
+    }
     for (const library of descriptor.libraries) {
         for (const [type, pattern] of LOADER_LIBRARIES) {
             if (pattern.test(library.name)) {
@@ -466,9 +511,12 @@ const VERSION_LIBRARIES: ReadonlyArray<{ pattern: RegExp; prefix: boolean }> = [
 const VERSION_TOKEN =
     /(?:rd-\d+|inf-\d+|[abc]\d+\.\d+(?:\.\d+)?[a-z]?|\d+\.\d+(?:\.\d+)?(?:-(?:pre|rc)\d+)?)/;
 
-// 判断这份版本是哪一版游戏：inheritsFrom 最准，其次看加载器库的坐标，
+// 判断这份版本是哪一版游戏：标记键与 inheritsFrom 最准，其次看加载器库的坐标，
 // 再次从 id 里找版本样的片段；都认不出返回 null（比如被改过名的原版）
 export function gameVersionOf(descriptor: Descriptor): string | null {
+    if (descriptor.declaredGameVersion !== null) {
+        return descriptor.declaredGameVersion;
+    }
     if (descriptor.inheritsFrom !== null) {
         return descriptor.inheritsFrom;
     }

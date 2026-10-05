@@ -9,6 +9,8 @@
  * @since 1.0.0
  */
 
+import { join } from "node:path";
+
 import { refreshMicrosoft } from "../../auth/index.ts";
 import {
     loadAccounts,
@@ -24,6 +26,7 @@ import {
 } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
 import {
+    launchOptionsOf,
     needsRefresh,
     pickAccount,
     planLaunch,
@@ -31,6 +34,7 @@ import {
     type LaunchPlan,
 } from "../../launch/index.ts";
 import { logger, print, progressReporter, versioned } from "../../output/index.ts";
+import { logDirectory } from "../../platform/index.ts";
 import {
     chooseInstance,
     clientJarOf,
@@ -49,6 +53,12 @@ import type { Context, LaunchCommand } from "../parse.ts";
 const log = logger("launch");
 
 export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<void> {
+    if (command.waitForExit === true && command.detach === true) {
+        throw new AppError("cli", "UsageError", {
+            context: { detail: "--wait-for-exit 与 --detach 只能给一个" },
+        });
+    }
+
     const setting = await loadSetting();
 
     const folder = pickFolder(setting.folders, setting.selectedFolder, command.folder);
@@ -77,6 +87,17 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
         });
     }
 
+    const config = folder.instances.find((item) => item.id === instance.id);
+    // --memory 比内存下限还小的话 JVM 起不来
+    if (command.memory !== undefined) {
+        const floor = launchOptionsOf(setting, folder, config).memory.minMb;
+        if (command.memory < floor) {
+            throw new AppError("cli", "UsageError", {
+                context: { detail: `--memory 不能小于 ${floor}` },
+            });
+        }
+    }
+
     // 检查永远做，补全只在真要启动时做
     const dryRun = command.dryRun === true;
     const missing = await missingLaunchFiles({ folderPath: folder.path, instance });
@@ -90,7 +111,7 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
         {
             setting,
             folder,
-            config: folder.instances.find((item) => item.id === instance.id),
+            config,
             instance,
             accounts: await refreshCredentials(
                 await loadAccounts(),
@@ -101,11 +122,12 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
             probes: state.javaProbe,
             accountName: command.account,
         },
-        { prepare: !dryRun },
+        { prepare: !dryRun, memoryMaxMb: command.memory },
     );
 
-    report(plan, ctx, dryRun, pick.source === "selected" ? instance.id : null, missing, repaired);
+    const selected = pick.source === "selected" ? instance.id : null;
     if (dryRun) {
+        report(plan, ctx, true, selected, missing, repaired, null, null);
         return;
     }
 
@@ -124,9 +146,26 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
         },
     }));
 
-    const game = spawnGame(plan.executable, plan.args, plan.directory);
+    // 命令行给过就按命令行，没给才看配置
+    const waitForExit =
+        command.waitForExit === true
+            ? true
+            : command.detach === true
+              ? false
+              : setting.launch.waitForExit;
+
+    // 游戏输出留在本进程的 stdout 上会污染 --json 的正文，也会让 detach 的管道拖到游戏退出
+    const gameLog = ctx.json || !waitForExit ? instanceLogFile(instance.id) : null;
+
+    const game = spawnGame(plan.executable, plan.args, plan.directory, {
+        logFile: gameLog ?? undefined,
+        unref: !waitForExit,
+    });
     log.info("游戏进程 pid=%s", game.pid);
-    if (!setting.launch.waitForExit) {
+    // detach 时子进程句柄随本进程退出失效，pid 是消费方认这个实例的唯一判据
+    report(plan, ctx, false, selected, missing, repaired, game.pid ?? null, gameLog);
+
+    if (!waitForExit) {
         return;
     }
 
@@ -223,6 +262,11 @@ async function refreshCredentials(
     return next;
 }
 
+// 实例自己的日志：<日志目录>/instance-<实例 id>.log
+function instanceLogFile(id: string): string {
+    return join(logDirectory(), `instance-${id}.log`);
+}
+
 function report(
     plan: LaunchPlan,
     ctx: Context,
@@ -230,6 +274,8 @@ function report(
     selected: string | null,
     missing: MissingFiles,
     repaired: RepairReport | null,
+    pid: number | null,
+    gameLog: string | null,
 ): void {
     if (ctx.json) {
         print(
@@ -237,6 +283,8 @@ function report(
                 versioned({
                     ...(summary(plan) as object),
                     selectedInstance: selected,
+                    pid,
+                    log: gameLog,
                     missing: missingJson(missing),
                     repair: repairJson(repaired),
                 }),
@@ -273,6 +321,12 @@ function report(
     }
     if (dryRun) {
         lines.push("", command(plan));
+    }
+    if (pid !== null) {
+        lines.push(`  进程      pid ${pid}`);
+    }
+    if (gameLog !== null) {
+        lines.push(`  日志      ${gameLog}`);
     }
     for (const warning of plan.warnings) {
         lines.push(`  警告      ${warning}`);

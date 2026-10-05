@@ -1,5 +1,27 @@
 # 更新记录
 
+## 1.12.0
+
+- `install --loader fabric|quilt` 改为在安装时把原版与加载器两层合并成一份自包含 json：实例目录自带客户端 jar，不再单独建基础版本目录，`versions/` 下只多一个目录；库与资源仍走共享的 `libraries/` 与 `assets/`
+- 合并后的 json 删掉 `inheritsFrom` 与 `jar`，`id` 用实例名，并写入 `bloomery` 标记键记录游戏版本与加载器（`inheritsFrom` 不在之后，那是认这两样的唯一依据）
+- 已知：`forge` / `neoforge` 仍走官方安装器的引用式两层布局（基础版本目录照旧存在），接入合并排在下一版
+- ndjson 进度事件加稳定键 `key`：`clientJar` / `library` / `natives` / `assets` / `files`，首帧、换阶段与收尾都带；`stage` 保留中文显示名，判断依据换成 `key`
+- `--version --json` 加 `api`：机器接口版本，破坏性变更时 +1，外壳按它判兼容
+- `launch` 加 `--wait-for-exit` 与 `--detach`：覆盖 `setting.json` 的 `launch.waitForExit`，两个同时给报 `UsageError`，不给时行为不变
+- `launch` 的结果加 `pid`（游戏进程号，`--dry-run` 时为 `null`）：`--detach` 之后子进程句柄随本进程退出失效，消费方按它认实例在不在跑
+- 输出顺序调整：计划在起进程之后才打印，人类可读那行改成「进程 pid <数字>」
+- `--json` 与 `--detach` 下游戏输出改追加到 `<日志目录>/instance-<实例 id>.log`，结果里的 `log` 给路径：原先继承 stdout，既污染 `--json` 的正文，又让 `--detach` 的调用方等到游戏结束才拿到管道 EOF
+- `--detach` 时放开子进程句柄，本进程不再等到游戏退出才结束（实测由 3.1 秒降到 0.2 秒）
+- 新增 `config get` / `set` / `unset`：按点分路径读写 `setting.json`，静态键覆盖默认值里的全部叶子，动态键覆盖 `folders.<id>` 与 `folders.<id>.instances.<id>`；值按 JSON 字面量认，`--string` 强制当字符串；`unset` 静态键回默认、动态键删项；别的命令维护的键（选中项、`java.list`、`download.sources`）报 `UsageError` 并指出入口
+- `launch` 加 `--memory <mb>`：只影响本次启动的内存上限，低于生效下限报 `UsageError`
+- `state.json` 退出前在锁内重读再重放本次改动：多个进程共用数据目录时，启动次数与上次游玩时间不再被后写的覆盖
+- 新增 `status`：一次给出 CLI 与 Node 版本、数据目录与日志目录、平台与主机内存、Java 清单（含原样版本串与能否启动）、启动会用的那个 Java、内存上下界与当前值、当前文件夹与选中实例、下载源与可选源、能力键 `features[]`
+- Java 探测结果与 `state.json` 的缓存加 `version`（`java.version` 原样串），`status` 与 `java list` 都能显示完整版本号
+- `auth` 加 `use <游戏名> [--type]`：只切 `setting.json` 的当前账户，不登录、不联网、不碰凭据；重名判定与 `logout` 同一套（不给 `--type` 且同名多条报 `UsageError` 并列出类型），目标不存在报 `AccountNotFound`
+- 新增错误码 `FileWriteFailed`：原子写失败（数据目录只读、磁盘满等）不再落成 detail 为空的 `UnknownError`，`detail` 给 `<errno> <路径>`，人类可读那份另附 `原因` 与「检查数据目录的写权限与剩余空间」
+- `config` 支持 `--folder <id>` / `--folder <id> --instance <id>` 定位文件夹与实例的键：含点号的实例 id（`1.20.1-农夫`）原先点分寻址切不出来，现在 id 原样取用；输出加 `folder` 与 `instance` 字段，`key` 改为作用域内的键；旧的点分写法对不含点号的 id 仍然可用
+- `version rename <旧名> <新名> [--dry-run]`：实例目录整份改名，json 与 jar 文件名跟着改；同步同一文件夹里其它版本的 `inheritsFrom` / `jar` 引用、配置项的 `id` 与 `target`、`selectedInstance`、`state.json` 的统计键与 `lastInstance`；返回 `rewritten` 列出被改引用的实例
+
 ## 1.11.0
 
 - 新增下载队列：`mod install --async` 入队并立刻返回，`download info` / `run` / `cancel` / `retry` / `clear` 管理与查看

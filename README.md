@@ -56,7 +56,16 @@ bloomery launch --repair                   # 只检查与补全，不启动
 bloomery launch --dry-run                  # 只打印启动计划，缺件数写在计划里
 bloomery launch --account cibocaz          # 指定账户
 bloomery launch --folder mc                # 指定文件夹
+bloomery launch --detach                   # 起完就返回，不等游戏退出
+bloomery launch --wait-for-exit            # 等游戏退出，退出码原样带出去
+bloomery launch --memory 4096              # 本次启动的内存上限，不写进配置
 ```
+
+等不等游戏退出由 `setting.json` 的 `launch.waitForExit` 决定，默认等。命令行给了 `--wait-for-exit` 或 `--detach` 时以命令行为准，两个同时给报 `UsageError`。不等时退出码拿不到。
+
+游戏输出的去向按调用方式分两种：`--json` 与 `--detach` 下追加到 `<日志目录>/instance-<实例 id>.log`，结果里的 `log` 给这个路径 —— 游戏占住 stdout 会破坏 `--json` 的正文，也会让 `--detach` 的调用方等到游戏结束才拿到管道 EOF；其余情况继承终端，实时可见。结果里的 `pid` 是游戏进程号，`--dry-run` 时为 `null`；`--detach` 之后本进程随即退出，消费方按 `pid` 认这个实例在不在跑。
+
+`--memory <mb>` 覆盖本次启动的内存上限，压过实例、文件夹与全局三层，小于生效的 `minMb` 时报 `UsageError`；要持久化改内存用 `config set launch.memory.maxMb`。
 
 启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。索引整份不在时 `--dry-run` 给一行「资源 索引缺失，需下载索引与全部资源约 X MB」，数字来自版本 json。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
 
@@ -79,6 +88,12 @@ bloomery install 1.20.6 --no-assets              # 跳过资源对象
 
 同名实例已存在时拒绝，不覆盖。
 
+fabric 与 quilt 装出来的是**一个自包含实例**：安装时把原版与加载器两层合并成一份 json，删掉 `inheritsFrom` 与 `jar`，`id` 用实例名，客户端 jar 放在实例目录里，`versions/` 下不会多出原版目录。库与资源仍走共享的 `<游戏文件夹>/libraries` 与 `assets`。合并后的 json 带一个 `bloomery` 标记键，记录游戏版本与加载器 —— `inheritsFrom` 不在之后，那是认这两样的唯一依据（`version list` 的游戏版本、MOD 的游戏版本过滤都靠它）。
+
+forge 与 neoforge 目前仍是**引用式两层**：走官方安装器，实例 json 用 `inheritsFrom` 指向基础版本，客户端 jar 用基础版本那份，所以 `versions/` 下会同时出现基础版本目录。接入合并排在下一版。
+
+`install --json` 的 `base` 字段说明基础版本是本来就在还是这次顺带装的，只有 forge 与 neoforge 会用到；fabric 与 quilt 恒为 `none`。
+
 ### auth
 
 账户管理。离线账户立即可用，微软账户见下文。
@@ -87,10 +102,14 @@ bloomery install 1.20.6 --no-assets              # 跳过资源对象
 bloomery auth login cibocaz                      # 离线账户
 bloomery auth login --type microsoft             # 微软设备码登录
 bloomery auth list
+bloomery auth use cibocaz                        # 切换当前账户，不登录
+bloomery auth use cibocaz --type microsoft
 bloomery auth logout cibocaz
 ```
 
 离线账户立即可用。`auth login --type microsoft --json` 的 stdout 是 NDJSON 事件流，见[设备码登录流](#设备码登录流)。
+
+`auth use <游戏名>` 只改 `setting.json` 的当前账户，不登录、不联网、不碰凭据；重名判定与 `logout` 同一套。
 
 `auth logout <游戏名>` 不给 `--type` 时按游戏名在全部账户里找；同名有多条（离线与微软各一条）时报用法错误，detail 列出匹配到的类型。给了 `--type` 就按 `<游戏名>@<类型>` 认。
 
@@ -165,11 +184,22 @@ bloomery view game 1.20.6                        # 该游戏版本上四种加�
 bloomery version list                            # 列出实例，标出当前选中
 bloomery version info 1.20.6-fabric-0.19.5       # 单个实例详情
 bloomery version select 1.20.6-fabric-0.19.5     # 选中
+bloomery version rename 1.20.6 vanilla           # 改实例名
+bloomery version rename 1.20.6 vanilla --dry-run # 只算不改
 ```
 
 选中后 `launch` 与 `mod install` 省略版本时都用它。优先级：命令行给的 > 当前选中 > 上次启动 > 第一个可用。
 
 `version info` 的实例 JSON 带 `java{required,resolved}`：`required` 是版本 json 要求的主版本，`resolved` 是按启动同一条规则挑出的实际 Java（主版本与可执行文件路径），挑不到时为 `null`。`lastPlayed` 是上次启动时刻，没启动过时为 `null`。
+
+`version rename <旧名> <新名>` 把实例目录整份改名，并同步四处引用：
+
+- `<versions>/<旧名>/` → `<versions>/<新名>/`，目录里的 `<旧名>.json` 与 `<旧名>.jar` 跟着改名（json 里的 `id` 是游戏版本号，不动）
+- 同一文件夹里其它版本的 `inheritsFrom` 或 `jar` 指向旧名的，一并改写；返回的 `rewritten` 列出这些实例 id
+- `setting.json`：该实例配置项的 `id`、别的实例配置项的 `target`、`selectedInstance`
+- `state.json`：统计键 `<文件夹 id>/<旧名>` 与 `lastInstance`
+
+新名字去首尾空白，不得为空、不得含 `/` `\` `<>:"|?*` 与控制字符；与旧名相同直接成功返回（`moved: false`）；新名已存在报 `VersionExists`；旧名不在报 `VersionNotFound`。省略 `--folder` 时按当前文件夹。
 
 ### folder
 
@@ -229,6 +259,51 @@ bloomery mirror update                           # 不给 --from 就用上次的
 
 拉来的清单缓存在 `<配置目录>/mirrors.json`（含来源地址与拉取时刻），`mirror use <名字>` 对预置与拉来的源一视同仁；拉来的源按 `custom` 写入。BMCLAPI 只改写 Mojang 主机（库、资源、版本 json），Forge 等第三方 maven 原样直连。写入的是 `setting.json` 的 `download.sources`。
 
+### config
+
+读写 `setting.json`。全局键是点分路径（与 `defaults.ts` 的默认值一致）；文件夹与实例级的键用 `--folder <id>` / `--folder <id> --instance <id>` 定位，键相对该作用域。
+
+```bash
+bloomery config get                                    # 整份配置
+bloomery config get network.concurrency                # 全局单键
+bloomery config set network.concurrency 16             # 值按 JSON 字面量认
+bloomery config set launch.jvmArgs '["-XX:+UseG1GC"]'  # 数组整体替换
+bloomery config set network.proxy null                 # 清空可空字段
+bloomery config set network.proxy 8080 --string        # 强制当字符串
+bloomery config unset network.concurrency              # 回默认值
+bloomery config set memory.maxMb 2048 --folder mc      # 文件夹级覆盖
+bloomery config set memory.maxMb 3072 --folder mc --instance '1.20.1-农夫'
+bloomery config get --folder mc --instance '1.20.1-农夫' # 该实例整条配置
+```
+
+- **`--folder` / `--instance` 取的是 id 本身，不按点号切分**，所以含点号的实例 id（`1.20.1-农夫`、`1.18.2-Forge_40.3.0`）只能走这条路
+- 点分写法对 id 里没有 `.` 的情形仍然可用（`folders.mc.instances.1.20.6.memory.maxMb`）；id 里有点号时点分寻址报 `UsageError`，detail 里给出改用 flag 的提示
+- `--instance` 必须配 `--folder`：实例 id 只在文件夹内唯一；两者与 `folders.` 开头的键不能同时给
+- 文件夹级可写 `name` / `java` / `memory.minMb` / `memory.maxMb`；实例级可写 `name` / `java` / `notes` / `memory.*` / `window.*` / `jvmArgs` / `gameArgs` / `useGlobalSettings.*`
+- 值先按 JSON 字面量认（`true` / `false` / `null` / 数字 / `[...]` / `{...}`），认不出当普通字符串；`--string` 直接当字符串
+- 类型与键都对不上时报 `UsageError`；枚举键的取值写在 detail 里
+- `unset` 对全局键恢复默认值，对文件夹与实例的键删掉这一项，补丁删空时置 `null`
+- 配置里还没有那条实例时，`set` 按磁盘上扫到的版本补一条配置项，内存与窗口的覆盖才有地方落
+- 由别的命令维护的键在这里读写都报 `UsageError` 并指出入口：`selectedAccount`（`auth`）、`selectedFolder`（`folder select`）、`selectedInstance`（`version select`）、`java.list`（`java add` / `remove` / `scan`）、`download.sources`（`mirror use`）
+- 写盘与其余命令同一套：临时文件 + rename
+
+`--json` 的输出里 `key` 是作用域内的键，文件夹与实例另给字段，含点号的 id 才不会歧义：
+
+```json
+{ "v": 1, "key": "memory.maxMb", "folder": "mc", "instance": "1.20.1-农夫", "value": 3072 }
+```
+
+### status
+
+一次拿全外壳要的环境事实。只读：不写 `setting.json`，也不写 `state.json` 的探测缓存；清单里的 Java 逐个真探测。
+
+```bash
+bloomery status            # 人看的几行
+bloomery --json status     # 机器形状见下表
+```
+
+`features` 是本进程实际支持的能力键（`downloadQueue` / `launchRepair` / `modAsync` / `progressKey`），外壳据此显示入口，不拿版本号猜。`javaDefault` 是启动会用的那个 Java，取不到时为 `null`，有值时恒等于某个 `java[].path`。`folder` 为 `null` 表示没有可用的游戏文件夹；其上的 `selected` 恒为 `true`（它本来就是当前生效的那个），`selectedInstance` 是实例 id。`memory.currentMb` 是选中实例生效的上限，无选中实例时为 `null`；`globalMb` 恒有值，给设置页滑块。首次运行没有 `setting.json` 时 `mirror.source` 为 `null`，此时生效值都还是默认值。
+
 ### 全局选项
 
 ```
@@ -262,57 +337,64 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 
 顶层是对象时带 `"v": 1`；顶层是数组时不带 `v`，数组本身即 v1。缺失的标量用 `null`，不用空串。字段顺序不作保证，消费方按名字取。
 
-| 命令                               | 顶层   | `v`  | 字段                                                                                                                                                                                                  |
-| ---------------------------------- | ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `folder list`                      | 数组   | 无   | 元素：`id:string` `name:string` `path:string` `exists:boolean` `writable:boolean` `instanceCount:number` `selected:boolean`                                                                           |
-| `folder scan [id]`                 | 数组   | 无   | 元素：FolderView `id:string` `selectedInstance:string\|null` `name:string` `path:string` `exists:boolean` `writable:boolean` `versionsDirectory:string` `dropped:string[]` `instances[]`              |
-| `folder add <path>`                | 对象   | 有   | `id` `path` `versionCount`                                                                                                                                                                            |
-| `folder add <path> --dry-run`      | 对象   | 有   | FolderView，含 `instances[]`                                                                                                                                                                          |
-| `folder add <path> --no-select`    | 对象   | 有   | 同 `folder add <path>`，只是不改当前文件夹                                                                                                                                                            |
-| `folder remove <id>`               | 对象   | 有   | `removed`                                                                                                                                                                                             |
-| `folder select <id>`               | 对象   | 有   | `selected` `path`                                                                                                                                                                                     |
-| `version list`                     | 对象   | 有   | 同 `folder scan` 的元素（FolderView）                                                                                                                                                                 |
-| `version info <id>`                | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                              |
-| `version select <id>`              | 对象   | 有   | `selected` `folder`                                                                                                                                                                                   |
-| `launch [id]`                      | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `missing` `repair`                                                               |
-| `launch [id] --dry-run`            | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair` 恒为 `null`                                                                                                                                                    |
-| `launch [id] --repair`             | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                |
-| `install <version>`                | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                                        |
-| `mod search <关键词>`              | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                               |
-| `mod install <关键词>`             | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                                         |
-| `mod install <关键词> --async`     | 对象   | 有   | 队列任务：`id` `type` `target` `state` `params` `attempts` `created` `started` `finished` `progress` `error`；另给 `spawn:{outcome:string,pid:number\|null,log:string}`（这次拉起后台 worker 的结果） |
-| `download info`                    | 对象   | 有   | `worker:number\|null` `tasks[]`（队列任务，同上）                                                                                                                                                     |
-| `download info <id>`               | 对象   | 有   | `worker` `task`（单个队列任务）                                                                                                                                                                       |
-| `download run`                     | 对象   | 有   | `recovered:string[]` `tasks[]`（`id` `type` `target` `state` `error`）`done` `failed` `cancelled`                                                                                                     |
-| `download cancel <id>`             | 对象   | 有   | `id` `outcome`（`cancelled` 或 `aborting`）`task`                                                                                                                                                     |
-| `download retry <id>`              | 对象   | 有   | 队列任务                                                                                                                                                                                              |
-| `download clear`                   | 对象   | 有   | `removed:number`                                                                                                                                                                                      |
-| `modpack <文件>`                   | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                              |
-| `mirror list`                      | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                                      |
-| `mirror use <名字>`                | 对象   | 有   | `source`                                                                                                                                                                                              |
-| `mirror update`                    | 对象   | 有   | `from` `fetchedAt` `entries[]`                                                                                                                                                                        |
-| `view loader`                      | 对象   | 有   | `type` `loaders[]`（`name` `latest` `total`）                                                                                                                                                         |
-| `view loader <名字>`               | 对象   | 有   | `loader` `type` `page` `pages` `perPage` `total` `versions[]`（`version` `gameVersion` `channel`）                                                                                                    |
-| `view loader <名字> --game <版本>` | 对象   | 有   | 同上，多 `game`                                                                                                                                                                                       |
-| `view loader <名字> --games`       | 对象   | 有   | `loader` `page` `pages` `perPage` `total` `versions[]`（字符串数组）                                                                                                                                  |
-| `view game <版本>`                 | 对象   | 有   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                                  |
-| `auth list`                        | 数组   | 无   | 元素：`id:string` `type:string` `name:string` `uuid:string\|null` `selected:boolean` `status:string`；微软账户多 `xuid:string\|null` `expiresAt:string\|null` `hasCredential:boolean`                 |
-| `auth login <游戏名>`              | 对象   | 有   | 账户：`id` `type` `name` `uuid`                                                                                                                                                                       |
-| `auth login --type microsoft`      | NDJSON | 每行 | 见[设备码登录流](#设备码登录流)                                                                                                                                                                       |
-| `auth logout <游戏名>`             | 对象   | 有   | `removed`                                                                                                                                                                                             |
-| `java list` / `java scan`          | 数组   | 无   | 元素：`path:string` `major:number\|null` `kind:string` `arch:string\|null` `vendor:string\|null` `source:string` `present:boolean`                                                                    |
-| `java add <path>`                  | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source`                                                                                                                                                        |
-| `java remove <path>`               | 对象   | 有   | `removed`                                                                                                                                                                                             |
-| `java which`                       | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                                        |
-| `java install <主版本>`            | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                                     |
-| `java install --provider mojang`   | 对象   | 有   | `provider` `component` `version` `platform` `url` `root` `java` `files` `bytes` `directories` `links` `registered`                                                                                    |
-| 错误信封                           | 对象   | 有   | `error`                                                                                                                                                                                               |
-| `--version --json`                 | 对象   | 有   | `version`                                                                                                                                                                                             |
+`--version --json` 的 `api` 是机器接口版本：字段形状或语义发生破坏性变更时 +1。消费方按 `api` 判兼容，不按语义版本号。
+
+| 命令                                | 顶层   | `v`  | 字段                                                                                                                                                                                                  |
+| ----------------------------------- | ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folder list`                       | 数组   | 无   | 元素：`id:string` `name:string` `path:string` `exists:boolean` `writable:boolean` `instanceCount:number` `selected:boolean`                                                                           |
+| `folder scan [id]`                  | 数组   | 无   | 元素：FolderView `id:string` `selectedInstance:string\|null` `name:string` `path:string` `exists:boolean` `writable:boolean` `versionsDirectory:string` `dropped:string[]` `instances[]`              |
+| `folder add <path>`                 | 对象   | 有   | `id` `path` `versionCount`                                                                                                                                                                            |
+| `folder add <path> --dry-run`       | 对象   | 有   | FolderView，含 `instances[]`                                                                                                                                                                          |
+| `folder add <path> --no-select`     | 对象   | 有   | 同 `folder add <path>`，只是不改当前文件夹                                                                                                                                                            |
+| `folder remove <id>`                | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `folder select <id>`                | 对象   | 有   | `selected` `path`                                                                                                                                                                                     |
+| `version list`                      | 对象   | 有   | 同 `folder scan` 的元素（FolderView）                                                                                                                                                                 |
+| `version info <id>`                 | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                              |
+| `version select <id>`               | 对象   | 有   | `selected` `folder`                                                                                                                                                                                   |
+| `version rename <旧> <新>`          | 对象   | 有   | `id` `from` `folder` `moved:boolean` `rewritten:string[]` `dryRun:boolean`                                                                                                                            |
+| `launch [id]`                       | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `pid` `log` `missing` `repair`                                                   |
+| `launch [id] --dry-run`             | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair`、`pid` 与 `log` 恒为 `null`                                                                                                                                    |
+| `launch [id] --repair`              | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                |
+| `install <version>`                 | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                                        |
+| `mod search <关键词>`               | 数组   | 无   | 元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`                                               |
+| `mod install <关键词>`              | 对象   | 有   | `instance` `mods` `project` `version` `files[]` `dependencies[]` `warnings[]`                                                                                                                         |
+| `mod install <关键词> --async`      | 对象   | 有   | 队列任务：`id` `type` `target` `state` `params` `attempts` `created` `started` `finished` `progress` `error`；另给 `spawn:{outcome:string,pid:number\|null,log:string}`（这次拉起后台 worker 的结果） |
+| `download info`                     | 对象   | 有   | `worker:number\|null` `tasks[]`（队列任务，同上）                                                                                                                                                     |
+| `download info <id>`                | 对象   | 有   | `worker` `task`（单个队列任务）                                                                                                                                                                       |
+| `download run`                      | 对象   | 有   | `recovered:string[]` `tasks[]`（`id` `type` `target` `state` `error`）`done` `failed` `cancelled`                                                                                                     |
+| `download cancel <id>`              | 对象   | 有   | `id` `outcome`（`cancelled` 或 `aborting`）`task`                                                                                                                                                     |
+| `download retry <id>`               | 对象   | 有   | 队列任务                                                                                                                                                                                              |
+| `download clear`                    | 对象   | 有   | `removed:number`                                                                                                                                                                                      |
+| `modpack <文件>`                    | 对象   | 有   | `name` `pack` `version` `files` `overrides` `warnings[]`                                                                                                                                              |
+| `mirror list`                       | 对象   | 有   | `presets[]` `mirrors[]` `source`                                                                                                                                                                      |
+| `mirror use <名字>`                 | 对象   | 有   | `source`                                                                                                                                                                                              |
+| `mirror update`                     | 对象   | 有   | `from` `fetchedAt` `entries[]`                                                                                                                                                                        |
+| `config get`                        | 对象   | 有   | `config`（整份 `setting.json`）                                                                                                                                                                       |
+| `config get <键>` / `set` / `unset` | 对象   | 有   | `key:string\|null` `folder:string\|null` `instance:string\|null` `value`                                                                                                                              |
+| `status`                            | 对象   | 有   | `cliVersion` `api` `node` `home` `logs` `host{platform,arch,memoryMb}` `java[]` `javaDefault` `memory{minMb,maxMb,globalMb,currentMb}` `folder` `mirror` `features[]`                                 |
+| `view loader`                       | 对象   | 有   | `type` `loaders[]`（`name` `latest` `total`）                                                                                                                                                         |
+| `view loader <名字>`                | 对象   | 有   | `loader` `type` `page` `pages` `perPage` `total` `versions[]`（`version` `gameVersion` `channel`）                                                                                                    |
+| `view loader <名字> --game <版本>`  | 对象   | 有   | 同上，多 `game`                                                                                                                                                                                       |
+| `view loader <名字> --games`        | 对象   | 有   | `loader` `page` `pages` `perPage` `total` `versions[]`（字符串数组）                                                                                                                                  |
+| `view game <版本>`                  | 对象   | 有   | `game` `type` `page` `pages` `perPage` `total` `versions[]` `loaders[]` `warnings[]`                                                                                                                  |
+| `auth list`                         | 数组   | 无   | 元素：`id:string` `type:string` `name:string` `uuid:string\|null` `selected:boolean` `status:string`；微软账户多 `xuid:string\|null` `expiresAt:string\|null` `hasCredential:boolean`                 |
+| `auth login <游戏名>`               | 对象   | 有   | 账户：`id` `type` `name` `uuid`                                                                                                                                                                       |
+| `auth login --type microsoft`       | NDJSON | 每行 | 见[设备码登录流](#设备码登录流)                                                                                                                                                                       |
+| `auth logout <游戏名>`              | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `auth use <游戏名>`                 | 对象   | 有   | `id` `name` `type`                                                                                                                                                                                    |
+| `java list` / `java scan`           | 数组   | 无   | 元素：`path:string` `major:number\|null` `kind:string` `arch:string\|null` `vendor:string\|null` `source:string` `present:boolean`                                                                    |
+| `java add <path>`                   | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source`                                                                                                                                                        |
+| `java remove <path>`                | 对象   | 有   | `removed`                                                                                                                                                                                             |
+| `java which`                        | 对象   | 有   | `path` `major` `kind` `arch` `vendor` `source` `home`；`--major <主版本>` 限定                                                                                                                        |
+| `java install <主版本>`             | 对象   | 有   | `name` `url` `root` `java` `archive` `sha256` `size` `registered`                                                                                                                                     |
+| `java install --provider mojang`    | 对象   | 有   | `provider` `component` `version` `platform` `url` `root` `java` `files` `bytes` `directories` `links` `registered`                                                                                    |
+| 错误信封                            | 对象   | 有   | `error`                                                                                                                                                                                               |
+| `--version --json`                  | 对象   | 有   | `version` `api`                                                                                                                                                                                       |
 
 同一命令不同模式形状不同，读数前先认清是哪一种：
 
 - `folder add <path>` 给摘要对象 `{id,path,versionCount}`，`folder add <path> --dry-run` 给 FolderView（含 `instances[]`）
-- `launch [id]` 与 `launch [id] --dry-run` 形状相同，区别只在有没有真的启动，以及 `repair` 有没有值
+- `launch [id]` 与 `launch [id] --dry-run` 形状相同，区别只在有没有真的启动，以及 `repair` 与 `pid` 有没有值
 - `launch [id] --repair` 只给 `version` `directory` `missing` `repair` 四项，不带启动计划
 - `java scan` 会把清单写回 `setting.json`，`java list` 只读
 
@@ -377,6 +459,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 - `detail`：具体细节，没有细节时是空串
 - `exit`：进程退出码，与真实退出码一致
 - `retryable`：是否值得重试，只有 `DownloadFailed` 与 `DependencyMissing` 为 `true`
+- `FileWriteFailed` 的 `detail` 是 `<errno> <路径>`（例如 `EROFS /home/u/.config/bloomery/setting.json`），数据目录不可写、磁盘满这类情况都归它，`UnknownError` 只留给意料外的分支
 - `context`：恒存在，没有额外字段时是 `{}`；`detail` 之外的上下文键都落在这里
 
 退出码分档：`0` 成功 / `1` 运行期失败 / `2` 参数不合法 / `3` 未实现。
@@ -388,6 +471,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 | `UnknownCommand`           | 未知命令                                 | 2    | false     |
 | `NotImplemented`           | 该功能尚未实现                           | 3    | false     |
 | `ConfigTooNew`             | 配置版本比程序新                         | 1    | false     |
+| `FileWriteFailed`          | 文件写入失败                             | 1    | false     |
 | `FolderNotFound`           | 游戏文件夹不存在                         | 1    | false     |
 | `FolderUnusable`           | 游戏文件夹不可用                         | 1    | false     |
 | `FolderDuplicate`          | 游戏文件夹已经添加过                     | 1    | false     |
@@ -401,6 +485,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 | `JavaDuplicate`            | 这个 Java 已经在清单里                   | 1    | false     |
 | `DependencyMissing`        | 依赖文件缺失                             | 1    | **true**  |
 | `DownloadFailed`           | 下载失败                                 | 1    | **true**  |
+| `WorkerBusy`               | 已有下载进程在运行                       | 1    | false     |
 | `AccountNotFound`          | 找不到可用的账户                         | 1    | false     |
 | `AccountExists`            | 这个账号已经在清单里                     | 1    | false     |
 | `AccountExpired`           | 账户凭据需要刷新                         | 1    | false     |
@@ -422,14 +507,17 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 `--progress ndjson` 把进度写成 NDJSON 到 **stderr**（标准输出不受影响），每行一个对象：
 
 ```json
-{ "v": 1, "stage": "库", "done": 4617, "total": 59288230, "bytes": true }
+{ "v": 1, "key": "library", "stage": "库", "done": 4617, "total": 59288230, "bytes": true }
 ```
 
-- `stage`：阶段名，`install` 与 `launch` 的补全都是 `客户端 jar` / `库` / `natives` / `资源` 四条通道
+- `key`：通道的稳定键，每条事件都有：`clientJar` / `library` / `natives` / `assets` / `files`。前四个是 `install` 与 `launch` 补全的四条通道，`files` 是逐文件下载（`java install --provider mojang` 与队列 worker）。消费方按 `key` 认通道
+- `stage`：同一通道的显示名，`客户端 jar` / `库` / `natives` / `资源` / `文件`，随实现措辞变化，别拿它做判断
 - `done` / `total`：`bytes` 为 `true` 时是字节数，否则是个数
 - `bytes`：布尔，说明前两个字段的单位
+- `existing`：可选，`true` 表示这批文件本地已有、这次没下
+- `taskId`：可选，队列 worker 跑任务时带上的任务 id，消费端据此把事件归属到任务
 
-节流 100ms 一条；新阶段与收尾必发；stderr 积压超过 64KB 时丢中间帧（收尾那条仍强制写），因此消费端再慢也不会拖慢下载。
+节流 100ms 一条；首帧、新阶段与收尾必发；stderr 积压超过 64KB 时丢中间帧（收尾那条仍强制写），因此消费端再慢也不会拖慢下载。
 
 ### 设备码登录流
 
@@ -465,6 +553,10 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 
 forge 与 neoforge 走官方安装器：下载安装器到 `<文件夹>/.bloomery/`，执行完删除；过程需要本机 Java，按目标版本 json 的 `javaVersion` 挑（1.12.2 要 Java 8），耗时数分钟，输出实时透传。`--name` 指定实例名时，安装器写出的版本目录整份改名接管，继承链只留一层。
 
+fabric 与 quilt 走官方 meta：拉到的 profile 是引用式的（`inheritsFrom` 指向游戏版本），安装时与原版 json 合并成一份自包含 json 写进实例目录，见 [install](#install)。
+
+读取侧两种布局都支持：外部启动器（官方启动器、PCL、HMCL）装出来的实例是引用式的，沿 `inheritsFrom` 递归合并仍在，`--repair` 与 `launch` 对它们照常工作。
+
 ## 存储
 
 按 PCL / HMCL 的布局存放，只使用版本隔离模式：
@@ -483,20 +575,39 @@ forge 与 neoforge 走官方安装器：下载安装器到 `<文件夹>/.bloomer
 
 MOD、配置、存档都在实例目录下，互不影响。
 
+`<实例 id>.json` 有两种形态：自包含（fabric / quilt 装出来的，带 `bloomery` 标记键，客户端 jar 就在实例目录里）与引用式（forge / neoforge 与外部启动器装出来的，`inheritsFrom` 指向基础版本目录，jar 用基础版本那份）。两种都能启动、补全与改名。
+
 配置与日志：
 
 ```
 ~/.config/bloomery/
   setting.json            # 文件夹、账户、下载源、代理、并发、选中项
   state.json              # 上次启动的实例、Java 探测缓存
+  accounts.json           # 账户，含凭据，权限收紧
+  mirrors.json            # 拉来的下载源清单与拉取时刻
+  downloads.json          # 下载队列的任务清单
+  downloads.lock          # 队列 worker 的 pid 锁
+  downloads.cancel        # 跨进程的取消请求
   logs/latest.log
+  logs/worker.log         # 后台 worker 的正文，追加写
 ```
 
 `--home <dir>` 时配置目录换成 `<dir>/.config/bloomery`，日志落点 `logs/` 也在这个目录下。
 
+`state.json` 退出前在 `state.json.lock` 锁内重读一次，再重放本次进程改过的内容：多个进程共用同一个数据目录时，启动次数与上次游玩时间不会被后写的整份覆盖。
+
 下载源、代理与并发在 `setting.json` 的 `network` 段（`concurrency` 默认 8，四类文件按任务数分配）。
 
 代理也可用环境变量 `HTTPS_PROXY` / `HTTP_PROXY`；`network.proxy` 有值时优先于环境变量，`NO_PROXY` 命中的地址直连
+
+## 中断与重入
+
+全仓库没有信号处理：`SIGINT` 与 `SIGTERM` 直接终止进程，不写收尾状态。
+
+- `install` 可续跑：已存在的文件逐个跳过，中断后重跑接着补
+- 中断不更新 `state.json` 的启动统计，也不改队列任务的 `state`
+- 队列里残留的 `running` 不作判据，判据是 `download info` 的 `worker` 字段；遗留任务由下次 worker 启动时标为失败，重跑走 `download retry <id>`
+- 取消的对外结果看 `download cancel` 的 `outcome`（`cancelled` / `aborting`）
 
 ## 微软登录
 

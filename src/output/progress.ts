@@ -42,6 +42,24 @@ export const EXISTING_NOTE = "（已存在）";
 
 export type ProgressStyle = "bar" | "plain" | "off" | "ndjson";
 
+/** 稳定键，进 ndjson 事件的 key 字段；消费方按它认通道，不认中文 */
+export type ProgressKey = "clientJar" | "library" | "natives" | "assets" | "files";
+
+/** 进度通道：key 给机器读，label 给终端显示 */
+export interface ProgressStage {
+    readonly key: ProgressKey;
+    readonly label: string;
+}
+
+/** 五条通道，终端与机器两端共用同一份标签 */
+export const PROGRESS_STAGES: Readonly<Record<ProgressKey, ProgressStage>> = {
+    clientJar: { key: "clientJar", label: "客户端 jar" },
+    library: { key: "library", label: "库" },
+    natives: { key: "natives", label: "natives" },
+    assets: { key: "assets", label: "资源" },
+    files: { key: "files", label: "文件" },
+};
+
 export interface ProgressIo {
     readonly interactive: boolean;
     /** 终端当前的列数，判断上一帧现在占几行用 */
@@ -58,7 +76,13 @@ export interface ProgressIo {
 
 export interface ProgressReporter {
     /** bytes 为 true 时 done 与 total 是字节数；existing 表示这批全是已有的 */
-    update(stage: string, done: number, total: number, bytes?: boolean, existing?: boolean): void;
+    update(
+        stage: ProgressStage,
+        done: number,
+        total: number,
+        bytes?: boolean,
+        existing?: boolean,
+    ): void;
     /** 收尾：让最后一条进度留在屏幕上 */
     close(): void;
 }
@@ -138,13 +162,20 @@ export function progressReporter(
     };
 
     return {
-        update(next: string, done: number, total: number, bytes = false, existing = false): void {
+        update(
+            channel: ProgressStage,
+            done: number,
+            total: number,
+            bytes = false,
+            existing = false,
+        ): void {
             if (style === "off" || total <= 0) {
                 return;
             }
 
-            const first = !lanes.has(next);
-            const lane = lanes.get(next) ?? { done: 0, total, note: "", percent: -1 };
+            const { key, label } = channel;
+            const first = !lanes.has(label);
+            const lane = lanes.get(label) ?? { done: 0, total, note: "", percent: -1 };
             lane.done = done;
             lane.total = total;
             lane.note = existing ? EXISTING_NOTE : "";
@@ -153,14 +184,15 @@ export function progressReporter(
             // 机器可读：一行一个 JSON 事件，节流 + 背压，收尾与新阶段必发
             if (style === "ndjson") {
                 lane.percent = percent;
-                lanes.set(next, lane);
+                lanes.set(label, lane);
                 const force = first || percent >= 100;
                 if (!force && Date.now() - lastEmitAt < EMIT_INTERVAL_MS) {
                     return;
                 }
                 const payload = {
                     v: 1,
-                    stage: next,
+                    key,
+                    stage: label,
                     done,
                     total,
                     bytes,
@@ -186,18 +218,18 @@ export function progressReporter(
                         lane.percent >= 0 &&
                         percent - lane.percent < PLAIN_STEP
                     ) {
-                        lanes.set(next, lane);
+                        lanes.set(label, lane);
                         return;
                     }
                     lane.percent = percent;
-                    lanes.set(next, lane);
-                    io.line(`${next} ${sizeText(done)}/${sizeText(total)}${lane.note}`);
+                    lanes.set(label, lane);
+                    io.line(`${label} ${sizeText(done)}/${sizeText(total)}${lane.note}`);
                     return;
                 }
                 lane.percent = percent;
-                lanes.set(next, lane);
+                lanes.set(label, lane);
                 if (done === total || done % STEP === 0) {
-                    io.line(`${next} ${done}/${total}${lane.note}`);
+                    io.line(`${label} ${done}/${total}${lane.note}`);
                 }
                 return;
             }
@@ -207,7 +239,7 @@ export function progressReporter(
                 return;
             }
             lane.percent = percent;
-            lanes.set(next, lane);
+            lanes.set(label, lane);
 
             // 宽度只取一次：两次读取之间终端可能又变了，条与清理就对不上
             const width = io.width;

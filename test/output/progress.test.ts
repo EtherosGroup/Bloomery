@@ -9,6 +9,7 @@ import { test } from "node:test";
 
 import {
     liveColumns,
+    PROGRESS_STAGES,
     progressReporter,
     renderBar,
     type ProgressIo,
@@ -170,18 +171,18 @@ test("终端改大小后先擦掉被折行的旧帧", () => {
     const bar = progressReporter("bar", io);
 
     // 第一帧没有东西要清
-    bar.update("资源", 0, 100);
+    bar.update(PROGRESS_STAGES.assets, 0, 100);
     assert.match(io.writes[0] ?? "", /^\[/);
 
     // 100 格的旧帧在 41 列下会折成 3 行：退回 2 行，再整片擦掉
     resize(41);
-    bar.update("资源", 50, 100);
+    bar.update(PROGRESS_STAGES.assets, 50, 100);
     const cleaned = io.writes[1] ?? "";
     assert.match(cleaned, /^\u001b\[2A\r\u001b\[J/);
     assert.equal(displayWidth(cleaned.replace(/^\u001b\[2A\r\u001b\[J/, "")), 40);
 
     // 宽度没再变就只擦这一行
-    bar.update("资源", 60, 100);
+    bar.update(PROGRESS_STAGES.assets, 60, 100);
     assert.match(io.writes[2] ?? "", /^\r\u001b\[J\[/);
 });
 
@@ -189,9 +190,9 @@ test("两条通道各占一行，同一个块里一起刷新", () => {
     const { io } = resizableIo();
     const bar = progressReporter("bar", io);
 
-    bar.update("库", 0, 100);
-    bar.update("natives", 0, 100);
-    bar.update("库", 50, 100);
+    bar.update(PROGRESS_STAGES.library, 0, 100);
+    bar.update(PROGRESS_STAGES.natives, 0, 100);
+    bar.update(PROGRESS_STAGES.library, 50, 100);
 
     // 后一帧是两行：库 与 natives 同时重画
     const frame = io.writes.at(-1) ?? "";
@@ -207,13 +208,13 @@ test("一批文件全是已有的，后缀跟着收尾那一帧", () => {
     const io = fakeIo();
     const bar = progressReporter("bar", io);
 
-    bar.update("库", 47, 47, false, true);
+    bar.update(PROGRESS_STAGES.library, 47, 47, false, true);
     assert.match(io.writes.at(-1) ?? "", /100% 库\s*（已存在）/);
 
     // 中间帧不带
     const mid = fakeIo();
     const other = progressReporter("bar", mid);
-    other.update("库", 20, 47, false, false);
+    other.update(PROGRESS_STAGES.library, 20, 47, false, false);
     assert.doesNotMatch(mid.writes.at(-1) ?? "", /已存在/);
 });
 
@@ -221,8 +222,8 @@ test("非交互时后缀也带上", () => {
     const io = fakeIo({ interactive: false });
     const bar = progressReporter("bar", io);
 
-    bar.update("库", 47, 47, false, true);
-    bar.update("natives", 8, 8, false, false);
+    bar.update(PROGRESS_STAGES.library, 47, 47, false, true);
+    bar.update(PROGRESS_STAGES.natives, 8, 8, false, false);
     bar.close();
 
     assert.deepEqual(io.lines, ["库 47/47（已存在）", "natives 8/8"]);
@@ -232,10 +233,10 @@ test("两条通道重画时退两行，收尾留一块在屏幕上", () => {
     const io = fakeIo({ columns: 41, width: 40 });
     const bar = progressReporter("bar", io);
 
-    bar.update("客户端 jar", 0, 100);
-    bar.update("库", 0, 100);
+    bar.update(PROGRESS_STAGES.clientJar, 0, 100);
+    bar.update(PROGRESS_STAGES.library, 0, 100);
     // 上一块两行，重画前退一行再整片擦掉
-    bar.update("客户端 jar", 100, 100);
+    bar.update(PROGRESS_STAGES.clientJar, 100, 100);
     assert.match(io.writes.at(-1) ?? "", /^\u001b\[1A\r\u001b\[J/);
 
     bar.close();
@@ -250,12 +251,12 @@ test("同一个百分比不重复刷", () => {
     const bar = progressReporter("bar", io);
 
     // 40 格的条里，1/1000 与 9/1000 都是 0%，只该刷一次
-    bar.update("资源", 1, 1000);
-    bar.update("资源", 9, 1000);
+    bar.update(PROGRESS_STAGES.assets, 1, 1000);
+    bar.update(PROGRESS_STAGES.assets, 9, 1000);
     assert.equal(io.writes.length, 1);
 
     // 最后一步无论百分比是否相同都要刷
-    bar.update("资源", 1000, 1000);
+    bar.update(PROGRESS_STAGES.assets, 1000, 1000);
     assert.equal(io.writes.length, 2);
     assert.match(io.writes.at(-1) ?? "", /100%/);
 });
@@ -264,9 +265,9 @@ test("非交互退化成按阶段报数", () => {
     const io = fakeIo({ interactive: false });
     const bar = progressReporter("bar", io);
 
-    bar.update("库", 0, 3);
-    bar.update("库", 1, 3);
-    bar.update("库", 3, 3);
+    bar.update(PROGRESS_STAGES.library, 0, 3);
+    bar.update(PROGRESS_STAGES.library, 1, 3);
+    bar.update(PROGRESS_STAGES.library, 3, 3);
     bar.close();
 
     assert.deepEqual(io.writes, []);
@@ -278,9 +279,9 @@ test("按字节报时用人看的单位", () => {
     const bar = progressReporter("bar", io);
     const total = 100 * 1024 * 1024;
 
-    bar.update("客户端 jar", 0, total, true);
-    bar.update("客户端 jar", total * 0.51, total, true);
-    bar.update("客户端 jar", total, total, true);
+    bar.update(PROGRESS_STAGES.clientJar, 0, total, true);
+    bar.update(PROGRESS_STAGES.clientJar, total * 0.51, total, true);
+    bar.update(PROGRESS_STAGES.clientJar, total, total, true);
 
     // 每 5% 一行，0 与收尾必报
     assert.deepEqual(io.lines, [
@@ -294,7 +295,7 @@ test("plain 直接用报数", () => {
     const io = fakeIo({ interactive: true });
     const bar = progressReporter("plain", io);
 
-    bar.update("库", 3, 3);
+    bar.update(PROGRESS_STAGES.library, 3, 3);
     assert.deepEqual(io.writes, []);
     assert.deepEqual(io.lines, ["库 3/3"]);
 });
@@ -303,7 +304,7 @@ test("off 什么都不输出", () => {
     const io = fakeIo();
     const bar = progressReporter("off", io);
 
-    bar.update("库", 3, 3);
+    bar.update(PROGRESS_STAGES.library, 3, 3);
     bar.close();
     assert.deepEqual(io.writes, []);
     assert.deepEqual(io.lines, []);
@@ -313,13 +314,14 @@ test("ndjson：一行一事件，节流但收尾必发", () => {
     const io = fakeIo();
     const reporter = progressReporter("ndjson", io);
 
-    reporter.update("库", 0, 100);
-    reporter.update("库", 1, 100); // 同一节流窗口内，丢掉
-    reporter.update("库", 100, 100); // 收尾必发
+    reporter.update(PROGRESS_STAGES.library, 0, 100);
+    reporter.update(PROGRESS_STAGES.library, 1, 100); // 同一节流窗口内，丢掉
+    reporter.update(PROGRESS_STAGES.library, 100, 100); // 收尾必发
 
     assert.equal(io.events.length, 2);
     assert.deepEqual(JSON.parse(io.events[0] ?? ""), {
         v: 1,
+        key: "library",
         stage: "库",
         done: 0,
         total: 100,
@@ -333,11 +335,47 @@ test("ndjson：一行一事件，节流但收尾必发", () => {
 test("ndjson：新阶段立即发，不写终端", () => {
     const io = fakeIo();
     const reporter = progressReporter("ndjson", io);
-    reporter.update("客户端 jar", 0, 10, true);
-    reporter.update("库", 0, 10);
+    reporter.update(PROGRESS_STAGES.clientJar, 0, 10, true);
+    reporter.update(PROGRESS_STAGES.library, 0, 10);
     assert.equal(io.events.length, 2);
     assert.equal(JSON.parse(io.events[0] ?? "").bytes, true);
     assert.equal(JSON.parse(io.events[1] ?? "").stage, "库");
+});
+
+test("ndjson：首帧、换阶段、收尾都带稳定 key", () => {
+    const io = fakeIo();
+    const reporter = progressReporter("ndjson", io);
+
+    reporter.update(PROGRESS_STAGES.assets, 0, 100); // 首帧
+    reporter.update(PROGRESS_STAGES.files, 3, 9); // 换阶段
+    reporter.update(PROGRESS_STAGES.files, 9, 9); // 收尾
+
+    assert.equal(io.events.length, 3);
+    assert.deepEqual(
+        io.events.map((text) => JSON.parse(text).key),
+        ["assets", "files", "files"],
+    );
+    assert.deepEqual(
+        io.events.map((text) => JSON.parse(text).stage),
+        ["资源", "文件", "文件"],
+    );
+});
+
+test("ndjson：existing 与 taskId 与 key 并存", () => {
+    const io = fakeIo();
+    const reporter = progressReporter("ndjson", io, "a1b2c3d4");
+    reporter.update(PROGRESS_STAGES.clientJar, 5, 5, true, true);
+
+    assert.deepEqual(JSON.parse(io.events[0] ?? ""), {
+        v: 1,
+        key: "clientJar",
+        stage: "客户端 jar",
+        done: 5,
+        total: 5,
+        bytes: true,
+        existing: true,
+        taskId: "a1b2c3d4",
+    });
 });
 
 test("ndjson：背压时丢中间帧，收尾强制写", () => {
@@ -355,11 +393,12 @@ test("ndjson：背压时丢中间帧，收尾强制写", () => {
         },
     });
 
-    reporter.update("资源", 0, 100);
+    reporter.update(PROGRESS_STAGES.assets, 0, 100);
     blocked = true;
-    reporter.update("资源", 50, 100); // 被背压丢掉
-    reporter.update("资源", 100, 100); // 收尾强制写
+    reporter.update(PROGRESS_STAGES.assets, 50, 100); // 被背压丢掉
+    reporter.update(PROGRESS_STAGES.assets, 100, 100); // 收尾强制写
 
     assert.equal(events.length, 2);
     assert.equal(JSON.parse(events.at(-1) ?? "").done, 100);
+    assert.equal(JSON.parse(events.at(-1) ?? "").key, "assets");
 });

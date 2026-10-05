@@ -2,7 +2,8 @@
  * auth 命令：账户的增删查
  *
  * 账号 id 是 <游戏名>@<类型>，与显示名分开；同一个游戏名可以同时有离线与微软两条
- * 登出不给 --type 时按游戏名在全部账户里找，同名多条报用法错误
+ * 登出与切换不给 --type 时按游戏名在全部账户里找，同名多条报用法错误
+ * use 只改 setting 里的当前选中项，不登录也不碰凭据
  * 微软登录走设备码授权：终端给网址与代码，浏览器里授权完这边接着换令牌
  * client id 优先取 --client-id，其次 BLOOMERY_CLIENT_ID；登进来后按账号存下来给续期用
  * @author IsCibocaz
@@ -51,6 +52,8 @@ export async function runAuth(command: AuthCommand, ctx: Context): Promise<void>
                 : login(required(command.username, "username"), ctx);
         case "logout":
             return logout(required(command.username, "username"), type, ctx);
+        case "use":
+            return use(required(command.username, "username"), type, ctx);
     }
 }
 
@@ -225,33 +228,60 @@ async function logout(
     ctx: Context,
 ): Promise<void> {
     const accounts = await loadAccounts();
-    const id = targetId(accounts.accounts, username, type);
+    const account = targetAccount(accounts.accounts, username, type);
 
     await saveAccounts({
         ...accounts,
-        accounts: accounts.accounts.filter((account) => account.id !== id),
+        accounts: accounts.accounts.filter((item) => item.id !== account.id),
     });
 
     const setting = await loadSetting();
-    if (setting.selectedAccount === id) {
+    if (setting.selectedAccount === account.id) {
         await saveSetting({ ...setting, selectedAccount: null });
     }
 
     if (ctx.json) {
-        print(JSON.stringify(versioned({ removed: id }), null, 4));
+        print(JSON.stringify(versioned({ removed: account.id }), null, 4));
         return;
     }
-    print(`已移除 ${id}`);
+    print(`已移除 ${account.id}`);
+}
+
+// 只切当前账号：不登录、不刷新、不碰凭据
+async function use(username: string, type: AccountType | undefined, ctx: Context): Promise<void> {
+    const accounts = await loadAccounts();
+    const account = targetAccount(accounts.accounts, username, type);
+
+    const setting = await loadSetting();
+    await saveSetting({ ...setting, selectedAccount: account.id });
+    log.info("当前账户切到 %s", account.id);
+
+    if (ctx.json) {
+        print(
+            JSON.stringify(
+                versioned({ id: account.id, name: account.name, type: account.type }),
+                null,
+                4,
+            ),
+        );
+        return;
+    }
+    print(`当前账户 ${account.id}`);
 }
 
 // 给了类型按 id 认；没给类型按游戏名找，同名多条时把类型列出来
-function targetId(list: readonly Account[], name: string, type: AccountType | undefined): string {
+function targetAccount(
+    list: readonly Account[],
+    name: string,
+    type: AccountType | undefined,
+): Account {
     if (type !== undefined) {
         const id = accountId(name, type);
-        if (!list.some((account) => account.id === id)) {
+        const found = list.find((account) => account.id === id);
+        if (found === undefined) {
             throw new AppError("cli", "AccountNotFound", { context: { detail: id } });
         }
-        return id;
+        return found;
     }
 
     const found = accountsNamed(list, name);
@@ -268,7 +298,7 @@ function targetId(list: readonly Account[], name: string, type: AccountType | un
             },
         });
     }
-    return only.id;
+    return only;
 }
 
 // 没给类型返回 undefined：登出要按游戏名在全部类型里找

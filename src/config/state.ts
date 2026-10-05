@@ -1,7 +1,8 @@
 /**
  * 状态文件
  *
- * 内存里累计，退出前写一次；统计丢了无所谓，所以坏文件直接删掉重建
+ * 内存里累计，退出前在锁内重读一次再重放本次的改动
+ * 统计丢了无所谓，所以坏文件直接删掉重建
  * @author IsCibocaz
  * @since 1.0.0
  */
@@ -9,6 +10,7 @@
 import { rm } from "node:fs/promises";
 
 import { readText, writeAtomic } from "../infra/fs.ts";
+import { withFileLock } from "../infra/lock.ts";
 import { logger } from "../output/index.ts";
 import { stateFile } from "../platform/index.ts";
 import { defaultState } from "./defaults.ts";
@@ -21,6 +23,8 @@ const STAT_KEY = /^[^/]+\/[^/]+$/;
 
 let cache: State | undefined;
 let dirty = false;
+// 本次进程改过的内容，退出前重读一次再按顺序重放
+const pending: Array<(state: State) => State> = [];
 
 // 首次调用读盘，之后返回内存里那份
 export async function loadState(): Promise<State> {
@@ -33,16 +37,28 @@ export async function loadState(): Promise<State> {
 
 export async function updateState(change: (state: State) => State): Promise<State> {
     cache = change(await loadState());
+    pending.push(change);
     dirty = true;
     return cache;
 }
 
 // 没改过就不写盘
+// 多个进程共用数据目录时各自都写一份，退出前重读再重放，启动统计才不会被后写的覆盖
 export async function flushState(): Promise<void> {
     if (cache === undefined || !dirty) {
         return;
     }
-    await writeAtomic(stateFile(), `${JSON.stringify(cache, null, 4)}\n`);
+    const changes = [...pending];
+    const merged = await withFileLock(`${stateFile()}.lock`, async () => {
+        let next = await read();
+        for (const change of changes) {
+            next = change(next);
+        }
+        await writeAtomic(stateFile(), `${JSON.stringify(next, null, 4)}\n`);
+        return next;
+    });
+    cache = merged;
+    pending.length = 0;
     dirty = false;
 }
 
@@ -104,6 +120,7 @@ function readProbe(value: unknown, at: string): JavaProbe | undefined {
     const r = reader(at, raw, []);
     const probe: JavaProbe = {
         major: r.optionalInteger("major", 1) ?? null,
+        version: r.nullableString("version", null),
         arch: r.enumeration("arch", ["x64", "x86", "arm64", "arm"] as const, "x64"),
         vendor: r.nullableString("vendor", null),
         probedAt: r.string("probedAt", ""),

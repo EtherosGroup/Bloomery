@@ -67,6 +67,8 @@ export interface PlanInput {
 export interface PlanOptions {
     /** false 表示预览：不解压 natives，缺件也不报错 */
     readonly prepare?: boolean;
+    /** 本次启动的内存上限，来自 --memory；压过实例、文件夹与全局三层 */
+    readonly memoryMaxMb?: number | undefined;
 }
 
 export async function planLaunch(
@@ -96,7 +98,11 @@ export async function planLaunch(
     }
 
     const warnings: string[] = [];
-    const options = launchOptionsOf(input.setting, input.folder, input.config);
+    const base = launchOptionsOf(input.setting, input.folder, input.config);
+    const options =
+        planOptions.memoryMaxMb === undefined
+            ? base
+            : { ...base, memory: { ...base.memory, maxMb: planOptions.memoryMaxMb } };
     const gameDirectory = input.instance.directory;
     const librariesRoot = join(input.folder.path, "libraries");
     const assetsRoot = join(input.folder.path, "assets");

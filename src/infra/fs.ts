@@ -10,17 +10,28 @@
 import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { AppError } from "../error/index.ts";
+
 // 先写临时文件再改名：目标路径上不会出现写到一半的内容
+// 失败统一报 FileWriteFailed，detail 是 <errno> <路径>，消费方据此知道是哪个文件写不下去
 export async function writeAtomic(path: string, text: string, mode?: number): Promise<void> {
-    await mkdir(dirname(path), { recursive: true });
     const temp = `${path}.tmp-${process.pid}`;
     try {
+        await mkdir(dirname(path), { recursive: true });
         await writeFile(temp, text, mode === undefined ? undefined : { mode });
         await rename(temp, path);
     } catch (error) {
         await rm(temp, { force: true }).catch(() => {});
-        throw error;
+        throw writeFailure(path, error);
     }
+}
+
+function writeFailure(path: string, error: unknown): AppError {
+    const code = (error as NodeJS.ErrnoException).code;
+    return new AppError("fs", "FileWriteFailed", {
+        cause: error,
+        context: { detail: `${code === undefined ? "写入失败" : code} ${path}` },
+    });
 }
 
 // 文件不存在返回 undefined，其余错误照抛

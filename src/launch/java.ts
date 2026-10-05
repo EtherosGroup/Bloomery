@@ -51,6 +51,8 @@ const SOURCE_RANK: Record<JavaSource, number> = { manual: 0, downloaded: 1, dete
 export interface JavaInfo {
     readonly path: string;
     readonly major: number | null;
+    /** java.version 的原样字符串，界面直接显示 */
+    readonly version: string | null;
     readonly arch: JavaArch | null;
     readonly vendor: string | null;
     readonly kind: JavaKind;
@@ -95,6 +97,7 @@ export async function probeJava(
     return {
         path,
         major: majorOfVersion(version),
+        version,
         arch: javaArchOf(properties["os.arch"] ?? ""),
         vendor: properties["java.vendor"] ?? null,
         kind: (await exists(join(dirname(path), JAVAC_EXECUTABLE))) ? "jdk" : "jre",
@@ -306,6 +309,7 @@ export function javaEntryOf(info: JavaInfo): JavaEntry {
 export function javaProbeOf(info: JavaInfo): JavaProbe {
     return {
         major: info.major,
+        version: info.version,
         arch: info.arch,
         vendor: info.vendor,
         probedAt: info.probedAt,
@@ -507,6 +511,7 @@ async function probeCached(
     return {
         path,
         major: cached.major ?? null,
+        version: cached.version ?? null,
         arch: cached.arch ?? null,
         vendor: cached.vendor ?? null,
         kind: (await exists(join(dirname(path), JAVAC_EXECUTABLE))) ? "jdk" : "jre",

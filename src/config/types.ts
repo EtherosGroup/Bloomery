@@ -226,6 +226,8 @@ export interface InstanceStat {
 
 export interface JavaProbe {
     readonly major?: number | null;
+    /** java.version 的原样字符串 */
+    readonly version?: string | null;
     readonly arch?: JavaArch | null;
     readonly vendor?: string | null;
     readonly probedAt: string;

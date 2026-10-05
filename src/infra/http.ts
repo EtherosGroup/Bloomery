@@ -2,7 +2,7 @@
  * HTTP 请求
  *
  * 直接用 node:http / node:https 发，不引第三方库，超时、代理、重定向才有地方下手
- * 重试只针对网络错误、429 与 5xx；4xx 是明确的拒绝，重试没有意义
+ * 重试只针对网络错误与 5xx；4xx 是明确的拒绝，重试没有意义
  * 代理只认 http 代理：https 走 CONNECT 隧道，http 用绝对地址请求
  * @author IsCibocaz
  * @since 1.0.0

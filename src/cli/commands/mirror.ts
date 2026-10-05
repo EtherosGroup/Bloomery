@@ -133,7 +133,8 @@ async function update(
     print(`镜像清单 ${entries.length} 条  ${url}`);
 }
 
-async function readMirrorFile(): Promise<MirrorFile> {
+// status 并进环境快照时也读这份缓存
+export async function readMirrorFile(): Promise<MirrorFile> {
     const path = mirrorListFile();
     const text = await readText(path);
     if (text === undefined) {

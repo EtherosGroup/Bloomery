@@ -9,6 +9,7 @@ export type ErrorCode =
     | "UnknownCommand"
     | "NotImplemented"
     | "ConfigTooNew"
+    | "FileWriteFailed"
     | "FolderNotFound"
     | "FolderUnusable"
     | "FolderDuplicate"

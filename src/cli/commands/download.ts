@@ -31,6 +31,7 @@ import { installMod } from "../../mod/index.ts";
 import {
     logger,
     print,
+    PROGRESS_STAGES,
     progressReporter,
     renderTable,
     versioned,
@@ -191,7 +192,7 @@ function modRunner(setting: Setting, style: ProgressStyle): WorkerOptions["run"]
         let total = 0;
 
         const report = (): void => {
-            progress.update("文件", done, total, true);
+            progress.update(PROGRESS_STAGES.files, done, total, true);
             control.progress("文件", done, total, true);
         };
         const wrapped: typeof downloadOne = async (item, options, onChunk) => {

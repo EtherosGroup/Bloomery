@@ -47,6 +47,8 @@ export {
     type InstanceView,
 } from "./folder.ts";
 export { readVersion, scanVersions, type LocalVersion, type VersionScan } from "./store.ts";
+export { renameVersion, versionNameOf, type RenameInput, type RenameReport } from "./rename.ts";
+export { mergeManifests, MARK_KEY, type MergeInput } from "./merge.ts";
 export {
     assetIndexIdOf,
     clientJarOf,

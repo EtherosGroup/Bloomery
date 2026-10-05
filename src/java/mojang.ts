@@ -23,7 +23,7 @@ import {
     type TransferOptions,
 } from "../infra/download.ts";
 import { pathExists } from "../infra/fs.ts";
-import { logger } from "../output/index.ts";
+import { logger, PROGRESS_STAGES, type ProgressStage } from "../output/index.ts";
 import {
     MOJANG_INDEX,
     mojangJavaPath,
@@ -37,7 +37,7 @@ const log = logger("java");
 
 /** 分阶段的上报签名 */
 export interface MojangProgress {
-    (stage: string, done: number, total: number, bytes: boolean, existing: boolean): void;
+    (stage: ProgressStage, done: number, total: number, bytes: boolean, existing: boolean): void;
 }
 
 export interface MojangInstallInput {
@@ -212,7 +212,7 @@ function stage(onProgress: MojangProgress | undefined): Progress | undefined {
     return onProgress === undefined
         ? undefined
         : (done, total, bytes, _target, existing) =>
-              onProgress("文件", done, total, bytes, existing);
+              onProgress(PROGRESS_STAGES.files, done, total, bytes, existing);
 }
 
 function message(error: unknown): string {

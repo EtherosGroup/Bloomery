@@ -172,6 +172,7 @@ function jvm(path: string, major: number | null, source: JavaSource = "detected"
     return {
         path,
         major,
+        version: major === null ? null : `${major}.0.0`,
         arch: "x64",
         vendor: null,
         kind: "jdk",

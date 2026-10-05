@@ -30,6 +30,12 @@ export interface LaunchCommand {
     readonly dryRun?: boolean;
     /** 只做检查与补全，不启动游戏 */
     readonly repair?: boolean;
+    /** 显式等游戏退出；与 detach 互斥，都不给时读 setting.json */
+    readonly waitForExit?: boolean;
+    /** 显式不等游戏退出，起完就返回 */
+    readonly detach?: boolean;
+    /** 本次启动的内存上限，单位 MB；不写进配置 */
+    readonly memory?: number;
 }
 
 export interface InstallCommand {
@@ -47,8 +53,8 @@ export interface InstallCommand {
 
 export interface AuthCommand {
     readonly name: "auth";
-    readonly action: "login" | "logout" | "list";
-    /** logout 必给；login 只有离线要用，微软的游戏名登录后才拿到 */
+    readonly action: "login" | "logout" | "list" | "use";
+    /** logout 与 use 必给；login 只有离线要用，微软的游戏名登录后才拿到 */
     readonly username?: string;
     /** 账号类型，省略按 offline；取值在命令里校验 */
     readonly type?: string;
@@ -130,11 +136,15 @@ export interface FolderCommand {
 
 export interface VersionCommand {
     readonly name: "version";
-    readonly action: "list" | "info" | "select";
-    /** info 与 select 必给 */
+    readonly action: "list" | "info" | "select" | "rename";
+    /** info / select 给实例；rename 给旧名字 */
     readonly id?: string;
+    /** rename 用：新名字 */
+    readonly renameTo?: string;
     /** 省略时用当前文件夹 */
     readonly folder?: string;
+    /** rename 用：只算不改 */
+    readonly dryRun?: boolean;
 }
 
 export interface JavaCommand {
@@ -155,6 +165,25 @@ export interface JavaCommand {
     readonly force?: boolean;
 }
 
+export interface ConfigCommand {
+    readonly name: "config";
+    readonly action: "get" | "set" | "unset";
+    /** 点分路径，get 可省略；给了 folder / instance 时相对该作用域 */
+    readonly key?: string;
+    /** set 的取值，原样交给解析 */
+    readonly value?: string;
+    /** set 用：值按普通字符串处理 */
+    readonly asString?: boolean;
+    /** 作用域：文件夹 id，可含点号 */
+    readonly folder?: string;
+    /** 作用域：实例 id，可含点号，要配 folder */
+    readonly instance?: string;
+}
+
+export interface StatusCommand {
+    readonly name: "status";
+}
+
 export type Command =
     | LaunchCommand
     | InstallCommand
@@ -166,7 +195,9 @@ export type Command =
     | FolderCommand
     | VersionCommand
     | JavaCommand
-    | DownloadCommand;
+    | DownloadCommand
+    | ConfigCommand
+    | StatusCommand;
 
 export type CommandName = Command["name"];
 

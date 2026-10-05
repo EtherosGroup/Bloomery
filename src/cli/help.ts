@@ -5,7 +5,7 @@
  */
 
 import { packageVersion, runtimeVersion } from "../infra/package.ts";
-import { print, versioned } from "../output/index.ts";
+import { API_VERSION, print, versioned } from "../output/index.ts";
 import type { CommandName, OptionDecls } from "./parse.ts";
 import { CLI_SPEC, GLOBAL_OPTIONS } from "./spec.ts";
 
@@ -15,10 +15,10 @@ export function printHelp(name?: CommandName): void {
     print(name === undefined ? overview() : commandHelp(name));
 }
 
-// 版本号取自 package.json
+// 版本号取自 package.json；api 是机器接口版本，给外壳判兼容用
 export function printVersion(json: boolean): void {
     const version = runtimeVersion();
-    print(json ? JSON.stringify(versioned({ version }), null, 4) : version);
+    print(json ? JSON.stringify(versioned({ version, api: API_VERSION }), null, 4) : version);
 }
 
 function overview(): string {
