@@ -225,7 +225,8 @@ function officialError(
     error: unknown,
     tail: readonly string[],
 ): AppError {
-    return new AppError("install", "DependencyMissing", {
+    // 安装器退出码非 0：重试往往没用（Java 版本不符、安装器本身报错），所以不标可重试
+    return new AppError("install", "LoaderInstallFailed", {
         context: {
             detail: `${input.name} 官方安装器执行失败`,
             java: input.java,

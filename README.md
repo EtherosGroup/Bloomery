@@ -478,6 +478,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 | `VersionNotFound`          | 版本不存在                               | 1    | false     |
 | `VersionBroken`            | 无法读取版本文件                         | 1    | false     |
 | `InstallBroken`            | 安装失败                                 | 1    | false     |
+| `LoaderInstallFailed`      | 加载器安装失败                           | 1    | false     |
 | `GameFilesMissing`         | 启动文件缺失                             | 1    | false     |
 | `VersionExists`            | 版本已经存在                             | 1    | false     |
 | `JavaNotFound`             | 找不到可用的 Java                        | 1    | false     |

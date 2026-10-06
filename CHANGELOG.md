@@ -1,5 +1,9 @@
 # 更新记录
 
+## 1.12.4
+
+- 新增错误码 `LoaderInstallFailed`（加载器安装失败，`retryable` false）：forge / neoforge 的官方安装器退出码非 0 时不再报 `DependencyMissing`。后者标着可重试，但安装器失败重试往往没用（Java 版本不符、安装器本身报错）—— 下载失败仍走 `DependencyMissing`，那条确实值得重试
+
 ## 1.12.3
 
 - 挑官方安装器的 Java 改为从刚拉下来的原版 json 读主版本要求，不再读磁盘：全新文件夹里那份 json 还没落盘，旧实现读不到要求会退回默认目标 17，可能挑中 Java 21 去跑要 Java 8 的 1.12.2 Forge 安装器
