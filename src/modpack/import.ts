@@ -20,6 +20,7 @@ import {
     type InstallProgress,
     type InstallReport,
     type LoaderName,
+    type OfficialJavaPick,
 } from "../version/index.ts";
 import { readMrpack, type Mrpack, type MrpackFile } from "./mrpack.ts";
 
@@ -39,8 +40,8 @@ export interface ModpackImportInput {
     readonly dryRun?: boolean | undefined;
     /** false 时跳过资源对象，只装游戏本体 */
     readonly assets?: boolean | undefined;
-    /** 包里要 forge / neoforge 时官方安装器用的 java */
-    readonly officialJava?: string | undefined;
+    /** 包里要 forge / neoforge 时用这个回调挑官方安装器的 java */
+    readonly officialJavaFor?: OfficialJavaPick | undefined;
     /** 过程提示；--json 时调用方不给 */
     readonly logLine?: ((text: string) => void) | undefined;
     readonly onProgress?: InstallProgress | undefined;
@@ -94,7 +95,7 @@ export async function importModpack(input: ModpackImportInput): Promise<ModpackI
         network: input.network,
         download: input.download,
         assets: input.assets !== false,
-        officialJava: input.officialJava,
+        officialJavaFor: input.officialJavaFor,
         logLine: input.logLine,
         onProgress: input.onProgress,
     });

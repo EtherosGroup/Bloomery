@@ -26,8 +26,8 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
         });
     }
 
-    // 包里要 forge / neoforge 时安装器要用 java；这里统一挑一个，只有那条路会用到
-    const officialJava = await officialJavaOf(setting.java);
+    // 包里要 forge / neoforge 时安装器要用 java；主版本要求由安装那边从原版 json 读出来传进来
+    const officialJavaFor = (required: number | null) => officialJavaOf(setting.java, required);
     const progress = progressReporter(
         ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
     );
@@ -39,7 +39,7 @@ export async function runModpack(command: ModpackCommand, ctx: Context): Promise
         download: setting.download,
         dryRun: command.dryRun,
         assets: command.noAssets !== true,
-        officialJava,
+        officialJavaFor,
         onProgress: progress.update,
         // --json 时不给过程提示，避免污染标准输出
         logLine: ctx.json ? undefined : print,

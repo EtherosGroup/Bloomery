@@ -10,7 +10,7 @@
 import { loadSetting } from "../../config/index.ts";
 import { AppError } from "../../error/index.ts";
 import { logger, print, progressReporter, versioned } from "../../output/index.ts";
-import { officialJavaOf, requiredJavaIn } from "../java-choice.ts";
+import { officialJavaOf } from "../java-choice.ts";
 import {
     fileFailures,
     installVersion,
@@ -45,12 +45,12 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         throw new AppError("cli", "FolderNotFound", { context: { detail } });
     }
 
-    // forge 与 neoforge 要跑官方安装器，先挑一个 java；挑不到就把错留给安装器那步报
+    // forge 与 neoforge 要跑官方安装器，java 由安装那边回调挑：
+    // 主版本要求来自刚拉下来的原版 json，此刻它还没落盘，读磁盘等于没有（1.12.2 要 8）
     const folderPath = resolveFolderPath(folder);
-    // 安装器要用游戏版本要求的那个 Java：1.12.2 要 8，拿最新的去跑会失败
-    const officialJava =
+    const officialJavaFor =
         loader !== null && (loader.name === "forge" || loader.name === "neoforge")
-            ? await officialJavaOf(setting.java, await requiredJavaIn(folderPath, command.version))
+            ? (required: number | null) => officialJavaOf(setting.java, required)
             : undefined;
 
     const progress = progressReporter(
@@ -64,7 +64,7 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
         network: setting.network,
         download: setting.download,
         assets: command.assets !== false,
-        officialJava,
+        officialJavaFor,
         onProgress: progress.update,
         // --json 时不给过程提示，避免污染标准输出
         logLine: ctx.json ? undefined : print,

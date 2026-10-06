@@ -7,7 +7,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { pickJava, requiredJavaOf } from "../../src/cli/java-choice.ts";
+import { pickJava } from "../../src/cli/java-choice.ts";
+import { requiredJavaOf } from "../../src/version/descriptor.ts";
 
 const JVMS = [
     { path: "/jvm/25/bin/java", major: 25 },

@@ -533,6 +533,14 @@ export function gameVersionOf(descriptor: Descriptor): string | null {
     return VERSION_TOKEN.exec(descriptor.id)?.[0] ?? null;
 }
 
+// 版本 json 里的 Java 主版本要求：1.12.2 是 8，1.20.6 是 21
+// 挑跑官方安装器的 java 要用它；那份 json 此刻还没落盘，只能从内存里读
+export function requiredJavaOf(raw: unknown): number | null {
+    const javaVersion = object(object(raw, "version")?.["javaVersion"], "version.javaVersion");
+    const major = javaVersion?.["majorVersion"];
+    return typeof major === "number" && Number.isFinite(major) ? major : null;
+}
+
 /* ---------- 小工具 ---------- */
 
 function versionTypeOf(value: unknown): VersionType | null {

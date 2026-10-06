@@ -47,7 +47,13 @@ import {
 import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
 import { logger, PROGRESS_STAGES, type ProgressStage } from "../output/index.ts";
-import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
+import {
+    readDescriptor,
+    requiredJavaOf,
+    type Descriptor,
+    type DownloadEntry,
+    type Library,
+} from "./descriptor.ts";
 import { installWithOfficial, type OfficialInstallReport } from "./official.ts";
 import {
     defaultVersionName,
@@ -77,6 +83,9 @@ export interface InstallProgress {
     (stage: ProgressStage, done: number, total: number, bytes: boolean, existing: boolean): void;
 }
 
+/** 挑跑官方安装器的 java：required 来自原版 json，拿不到为 null */
+export type OfficialJavaPick = (required: number | null) => Promise<string | undefined>;
+
 export interface InstallInput {
     readonly folderPath: string;
     /** 要装的 Minecraft 版本，例如 1.20.6 */
@@ -88,8 +97,8 @@ export interface InstallInput {
     readonly download: DownloadSetting;
     /** false 时跳过资源对象，只装游戏本体 */
     readonly assets?: boolean | undefined;
-    /** forge 与 neoforge 要跑官方安装器，这是挑好的 java；由调用方解析 */
-    readonly officialJava?: string | undefined;
+    /** forge 与 neoforge 要跑官方安装器，用这个回调挑 java；required 是原版 json 里的主版本要求，读不到为 null */
+    readonly officialJavaFor?: OfficialJavaPick | undefined;
     /** 过程提示；--json 时调用方不给 */
     readonly logLine?: ((text: string) => void) | undefined;
     readonly onProgress?: InstallProgress | undefined;
@@ -186,6 +195,18 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         json = await fetchVanillaJson(input.versionId, options);
     } else if (isOfficial) {
         // forge 与 neoforge：跑官方安装器拿到它写出的加载器 json，再与原版合并成自包含实例
+        // 原版 json 先拉下来：合并要用它，挑 java 也要它 —— 此刻它还没落盘，读不了磁盘
+        const vanilla = await fetchVanillaJson(input.versionId, options);
+        const java = await input.officialJavaFor?.(requiredJavaOf(vanilla));
+        // 挑不到就别往下走了：原版那一份要下上百兆，先报出来省得白等
+        if (java === undefined && input.officialJavaFor !== undefined) {
+            throw new AppError("install", "JavaNotFound", {
+                context: {
+                    detail: `${loader.name} 官方安装器缺少 java`,
+                    hint: "装 java，或 bloomery java scan",
+                },
+            });
+        }
         // 安装器要原版在场，所以先按原版装一份；装完把这次新建的那份并掉（用户本来就有的不动）
         const baseExisted = await pathExists(baseJsonPath(input.folderPath, input.versionId));
         base = await ensureBase(input, options, warnings);
@@ -193,6 +214,7 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
             input,
             loader.name,
             loaderVersion ?? "",
+            java,
             options,
         );
         // 安装器写出的目录改名接管：实例名就是 name
@@ -202,7 +224,7 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         }
         official = { versionDirectory: name, java: installed.java };
         json = mergeManifests({
-            base: await fetchVanillaJson(input.versionId, options),
+            base: vanilla,
             loader: await readVersionJson(join(input.folderPath, "versions", name, `${name}.json`)),
             name,
             gameVersion: input.versionId,
@@ -361,9 +383,9 @@ async function runOfficialInstaller(
     input: InstallInput,
     name: LoaderName,
     loaderVersion: string,
+    java: string | undefined,
     options: TransferOptions,
 ): Promise<OfficialInstallReport> {
-    const java = input.officialJava;
     if (java === undefined) {
         throw new AppError("install", "JavaNotFound", {
             context: {
