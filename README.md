@@ -88,11 +88,11 @@ bloomery install 1.20.6 --no-assets              # 跳过资源对象
 
 同名实例已存在时拒绝，不覆盖。
 
-fabric 与 quilt 装出来的是**一个自包含实例**：安装时把原版与加载器两层合并成一份 json，删掉 `inheritsFrom` 与 `jar`，`id` 用实例名，客户端 jar 放在实例目录里，`versions/` 下不会多出原版目录。库与资源仍走共享的 `<游戏文件夹>/libraries` 与 `assets`。合并后的 json 带一个 `bloomery` 标记键，记录游戏版本与加载器 —— `inheritsFrom` 不在之后，那是认这两样的唯一依据（`version list` 的游戏版本、MOD 的游戏版本过滤都靠它）。
+四种加载器装出来都是**一个自包含实例**：安装时把原版与加载器两层合并成一份 json，删掉 `inheritsFrom` 与 `jar`，`id` 用实例名，客户端 jar 放在实例目录里，`versions/` 下不会多出原版目录。库与资源仍走共享的 `<游戏文件夹>/libraries` 与 `assets`。合并后的 json 带一个 `bloomery` 标记键，记录游戏版本与加载器 —— `inheritsFrom` 不在之后，那是认这两样的唯一依据（`version list` 的游戏版本、MOD 的游戏版本过滤都靠它）。
 
-forge 与 neoforge 目前仍是**引用式两层**：走官方安装器，实例 json 用 `inheritsFrom` 指向基础版本，客户端 jar 用基础版本那份，所以 `versions/` 下会同时出现基础版本目录。接入合并排在下一版。
+forge 与 neoforge 走官方安装器，装的时候基础版本要短暂存在（安装器与挑 Java 都要它）：装完把基础版本的客户端 jar 挪进实例目录，再把这份临时目录删掉。**用户本来就有的基础版本不动** —— 别的实例可能还在引用它。
 
-`install --json` 的 `base` 字段说明基础版本是本来就在还是这次顺带装的，只有 forge 与 neoforge 会用到；fabric 与 quilt 恒为 `none`。
+`install --json` 的 `base` 字段说明安装过程中基础版本是复用现成的还是这次临时装的（`present` / `installed`；临时装的那份已并入实例，不再单独保留），只有 forge 与 neoforge 会用到；fabric 与 quilt 恒为 `none`。
 
 ### auth
 
@@ -553,7 +553,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 
 forge 与 neoforge 走官方安装器：下载安装器到 `<文件夹>/.bloomery/`，执行完删除；过程需要本机 Java，按目标版本 json 的 `javaVersion` 挑（1.12.2 要 Java 8），耗时数分钟，输出实时透传。`--name` 指定实例名时，安装器写出的版本目录整份改名接管，继承链只留一层。
 
-fabric 与 quilt 走官方 meta：拉到的 profile 是引用式的（`inheritsFrom` 指向游戏版本），安装时与原版 json 合并成一份自包含 json 写进实例目录，见 [install](#install)。
+fabric 与 quilt 走官方 meta：拉到的 profile 是引用式的（`inheritsFrom` 指向游戏版本），安装时与原版 json 合并成一份自包含 json 写进实例目录。forge 与 neoforge 走官方安装器，装完同样与原版合并；四种加载器都只产出一个版本目录，见 [install](#install)。
 
 读取侧两种布局都支持：外部启动器（官方启动器、PCL、HMCL）装出来的实例是引用式的，沿 `inheritsFrom` 递归合并仍在，`--repair` 与 `launch` 对它们照常工作。
 

@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.12.2
+
+- `install --loader forge|neoforge` 也改为合并成自包含实例：跑完官方安装器后与原版 json 合并，删掉 `inheritsFrom` 与 `jar`，客户端 jar 落在实例目录里。四种加载器现在都只产出一个版本目录
+- 基础版本目录只在安装过程中临时存在：装完把它的客户端 jar 挪进实例目录（省一次重下）再删除。**用户本来就有的基础版本不动** —— 别的实例可能还在引用它
+- 修复：取 forge 版本清单时的提示行原先直接写标准输出，`--json` 下会污染那份 JSON（`install 1.12.2 --loader forge --json` 的结果解析不出来）。改走 `logLine` 回调，与其余过程提示一致
+- `install --json` 的 `official.versionDirectory` 改报合并后的实例目录名（原先报安装器写出的目录名，那个目录装完就被并掉了）
+
 ## 1.12.1
 
 - 修复：既声明 `artifact` 又带 natives 的库只下 natives、不下 artifact，而类路径检查要求那份 artifact，导致安装与 `--repair` 永远报 `GameFilesMissing` 且补不上。官方 1.12.2 有 3 条（`lwjgl-platform:2.9.4-nightly-20150209` 的 artifact 是 22 字节空 jar）、1.16.5 有 16 条（`org.lwjgl:lwjgl` 等，是真正要用的 jar）。这是 v1.9.0 起就有的老问题

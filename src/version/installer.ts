@@ -46,7 +46,7 @@ import {
 } from "../infra/download.ts";
 import { pathExists, writeAtomic } from "../infra/fs.ts";
 import { sourcesOf } from "../infra/source.ts";
-import { logger, print, PROGRESS_STAGES, type ProgressStage } from "../output/index.ts";
+import { logger, PROGRESS_STAGES, type ProgressStage } from "../output/index.ts";
 import { readDescriptor, type Descriptor, type DownloadEntry, type Library } from "./descriptor.ts";
 import { installWithOfficial, type OfficialInstallReport } from "./official.ts";
 import {
@@ -185,7 +185,9 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
     if (loader === null) {
         json = await fetchVanillaJson(input.versionId, options);
     } else if (isOfficial) {
-        // forge 与 neoforge：跑官方安装器，我们的实例继承它写出的版本目录
+        // forge 与 neoforge：跑官方安装器拿到它写出的加载器 json，再与原版合并成自包含实例
+        // 安装器要原版在场，所以先按原版装一份；装完把这次新建的那份并掉（用户本来就有的不动）
+        const baseExisted = await pathExists(baseJsonPath(input.folderPath, input.versionId));
         base = await ensureBase(input, options, warnings);
         const installed = await runOfficialInstaller(
             input,
@@ -193,13 +195,23 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
             loaderVersion ?? "",
             options,
         );
-        official = { versionDirectory: installed.versionDirectory, java: installed.java };
-        // 安装器写出的目录改名接管：实例名就是 name，继承链只留一层
+        // 安装器写出的目录改名接管：实例名就是 name
         if (installed.versionDirectory !== name) {
             await adoptVersion(input.folderPath, installed.versionDirectory, name);
             warnings.push(`安装器目录 ${installed.versionDirectory} 改名 ${name}`);
         }
-        json = await readVersionJson(join(input.folderPath, "versions", name, `${name}.json`));
+        official = { versionDirectory: name, java: installed.java };
+        json = mergeManifests({
+            base: await fetchVanillaJson(input.versionId, options),
+            loader: await readVersionJson(join(input.folderPath, "versions", name, `${name}.json`)),
+            name,
+            gameVersion: input.versionId,
+            loaderType: loader.name,
+            loaderVersion: loaderVersion ?? "",
+        });
+        if (!baseExisted) {
+            await dropBase(input.folderPath, input.versionId, name);
+        }
     } else {
         // 合并型：两层并成一份自包含 json，不再建基础版本目录
         json = mergeManifests({
@@ -296,7 +308,8 @@ async function officialLoaderVersion(
         }
         return wanted;
     }
-    print(
+    // 走 logLine 回调：--json 时调用方不给，标准输出才只有结果那一份 JSON
+    say(
         `正在取 ${name} 的版本清单（${name === "forge" ? "文件较大，国内可能较慢；指定 @<版本> 可跳过" : "稍等"}）…`,
     );
     const list = await listLoaderVersionsFor(name, game, options);
@@ -648,6 +661,28 @@ async function ensureBase(
     await installBody(input, id, jsonPath, read.descriptor, options, warnings);
     log.info("顺带装好基础版本 %s", id);
     return "installed";
+}
+
+// 合并型实例不再依赖基础版本：把它那份客户端 jar 挪进实例目录（省一次重下），再删掉新建的基础版本目录
+// 用户本来就有的基础版本不在此列 —— 别的实例可能还在引用它
+async function dropBase(folderPath: string, game: string, name: string): Promise<void> {
+    const baseDir = join(folderPath, "versions", game);
+    const baseJar = join(baseDir, `${game}.jar`);
+    const instanceJar = join(folderPath, "versions", name, `${name}.jar`);
+    if ((await pathExists(baseJar)) && !(await pathExists(instanceJar))) {
+        try {
+            await rename(baseJar, instanceJar);
+        } catch {
+            // 跨设备等情况下退回复制
+            await copyFile(baseJar, instanceJar);
+        }
+    }
+    await rm(baseDir, { recursive: true, force: true });
+    log.info("基础版本 %s 已并入 %s，未单独保留", game, name);
+}
+
+function baseJsonPath(folderPath: string, game: string): string {
+    return join(folderPath, "versions", game, `${game}.json`);
 }
 
 // 目录名就是版本名，重名一律拒绝
