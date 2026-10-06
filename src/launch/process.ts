@@ -9,7 +9,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, mkdirSync, openSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { AppError } from "../error/index.ts";
@@ -24,6 +24,8 @@ export interface GameProcess {
 export interface GameSpawnOptions {
     /** 游戏输出追加到这个文件，省略即继承父进程 */
     readonly logFile?: string | undefined;
+    /** 写进日志开头的一行；游戏一个字不输出时，这一行就是唯一的线索 */
+    readonly logHeader?: string | undefined;
     /** 放开子进程句柄，本进程不等它也能退出 */
     readonly unref?: boolean | undefined;
 }
@@ -37,7 +39,7 @@ export function spawnGame(
     const child =
         options.logFile === undefined
             ? spawn(executable, [...args], { cwd, stdio: "inherit" })
-            : spawnWithLog(executable, args, cwd, options.logFile);
+            : spawnWithLog(executable, args, cwd, options.logFile, options.logHeader ?? null);
 
     if (options.unref === true) {
         child.unref();
@@ -64,11 +66,16 @@ function spawnWithLog(
     args: readonly string[],
     cwd: string,
     logFile: string,
+    logHeader: string | null,
 ): ChildProcess {
     let fd: number;
     try {
         mkdirSync(dirname(logFile), { recursive: true });
         fd = openSync(logFile, "a");
+        if (logHeader !== null) {
+            // 与子进程共用这个句柄，先写的话这一行一定在最前面
+            writeSync(fd, logHeader);
+        }
     } catch (error) {
         throw new AppError("launch", "LaunchFailed", {
             cause: error,

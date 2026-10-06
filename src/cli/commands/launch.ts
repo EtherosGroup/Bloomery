@@ -159,6 +159,8 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
 
     const game = spawnGame(plan.executable, plan.args, plan.directory, {
         logFile: gameLog ?? undefined,
+        // 先记一行启动记录：游戏崩在写日志之前时，这条是唯一能区分"没起"与"起了没输出"的线索
+        logHeader: gameLog === null ? undefined : launchHeader(plan),
         unref: !waitForExit,
     });
     log.info("游戏进程 pid=%s", game.pid);
@@ -260,6 +262,11 @@ async function refreshCredentials(
         await saveAccounts(next);
     }
     return next;
+}
+
+// 日志开头那一行：时间、实例、真正被拉起的可执行文件
+function launchHeader(plan: LaunchPlan): string {
+    return `# ${new Date().toISOString()} bloomery 启动 ${plan.versionName}（${plan.executable}）\n`;
 }
 
 // 实例自己的日志：<日志目录>/instance-<实例 id>.log
