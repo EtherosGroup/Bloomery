@@ -164,6 +164,7 @@ function detailOf(error: AppError): string {
 
 // 机器可读的错误对象，--json 时给外壳用
 // 可重试的错误码：网络与临时性
+// 消费方应当读错误信封里的 retryable 字段，不要自己复制这份集合
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
     "DownloadFailed",
     "DependencyMissing",

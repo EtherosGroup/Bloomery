@@ -36,6 +36,7 @@ test("可重试的只有下载失败与依赖缺失", () => {
     for (const code of ["DependencyMissing", "DownloadFailed"] as const) {
         assert.equal(envelope(code).retryable, true, code);
     }
+    // 这两个码是穷尽的：消费方复制这份集合就会漂移，应当读信封里的 retryable 字段
     for (const code of [
         "LoaderInstallFailed",
         "InstallBroken",
