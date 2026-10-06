@@ -13,6 +13,8 @@ import { test } from "node:test";
 
 import type { DownloadSetting, Network } from "../../src/config/types.ts";
 import { pathExists } from "../../src/infra/fs.ts";
+import { readDescriptor } from "../../src/version/descriptor.ts";
+import { missingLaunchFiles } from "../../src/version/files.ts";
 import { installVersion } from "../../src/version/installer.ts";
 import { defaultVersionName, parseLoaderSpec } from "../../src/version/loader.ts";
 import { serve, zipOf, type TestServer } from "../helpers/server.ts";
@@ -303,5 +305,115 @@ test("没有这个版本时报出来", async () => {
         );
     } finally {
         await close(fixture);
+    }
+});
+
+/* ---------- artifact 与 natives 同时存在的库 ---------- */
+
+// 官方 1.12.2 的 lwjgl-platform 就是这种：artifact 是个 22 字节的空 jar，
+// 类路径要它、natives 要 classifier，两份都得下，否则检查与下载会互相打架
+function mixedJson(base: string, artifact: Buffer): unknown {
+    const entry = (url: string, data: Buffer): unknown => ({
+        sha1: sha1(data),
+        size: data.length,
+        url: `${base}${url}`,
+    });
+    return {
+        id: "t",
+        type: "release",
+        mainClass: "com.example.Main",
+        downloads: { client: entry("/client.jar", CLIENT_JAR) },
+        libraries: [
+            {
+                name: "g.h:i:1.0",
+                downloads: {
+                    artifact: entry("/libs/mixed.jar", artifact),
+                    classifiers: {
+                        "natives-linux": entry("/natives.jar", NATIVES_JAR),
+                        "natives-macos": entry("/natives.jar", NATIVES_JAR),
+                        "natives-windows": entry("/natives.jar", NATIVES_JAR),
+                    },
+                },
+                natives: {
+                    linux: "natives-linux",
+                    osx: "natives-macos",
+                    windows: "natives-windows",
+                },
+            },
+        ],
+    };
+}
+
+test("既声明 artifact 又带 natives 的库，两份都下", async () => {
+    const artifact = Buffer.from("empty-zip-artifact");
+    let base = "";
+    const server = await serve(({ path }) => {
+        switch (path) {
+            case "/mc/game/version_manifest_v2.json":
+                return {
+                    status: 200,
+                    body: JSON.stringify({
+                        latest: { release: "t", snapshot: "t" },
+                        versions: [{ id: "t", type: "release", url: `${base}/versions/t.json` }],
+                    }),
+                };
+            case "/versions/t.json":
+                return { status: 200, body: JSON.stringify(mixedJson(base, artifact)) };
+            case "/client.jar":
+                return { status: 200, body: CLIENT_JAR };
+            case "/libs/mixed.jar":
+                return { status: 200, body: artifact };
+            case "/natives.jar":
+                return { status: 200, body: NATIVES_JAR };
+            default:
+                return { status: 404 };
+        }
+    });
+    base = server.url;
+
+    const root = await mkdtemp(join(tmpdir(), "bloomery-mixed-"));
+    const download: DownloadSetting = {
+        verify: "strict",
+        sources: [{ provider: "custom", enabled: true, url: server.url }],
+    };
+    try {
+        const report = await installVersion({
+            folderPath: root,
+            versionId: "t",
+            network: NETWORK,
+            download,
+            assets: false,
+        });
+        assert.equal(report.libraries.downloaded, 1);
+        assert.equal(report.natives.report.downloaded, 1);
+        assert.equal(
+            await pathExists(join(root, "libraries", "g", "h", "i", "1.0", "i-1.0.jar")),
+            true,
+        );
+        assert.equal(
+            await pathExists(
+                join(root, "libraries", "g", "h", "i", "1.0", "i-1.0-natives-linux.jar"),
+            ),
+            true,
+        );
+
+        // 回归本体：类路径检查与下载任务必须一致，装完不该再报缺件
+        const read = await readDescriptor(join(root, "versions", "t", "t.json"), "t");
+        assert.ok(read.descriptor !== null);
+        const missing = await missingLaunchFiles({
+            folderPath: root,
+            instance: {
+                id: "t",
+                target: "t",
+                chain: ["t"],
+                directory: join(root, "versions", "t"),
+                descriptor: read.descriptor,
+                problem: null,
+            },
+        });
+        assert.equal(missing.total, 0);
+    } finally {
+        await server.close();
+        await rm(root, { recursive: true, force: true });
     }
 });

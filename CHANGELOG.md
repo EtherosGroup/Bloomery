@@ -1,5 +1,9 @@
 # 更新记录
 
+## 1.12.1
+
+- 修复：既声明 `artifact` 又带 natives 的库只下 natives、不下 artifact，而类路径检查要求那份 artifact，导致安装与 `--repair` 永远报 `GameFilesMissing` 且补不上。官方 1.12.2 有 3 条（`lwjgl-platform:2.9.4-nightly-20150209` 的 artifact 是 22 字节空 jar）、1.16.5 有 16 条（`org.lwjgl:lwjgl` 等，是真正要用的 jar）。这是 v1.9.0 起就有的老问题
+
 ## 1.12.0
 
 - `install --loader fabric|quilt` 改为在安装时把原版与加载器两层合并成一份自包含 json：实例目录自带客户端 jar，不再单独建基础版本目录，`versions/` 下只多一个目录；库与资源仍走共享的 `libraries/` 与 `assets/`

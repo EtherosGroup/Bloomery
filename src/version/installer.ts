@@ -747,7 +747,11 @@ function splitTasks(
             if (task !== null) {
                 natives.push(task);
             }
-            continue;
+            // 声明了 artifact 的还要按类路径库下一份：官方 1.12.2 的 lwjgl-platform 就是这种，
+            // 那是个 22 字节的空 jar，只下 natives 会让类路径检查一直判缺件
+            if (library.downloads.artifact === null) {
+                continue;
+            }
         }
 
         if (!isClasspathLibrary(library)) {
