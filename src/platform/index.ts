@@ -15,7 +15,14 @@ export {
     osVersion,
     type OsArch,
 } from "./arch.ts";
-export { JAVA_EXECUTABLE, JAVAC_EXECUTABLE, javaLayout, type JavaLayout } from "./java.ts";
+export {
+    gameExecutable,
+    JAVA_EXECUTABLE,
+    JAVAC_EXECUTABLE,
+    javaLayout,
+    javawPath,
+    type JavaLayout,
+} from "./java.ts";
 export { requiresShell } from "./process.ts";
 export {
     accountsFile,

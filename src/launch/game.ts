@@ -25,6 +25,7 @@ import {
 } from "../dependency/index.ts";
 import { AppError } from "../error/index.ts";
 import { packageVersion } from "../infra/package.ts";
+import { gameExecutable } from "../platform/index.ts";
 import { logger } from "../output/index.ts";
 import { clientJarOf, type InstanceView } from "../version/index.ts";
 import { accountFor, type LaunchAccount } from "./account.ts";
@@ -213,7 +214,8 @@ export async function planLaunch(
     ]);
 
     return {
-        executable: java.path,
+        // Windows 上换成 javaw.exe：无控制台的父进程起 java.exe 会多出一个控制台窗口
+        executable: gameExecutable(java.path),
         args: [...jvm, descriptor.mainClass, ...game],
         directory: gameDirectory,
         java,

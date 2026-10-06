@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.12.5
+
+- Windows 上启动游戏改用同目录的 `javaw.exe`（探测 Java 仍走 `java.exe`）：`java.exe` 是控制台子系统程序，从无控制台的父进程（GUI）启动时，系统会为它新分配一个控制台窗口，那个窗口出现在桌面上并抢前台，把游戏窗口盖在后面。原版启动器在 Windows 上用的也是 `javaw.exe`
+- 进程名随之变化：任务管理器里游戏进程从 `java.exe` 变成 `javaw.exe`（按 pid 认进程的不受影响）
+
 ## 1.12.4
 
 - 新增错误码 `LoaderInstallFailed`（加载器安装失败，`retryable` false）：forge / neoforge 的官方安装器退出码非 0 时不再报 `DependencyMissing`。后者标着可重试，但安装器失败重试往往没用（Java 版本不符、安装器本身报错）—— 下载失败仍走 `DependencyMissing`，那条确实值得重试

@@ -65,6 +65,8 @@ bloomery launch --memory 4096              # 本次启动的内存上限，不�
 
 游戏输出的去向按调用方式分两种：`--json` 与 `--detach` 下追加到 `<日志目录>/instance-<实例 id>.log`，结果里的 `log` 给这个路径 —— 游戏占住 stdout 会破坏 `--json` 的正文，也会让 `--detach` 的调用方等到游戏结束才拿到管道 EOF；其余情况继承终端，实时可见。结果里的 `pid` 是游戏进程号，`--dry-run` 时为 `null`；`--detach` 之后本进程随即退出，消费方按 `pid` 认这个实例在不在跑。
 
+Windows 上启动游戏用 Java 同目录的 `javaw.exe`，探测 Java 仍走 `java.exe`：`java.exe` 是控制台子系统程序，从无控制台的父进程（外壳、GUI）启动时系统会为它新分配一个控制台窗口，那个窗口出现在桌面上并抢前台。任务管理器里游戏进程因此是 `javaw.exe`，按 `pid` 认进程的不受影响。
+
 `--memory <mb>` 覆盖本次启动的内存上限，压过实例、文件夹与全局三层，小于生效的 `minMb` 时报 `UsageError`；要持久化改内存用 `config set launch.memory.maxMb`。
 
 启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。索引整份不在时 `--dry-run` 给一行「资源 索引缺失，需下载索引与全部资源约 X MB」，数字来自版本 json。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
