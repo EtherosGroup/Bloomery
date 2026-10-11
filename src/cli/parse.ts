@@ -64,12 +64,15 @@ export interface AuthCommand {
 
 export interface ModCommand {
     readonly name: "mod";
-    readonly action: "search" | "install";
-    readonly query: string;
-    /** install 用：装到哪个实例，省略按上次启动的 */
+    readonly action: "search" | "install" | "list" | "remove" | "disable" | "enable";
+    /** search 用：搜索词 */
+    readonly query?: string;
+    /** install / remove / disable / enable 用：一个或多个目标 */
+    readonly targets?: readonly string[];
+    /** install / list / remove 等用：针对哪个实例，省略按上次启动的 */
     readonly version?: string;
     readonly folder?: string;
-    /** install 用：只算不落盘 */
+    /** install / remove 等用：只算不落盘 */
     readonly dryRun?: boolean;
     /** install 用：是否连必需依赖一起装，省略按设置 */
     readonly deps?: boolean;
@@ -77,6 +80,12 @@ export interface ModCommand {
     readonly limit?: number;
     /** install 用：只入队，交给 download run 处理 */
     readonly async?: boolean;
+    /** search 用：按游戏版本过滤 */
+    readonly gameVersion?: string;
+    /** search 用：按加载器过滤 */
+    readonly loader?: string;
+    /** list / remove 等用：不联网反查 */
+    readonly offline?: boolean;
 }
 
 export interface DownloadCommand {
@@ -230,6 +239,8 @@ export interface PositionalSpec {
     readonly names: readonly string[];
     /** 必填个数 */
     readonly required: number;
+    /** 末位接任意多个，多个目标的命令用它 */
+    readonly rest?: boolean;
 }
 
 export interface CommandSpec<C extends Command> {
@@ -334,7 +345,7 @@ export function parse(argv: readonly string[], spec: CliSpec): ParsedCli {
     if (count < command.positionals.required) {
         throw usage(`缺少参数 <${command.positionals.names[count] ?? "参数"}>`);
     }
-    if (count > command.positionals.names.length) {
+    if (command.positionals.rest !== true && count > command.positionals.names.length) {
         throw usage(`多余的参数 ${parsed.positionals[command.positionals.names.length] ?? ""}`);
     }
 

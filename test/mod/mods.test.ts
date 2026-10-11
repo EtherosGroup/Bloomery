@@ -17,7 +17,9 @@ import {
     listVersions,
     pickVersion,
     projectOf,
+    projectsOf,
     searchMods,
+    versionFileOfHash,
 } from "../../src/mod/index.ts";
 import type { ModVersion, Transport } from "../../src/mod/index.ts";
 
@@ -83,6 +85,9 @@ function fakeTransport(
         calls.push(url);
         if (url.includes("/search")) {
             return Buffer.from(JSON.stringify(routes.search ?? { hits: [] }));
+        }
+        if (url.includes("/version_file/")) {
+            return Buffer.from(JSON.stringify(routes.single ?? {}));
         }
         if (url.includes("/version/") && !url.includes("/version?")) {
             return Buffer.from(JSON.stringify(routes.single ?? {}));
@@ -312,6 +317,105 @@ test("dry-run 只算不落盘", async () => {
         assert.equal(called, 0);
         assert.equal(report.files.length, 1);
         assert.equal(report.files[0]?.skipped, false);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test("搜索把加载器与游戏版本拼进 facets", async () => {
+    const calls: string[] = [];
+    await searchMods("sodium", {
+        network: NETWORK,
+        loader: "fabric",
+        gameVersion: "1.20.1",
+        transport: fakeTransport(calls, { search: { hits: [] } }),
+    });
+
+    const url = decodeURIComponent(calls[0] ?? "");
+    assert.match(
+        url,
+        /facets=\[\["project_type:mod"\],\["categories:fabric"\],\["versions:1\.20\.1"\]\]/,
+    );
+});
+
+test("不给过滤时 facets 只有项目类型", async () => {
+    const calls: string[] = [];
+    await searchMods("sodium", { network: NETWORK, transport: fakeTransport(calls, {}) });
+    assert.match(decodeURIComponent(calls[0] ?? ""), /facets=\[\["project_type:mod"\]\]/);
+});
+
+test("sha1 反查走 version_file，没发布过返回 undefined", async () => {
+    const calls: string[] = [];
+    const found = await versionFileOfHash("abc", {
+        network: NETWORK,
+        transport: fakeTransport(calls, {
+            single: version("v1", "release", "1.0", "2026-01-01T00:00:00Z"),
+        }),
+    });
+    assert.equal(found?.versionNumber, "1.0");
+    assert.match(calls[0] ?? "", /\/version_file\/abc\?algorithm=sha1/);
+
+    const missing: Transport = async (url: string) => {
+        const inner = Object.assign(new Error("HTTP 404"), { status: 404 });
+        throw new AppError("download", "DownloadFailed", {
+            cause: inner,
+            context: { detail: url },
+        });
+    };
+    assert.equal(
+        await versionFileOfHash("nope", { network: NETWORK, transport: missing }),
+        undefined,
+    );
+});
+
+test("项目标题批量取的 ids 按 JSON 数组拼", async () => {
+    const calls: string[] = [];
+    const hits = await projectsOf(["a", "b"], {
+        network: NETWORK,
+        transport: async (url: string) => {
+            calls.push(url);
+            return Buffer.from(JSON.stringify([PROJECT]));
+        },
+    });
+
+    assert.equal(hits[0]?.slug, "sodium");
+    assert.match(decodeURIComponent(calls[0] ?? ""), /ids=\["a","b"\]/);
+});
+
+test("安装按文件报字节进度，首尾两帧都在", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bloomery-mod-progress-"));
+    try {
+        const frames: Array<{ done: number; total: number; bytes: boolean; existing: boolean }> =
+            [];
+        const download = async (
+            task: DownloadTask,
+            _options: TransferOptions,
+            onChunk?: (bytes: number) => void,
+        ) => {
+            onChunk?.(3);
+            await mkdir(dirname(task.target), { recursive: true });
+            await writeFile(task.target, "jar");
+            return { target: task.target, bytes: 3, status: "downloaded" as const };
+        };
+
+        await installMod({
+            query: "sodium",
+            modsDirectory: root,
+            gameVersion: "1.20.6",
+            loader: "fabric",
+            network: NETWORK,
+            withDependencies: false,
+            transport: fakeTransport([], {
+                versions: [version("v1", "release", "1.0", "2026-01-01T00:00:00Z")],
+            }),
+            download,
+            onProgress: (done, total, bytes, _target, existing) =>
+                frames.push({ done, total, bytes, existing }),
+        });
+
+        assert.deepEqual(frames[0], { done: 0, total: 1000, bytes: true, existing: false });
+        assert.ok(frames.some((frame) => frame.done === 3 && frame.existing === false));
+        assert.deepEqual(frames.at(-1), { done: 1000, total: 1000, bytes: true, existing: false });
     } finally {
         await rm(root, { recursive: true, force: true });
     }

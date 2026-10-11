@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { AppError } from "../error/index.ts";
 import { pathExists } from "../infra/fs.ts";
-import { downloadOne, type TransferOptions } from "../infra/download.ts";
+import { downloadOne, type Progress, type TransferOptions } from "../infra/download.ts";
 import { logger } from "../output/index.ts";
 import {
     listVersions,
@@ -75,6 +75,8 @@ export interface ModInstallInput {
     readonly network: TransferOptions;
     readonly withDependencies: boolean;
     readonly dryRun?: boolean;
+    /** 每个文件一条字节进度：total 是这个文件的大小 */
+    readonly onProgress?: Progress;
     readonly transport?: Transport;
     readonly download?: typeof downloadOne;
 }
@@ -195,8 +197,12 @@ async function installOne(
 
     const target = join(context.input.modsDirectory, file.filename);
     const existed = await pathExists(target);
+    const progress = context.input.onProgress;
     if (context.input.dryRun !== true) {
         const download = context.input.download ?? downloadOne;
+        // 文件自己的字节进度：首帧一定发，收尾那帧把（已存在）也带上
+        progress?.(0, file.size, true, target, existed);
+        let done = 0;
         const outcome = await download(
             {
                 url: file.url,
@@ -205,6 +211,17 @@ async function installOne(
                 size: file.size,
             },
             context.input.network,
+            (chunk) => {
+                done += chunk;
+                progress?.(done, file.size, true, target, false);
+            },
+        );
+        progress?.(
+            Math.max(done, file.size),
+            file.size,
+            true,
+            target,
+            outcome.status === "skipped",
         );
         context.files.push({
             projectId: project.id,

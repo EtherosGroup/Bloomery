@@ -69,13 +69,28 @@ export interface VersionFilter {
 
 export const SEARCH_LIMIT = 10;
 
+/** 搜索按实例过滤：loader 与 gameVersion 都拼进 facets，服务端筛完再返回 */
+export interface SearchFilter {
+    readonly limit?: number;
+    readonly gameVersion?: string | null;
+    readonly loader?: string | null;
+}
+
 export async function searchMods(
     query: string,
-    input: ModrinthInput & { readonly limit?: number },
+    input: ModrinthInput & SearchFilter,
 ): Promise<readonly ModHit[]> {
-    const facets = encodeURIComponent(JSON.stringify([["project_type:mod"]]));
+    const facets: string[][] = [["project_type:mod"]];
+    if (input.loader !== null && input.loader !== undefined) {
+        facets.push([`categories:${input.loader}`]);
+    }
+    if (input.gameVersion !== null && input.gameVersion !== undefined) {
+        facets.push([`versions:${input.gameVersion}`]);
+    }
     const limit = input.limit ?? SEARCH_LIMIT;
-    const url = `${MODRINTH_API}/search?query=${encodeURIComponent(query)}&limit=${limit}&facets=${facets}`;
+    const url =
+        `${MODRINTH_API}/search?query=${encodeURIComponent(query)}` +
+        `&limit=${limit}&facets=${encodeURIComponent(JSON.stringify(facets))}`;
     const body = (await get(url, input)) ?? {};
     const hits = array(body["hits"]);
     return hits.map((hit) => hitOf(record(hit))).filter((hit): hit is ModHit => hit !== undefined);
@@ -118,6 +133,31 @@ export async function versionOfId(
     const url = `${MODRINTH_API}/version/${encodeURIComponent(id)}`;
     const body = await get(url, input, true);
     return body === undefined ? undefined : versionOf(body);
+}
+
+// 已装 jar 的 sha1 反查发布版本；没发布过的 jar 返回 undefined，不当作错误
+export async function versionFileOfHash(
+    sha1: string,
+    input: ModrinthInput,
+): Promise<ModVersion | undefined> {
+    const url = `${MODRINTH_API}/version_file/${encodeURIComponent(sha1)}?algorithm=sha1`;
+    const body = await get(url, input, true);
+    return body === undefined ? undefined : versionOf(body);
+}
+
+// 一次取多个项目，反查到的 project_id 靠这一次请求补齐标题与 slug
+export async function projectsOf(
+    ids: readonly string[],
+    input: ModrinthInput,
+): Promise<readonly ModHit[]> {
+    if (ids.length === 0) {
+        return [];
+    }
+    const url = `${MODRINTH_API}/projects?ids=${encodeURIComponent(JSON.stringify(ids))}`;
+    const body = (await raw(url, input)) ?? [];
+    return array(body)
+        .map((entry) => hitOf(record(entry)))
+        .filter((hit): hit is ModHit => hit !== undefined);
 }
 
 // 正式版优先，其次 beta 与 alpha，同级取发布最晚的

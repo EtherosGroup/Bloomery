@@ -174,7 +174,7 @@ test("--version --json 是对象输出，带 v 与 api", () => {
     assert.equal(info.v, 1);
     assert.match(info.version, /^\d+\.\d+\.\d+/);
     // 外壳按 api 判兼容，不按语义版本号
-    assert.equal(info.api, 1);
+    assert.equal(info.api, 2);
 });
 
 test("launch 的 --wait-for-exit 与 --detach 互斥", () => {
@@ -708,7 +708,7 @@ test("status 在空数据目录下按未设置报", () => {
             mirror: { source: string | null; presets: Array<{ id: string }> };
             features: string[];
         };
-        assert.equal(result.api, 1);
+        assert.equal(result.api, 2);
         assert.match(result.node, /^\d+\./);
         assert.equal(result.host.memoryMb > 0, true);
         assert.equal(result.home, join(home, ".config", "bloomery"));
@@ -1311,6 +1311,179 @@ test("version rename 的名字与目标校验", () => {
         ]);
         assert.equal(trimmed.status, 0, trimmed.stderr);
         assert.equal((JSON.parse(trimmed.stdout) as { id: string }).id, "vanilla");
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+/* ---------- mod：列表与管理 ---------- */
+
+// 建一个带实例的游戏目录，并在实例下放两个 MOD
+function modHome(): { home: string; mods: string } {
+    const home = writableLaunchHome(["1.20.6"]);
+    const mods = join(home, "game", "versions", "1.20.6", "mods");
+    mkdirSync(mods, { recursive: true });
+    writeFileSync(join(mods, "sodium.jar"), "jar-sodium");
+    writeFileSync(join(mods, "lithium.jar.disabled"), "jar-lithium");
+    return { home, mods };
+}
+
+test("mod list --offline 只走本地，禁用态按后缀认", () => {
+    const { home, mods } = modHome();
+    try {
+        const outcome = cliAt(home, [
+            "--json",
+            "mod",
+            "list",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+            "--offline",
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+
+        const result = JSON.parse(outcome.stdout) as {
+            v: number;
+            instance: string;
+            mods: string;
+            files: Array<{
+                filename: string;
+                enabled: boolean;
+                resolved: boolean;
+                project: unknown;
+                version: unknown;
+            }>;
+        };
+        assert.equal(result.v, 1);
+        assert.equal(result.instance, "1.20.6");
+        assert.equal(result.mods, mods);
+        assert.deepEqual(
+            result.files.map((one) => [one.filename, one.enabled, one.resolved]),
+            [
+                ["lithium.jar.disabled", false, false],
+                ["sodium.jar", true, false],
+            ],
+        );
+        // 未识别时两个字段是显式 null，不是省略
+        assert.equal(result.files[0]?.project, null);
+        assert.equal(result.files[0]?.version, null);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("mod disable 与 enable 改后缀，重复操作给 skipped 与退出码 1", () => {
+    const { home, mods } = modHome();
+    try {
+        const off = cliAt(home, [
+            "--json",
+            "mod",
+            "disable",
+            "sodium.jar",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+        ]);
+        assert.equal(off.status, 0, off.stderr);
+        const offJson = JSON.parse(off.stdout) as {
+            action: string;
+            changed: Array<{ from: string; to: string | null; path: string }>;
+            skipped: unknown[];
+        };
+        assert.equal(offJson.action, "disable");
+        assert.deepEqual(offJson.changed, [
+            { from: "sodium.jar", to: "sodium.jar.disabled", path: join(mods, "sodium.jar") },
+        ]);
+        assert.deepEqual(offJson.skipped, []);
+        assert.equal(existsSync(join(mods, "sodium.jar.disabled")), true);
+
+        const again = cliAt(home, [
+            "--json",
+            "mod",
+            "disable",
+            "sodium.jar.disabled",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+        ]);
+        assert.equal(again.status, 1);
+        const againJson = JSON.parse(again.stdout) as { skipped: unknown[] };
+        assert.deepEqual(againJson.skipped, [
+            { target: "sodium.jar.disabled", reason: "already-disabled" },
+        ]);
+
+        const on = cliAt(home, [
+            "--json",
+            "mod",
+            "enable",
+            "sodium.jar.disabled",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+        ]);
+        assert.equal(on.status, 0, on.stderr);
+        assert.equal(existsSync(join(mods, "sodium.jar")), true);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("mod remove 删文件，没命中的目标进 skipped", () => {
+    const { home, mods } = modHome();
+    try {
+        const outcome = cliAt(home, [
+            "--json",
+            "mod",
+            "remove",
+            "sodium.jar",
+            "nope.jar",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+            "--offline",
+        ]);
+        assert.equal(outcome.status, 1);
+
+        const result = JSON.parse(outcome.stdout) as {
+            action: string;
+            changed: Array<{ from: string; to: string | null }>;
+            skipped: unknown[];
+        };
+        assert.equal(result.action, "remove");
+        assert.deepEqual(result.changed, [
+            { from: "sodium.jar", to: null, path: join(mods, "sodium.jar") },
+        ]);
+        assert.deepEqual(result.skipped, [{ target: "nope.jar", reason: "not-found" }]);
+        assert.equal(existsSync(join(mods, "sodium.jar")), false);
+        assert.equal(existsSync(join(mods, "lithium.jar.disabled")), true);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
+test("mod install 在非加载器实例上报 ModUnsupported", () => {
+    const { home } = modHome();
+    try {
+        const outcome = cliAt(home, [
+            "--json",
+            "mod",
+            "install",
+            "sodium",
+            "--version",
+            "1.20.6",
+            "--folder",
+            "g",
+        ]);
+        assert.equal(outcome.status, 1);
+
+        const envelope = JSON.parse(outcome.stdout) as { v: number; error: { code: string } };
+        assert.equal(envelope.v, 1);
+        assert.equal(envelope.error.code, "ModUnsupported");
     } finally {
         rmSync(home, { recursive: true, force: true });
     }

@@ -142,37 +142,59 @@ export const COMMANDS: CommandTable = {
     },
 
     mod: {
-        summary: "MOD 检索与安装",
-        usage: "mod <search|install> <query> [--version <id>] [--folder <id>] [--dry-run] [--deps|--no-deps] [--async] [--limit <n>]",
+        summary: "MOD 检索、安装与管理",
+        usage: "mod <search|install|list|remove|disable|enable> [目标...] [--version <id>] [--folder <id>] [--game <版本>] [--loader <名字>] [--limit <n>] [--dry-run] [--deps|--no-deps] [--offline] [--async]",
         options: {
             version: {
                 type: "string",
                 value: "<id>",
-                summary: "装到哪个实例，省略按上次启动的",
+                summary: "针对哪个实例，省略按上次启动的",
             },
             folder: { type: "string", value: "<id>", summary: "游戏文件夹" },
-            "dry-run": { type: "boolean", summary: "只算不装" },
+            game: { type: "string", value: "<版本>", summary: "search 按游戏版本过滤" },
+            loader: { type: "string", value: "<名字>", summary: "search 按加载器过滤" },
+            "dry-run": { type: "boolean", summary: "只算不落盘" },
             deps: { type: "boolean", summary: "连必需依赖一起装" },
             "no-deps": { type: "boolean", summary: "只装这一个，不动依赖" },
+            offline: { type: "boolean", summary: "不联网反查已装 MOD" },
             async: { type: "boolean", summary: "入队并拉起后台 worker，立刻返回" },
             limit: { type: "string", value: "<n>", summary: "搜索结果条数，默认 10" },
         },
-        positionals: { names: ["action", "query"], required: 2 },
-        toCommand: (values, positionals) => ({
-            name: "mod",
-            action: requireChoice(
+        positionals: { names: ["action", "target"], required: 1, rest: true },
+        toCommand: (values, positionals) => {
+            const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["search", "install"] as const,
+                ["search", "install", "list", "remove", "disable", "enable"] as const,
                 "action",
-            ),
-            query: requirePositional(positionals, 1, "query"),
-            version: optionalString(values, "version"),
-            folder: optionalString(values, "folder"),
-            dryRun: values["dry-run"] === true,
-            deps: values["deps"] === true ? true : values["no-deps"] === true ? false : undefined,
-            async: values["async"] === true,
-            limit: optionalInteger(values, "limit"),
-        }),
+            );
+            // search 只接一个词；install 与三个管理动作接任意多个目标
+            if (action === "search") {
+                requirePositional(positionals, 1, "query");
+                optionalPositional(positionals, 1, "query");
+            }
+            const rest = positionals.slice(1);
+            if (action !== "search" && action !== "list" && rest.length === 0) {
+                throw new AppError("cli", "UsageError", {
+                    context: { detail: `mod ${action} 至少要给一个目标` },
+                });
+            }
+            return {
+                name: "mod",
+                action,
+                query: action === "search" ? positionals[1] : undefined,
+                targets: action === "search" ? undefined : rest,
+                version: optionalString(values, "version"),
+                folder: optionalString(values, "folder"),
+                dryRun: values["dry-run"] === true,
+                deps:
+                    values["deps"] === true ? true : values["no-deps"] === true ? false : undefined,
+                async: values["async"] === true,
+                limit: optionalInteger(values, "limit"),
+                gameVersion: optionalString(values, "game"),
+                loader: optionalString(values, "loader"),
+                offline: values["offline"] === true,
+            };
+        },
         run: runMod,
     },
 

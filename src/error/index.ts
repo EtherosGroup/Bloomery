@@ -5,4 +5,4 @@
  */
 export { AppError, type ErrorContext } from "./error.ts";
 export type { ErrorCode } from "./codes.ts";
-export { errorMessage, errorRetryable, handleError } from "./handler.ts";
+export { errorJson, errorMessage, errorRetryable, handleError } from "./handler.ts";

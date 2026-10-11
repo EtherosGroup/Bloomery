@@ -43,7 +43,7 @@ export const EXISTING_NOTE = "（已存在）";
 export type ProgressStyle = "bar" | "plain" | "off" | "ndjson";
 
 /** 稳定键，进 ndjson 事件的 key 字段；消费方按它认通道，不认中文 */
-export type ProgressKey = "clientJar" | "library" | "natives" | "assets" | "files";
+export type ProgressKey = "clientJar" | "library" | "natives" | "assets" | "files" | "mod";
 
 /** 进度通道：key 给机器读，label 给终端显示 */
 export interface ProgressStage {
@@ -51,13 +51,14 @@ export interface ProgressStage {
     readonly label: string;
 }
 
-/** 五条通道，终端与机器两端共用同一份标签 */
+/** 六条通道，终端与机器两端共用同一份标签；消费方按 key 认通道，未知 key 不丢事件 */
 export const PROGRESS_STAGES: Readonly<Record<ProgressKey, ProgressStage>> = {
     clientJar: { key: "clientJar", label: "客户端 jar" },
     library: { key: "library", label: "库" },
     natives: { key: "natives", label: "natives" },
     assets: { key: "assets", label: "资源" },
     files: { key: "files", label: "文件" },
+    mod: { key: "mod", label: "MOD" },
 };
 
 export interface ProgressIo {

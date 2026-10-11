@@ -1,5 +1,15 @@
 # 更新记录
 
+## 1.13.0
+
+- `mod search` 加按实例过滤：给 `--version` / `--folder` 就把该实例的游戏版本与加载器拼进 Modrinth 的 facets，也可用 `--game <版本>` / `--loader <名字>` 手写条件。原先只按 `project_type:mod` 搜，加载器或游戏版本对不上的结果要等到装的时候才失败
+- 新增 `mod list`：扫实例 `mods/` 下的 jar 与 `.jar.disabled`，算文件 sha1 反查 Modrinth 补项目名与版本，反查不到（没发布过、限流、断网）退回文件名，单条查不到不影响其余；`--offline` 只扫盘。禁用约定定为 `foo.jar` ↔ `foo.jar.disabled`，加载器只认 `.jar`
+- 新增 `mod remove` / `mod disable` / `mod enable`：接多个目标，逐条报告，没找到、重名、状态已经对、目标名被占用都记进 `skipped`（`reason` 是稳定机器键）而不是抛错，有跳过时退出码 1
+- `mod install` 接多个目标：sync 逐条装、装不上的不中断其余，`--async` 一次入队后只拉起一次 worker
+- `mod install` 的同步路径接上进度：`--progress ndjson` 出 MOD 下载的字节进度，通道 `key` 是 `mod`（新增的第六个通道）；`mod list` 的反查进度走同一个通道
+- **机器接口破坏性变更，`api` 1 → 2**：`mod search --json` 从裸数组改成信封（`query` `instance` `gameVersion` `loader` `hits[]`）；`mod install --json` 改成 `installs[]` + `failed[]`（单条与多条同形状，失败条目带 `code` `detail` `retryable`）；`mod install --async --json` 改成 `tasks[]` + `spawn`。消费方按 `--version --json` 的 `api` 判兼容
+- `mod install` 单条目标失败不再整条抛错，改由结果里的 `failed[]` 带出、退出码 1；非加载器实例这类整批前置条件仍当场报 `ModUnsupported`
+
 ## 1.12.6
 
 - 修 `--detach` 下游戏进程活不过 CLI 退出（仅 Windows）：`unref` 只放开事件循环句柄，子进程仍与父进程共用控制台，CLI 退出时控制台被拆、JVM 在 1 秒内结束 —— 实例日志 0 字节、游戏自己的 `latest.log` 不生成，表现是「GUI 启动没有窗口，命令行正常」（命令行下 `waitForExit` 默认 true，父进程不退出）。两条 spawn 路径在 unref 时都给 `detached`，与后台 worker 同一套；Windows VM 实测 CLI 退出 25 秒后游戏仍在跑，GLFW30 窗口 `Minecraft 1.20.6` 已建立

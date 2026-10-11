@@ -43,4 +43,4 @@ export function versioned<T extends object>(value: T): T & { v: number } {
 }
 
 // 机器接口版本，破坏性变更才 +1；消费方按它判兼容，不按语义版本号
-export const API_VERSION = 1;
+export const API_VERSION = 2;
