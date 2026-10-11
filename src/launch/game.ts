@@ -68,6 +68,8 @@ export interface PlanInput {
 export interface PlanOptions {
     /** false 表示预览：不解压 natives，缺件也不报错 */
     readonly prepare?: boolean;
+    /** 预览：访问令牌过期也让它进计划，只标出 needsRefresh，不为了预览去续期 */
+    readonly allowStaleAccount?: boolean;
     /** 本次启动的内存上限，来自 --memory；压过实例、文件夹与全局三层 */
     readonly memoryMaxMb?: number | undefined;
 }
@@ -173,7 +175,9 @@ export async function planLaunch(
     }
 
     const java = await resolveLaunchJava(input, options, descriptor, warnings);
-    const account = accountFor(input.accounts, input.accountName, input.setting.selectedAccount);
+    const account = accountFor(input.accounts, input.accountName, input.setting.selectedAccount, {
+        allowStale: planOptions.allowStaleAccount === true,
+    });
 
     const assetIndex = descriptor.assetIndex?.id ?? descriptor.assets ?? "legacy";
     const index = await readAssetIndex(assetsRoot, assetIndex);

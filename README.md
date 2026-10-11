@@ -69,7 +69,7 @@ Windows 上启动游戏用 Java 同目录的 `javaw.exe`，探测 Java 仍走 `j
 
 `--memory <mb>` 覆盖本次启动的内存上限，压过实例、文件夹与全局三层，小于生效的 `minMb` 时报 `UsageError`；要持久化改内存用 `config set launch.memory.maxMb`。
 
-启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。索引整份不在时 `--dry-run` 给一行「资源 索引缺失，需下载索引与全部资源约 X MB」，数字来自版本 json。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
+启动当前选中实例时，首行给出提示。`--dry-run` 不改动磁盘，也不联网：微软账户的访问令牌过期时只把计划里的 `account.needsRefresh` 标成 `true`，续期留到真启动那一次，预览不会为了拿一份不落盘的新令牌去等微软。`--repair` 不改启动统计（`state.json` 的启动次数与上次游玩时间只在真的启动时更新）。两个一起给时以 `--dry-run` 为准。索引整份不在时 `--dry-run` 给一行「资源 索引缺失，需下载索引与全部资源约 X MB」，数字来自版本 json。补全走进度事件，`--progress ndjson` 下与 `install` 同一套阶段名；续期那次网络往返走 `key` 为 `account` 的通道，前后各一帧。下载失败报 `DependencyMissing`（可重试），sha1 校验不过报 `InstallBroken`（不可重试）。
 
 ### install
 
@@ -372,8 +372,8 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `version info <id>`                     | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                                                                                         |
 | `version select <id>`                   | 对象   | 有   | `selected` `folder`                                                                                                                                                                                                                                              |
 | `version rename <旧> <新>`              | 对象   | 有   | `id` `from` `folder` `moved:boolean` `rewritten:string[]` `dryRun:boolean`                                                                                                                                                                                       |
-| `launch [id]`                           | 对象   | 有   | `version` `executable` `java` `account` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `pid` `log` `missing` `repair`                                                                                                              |
-| `launch [id] --dry-run`                 | 对象   | 有   | 同上，`--dry-run` 不启动进程；`repair`、`pid` 与 `log` 恒为 `null`                                                                                                                                                                                               |
+| `launch [id]`                           | 对象   | 有   | `version` `executable` `java` `account{name,uuid,kind,needsRefresh}` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `pid` `log` `missing` `repair`                                                                                 |
+| `launch [id] --dry-run`                 | 对象   | 有   | 同上，`--dry-run` 不启动进程、不续期微软凭据；`repair`、`pid` 与 `log` 恒为 `null`，`account.needsRefresh` 为 `true` 表示真启动时会先续一次                                                                                                                      |
 | `launch [id] --repair`                  | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                                                                           |
 | `install <version>`                     | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                                                                                                   |
 | `mod search <关键词>`                   | 对象   | 有   | `query` `instance` `gameVersion` `loader` `hits[]`（元素：`id:string` `slug:string` `title:string` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`）；没给 `--version`/`--folder` 时前三个后位是 `null` |
@@ -533,8 +533,8 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 { "v": 1, "key": "library", "stage": "库", "done": 4617, "total": 59288230, "bytes": true }
 ```
 
-- `key`：通道的稳定键，每条事件都有：`clientJar` / `library` / `natives` / `assets` / `files`。前四个是 `install` 与 `launch` 补全的四条通道，`files` 是逐文件下载（`java install --provider mojang` 与队列 worker）。消费方按 `key` 认通道
-- `stage`：同一通道的显示名，`客户端 jar` / `库` / `natives` / `资源` / `文件`，随实现措辞变化，别拿它做判断
+- `key`：通道的稳定键，每条事件都有：`clientJar` / `library` / `natives` / `assets` / `files` / `mod` / `account`。前四个是 `install` 与 `launch` 补全的四条通道，`files` 是逐文件下载（`java install --provider mojang` 与队列 worker），`mod` 是 MOD 安装与已装列表反查，`account` 是启动前续期微软凭据（`done` 0 → 1 两帧，`total` 恒为 1）。消费方按 `key` 认通道，不认识的 key 归到兜底通道即可
+- `stage`：同一通道的显示名，`客户端 jar` / `库` / `natives` / `资源` / `文件` / `MOD` / `账户`，随实现措辞变化，别拿它做判断
 - `done` / `total`：`bytes` 为 `true` 时是字节数，否则是个数
 - `bytes`：布尔，说明前两个字段的单位
 - `existing`：可选，`true` 表示这批文件本地已有、这次没下

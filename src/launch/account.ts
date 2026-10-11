@@ -22,6 +22,13 @@ export interface LaunchAccount {
     /** 版本 json 的 --userType */
     readonly userType: "msa" | "legacy";
     readonly kind: "offline" | "microsoft";
+    /** 访问令牌已过期或没有，真启动前要续一次；离线恒为 false */
+    readonly needsRefresh: boolean;
+}
+
+export interface AccountOptions {
+    /** 预览：访问令牌过期也放行，只把 needsRefresh 标出来 */
+    readonly allowStale?: boolean;
 }
 
 // OfflinePlayer:<名字> 的 MD5
@@ -43,6 +50,7 @@ export function accountFor(
     accounts: Accounts,
     wanted?: string,
     selected?: string | null,
+    options: AccountOptions = {},
 ): LaunchAccount {
     const list = accounts.accounts;
     if (list.length === 0) {
@@ -57,7 +65,7 @@ export function accountFor(
             context: { detail: wanted ?? selected ?? "没有可用的账户" },
         });
     }
-    return resolve(account);
+    return resolve(account, options.allowStale === true);
 }
 
 // 指定的 id 或名字优先，其次 setting 里选的，再次第一个
@@ -103,7 +111,7 @@ export function needsRefresh(account: Account): boolean {
     return !Number.isFinite(at) || at - Date.now() < 60_000;
 }
 
-function resolve(account: Account): LaunchAccount {
+function resolve(account: Account, allowStale: boolean): LaunchAccount {
     if (account.type === "offline") {
         return {
             id: account.id,
@@ -114,17 +122,19 @@ function resolve(account: Account): LaunchAccount {
             xuid: null,
             userType: "legacy",
             kind: "offline",
+            needsRefresh: false,
         };
     }
 
+    // 没有 refresh token 就没人能把它换新，预览也一样
     if (account.refreshToken === null || account.refreshToken === undefined) {
         throw new AppError("launch", "AccountExpired", { context: { detail: account.name } });
     }
-    if (
+    const stale =
         account.accessToken === null ||
         account.accessToken === undefined ||
-        expired(account.expiresAt)
-    ) {
+        expired(account.expiresAt);
+    if (stale && !allowStale) {
         throw new AppError("launch", "AccountExpired", { context: { detail: account.name } });
     }
     if (account.uuid === null || account.uuid === undefined) {
@@ -137,10 +147,11 @@ function resolve(account: Account): LaunchAccount {
         id: account.id,
         name: account.name,
         uuid: account.uuid,
-        accessToken: account.accessToken,
+        accessToken: account.accessToken ?? "",
         xuid: account.xuid ?? null,
         userType: "msa",
         kind: "microsoft",
+        needsRefresh: stale,
     };
 }
 

@@ -295,6 +295,7 @@ test("微软账户缺凭据时报需要重登", () => {
     });
     assert.equal(fresh.userType, "msa");
     assert.equal(fresh.xuid, "123");
+    assert.equal(fresh.needsRefresh, false);
 });
 
 test("空账户清单", () => {
@@ -311,4 +312,41 @@ test("退出码归一化", () => {
     assert.equal(exitCodeOf(3, null), 3);
     assert.equal(exitCodeOf(null, "SIGTERM"), 128 + 15);
     assert.equal(exitCodeOf(null, null), 0);
+});
+
+test("访问令牌过期：真启动拒绝，预览放行并标出来", () => {
+    const stale: MicrosoftAccount = {
+        id: "microsoft:Alex",
+        type: "microsoft",
+        name: "Alex",
+        uuid: "00000000-0000-0000-0000-000000000001",
+        xuid: "123",
+        clientId: "cid",
+        refreshToken: "r",
+        accessToken: "a",
+        expiresAt: new Date(Date.now() - 3_600_000).toISOString(),
+    };
+    const accounts: Accounts = { schemaVersion: 1, accounts: [stale] };
+
+    assert.throws(
+        () => accountFor(accounts),
+        (error: unknown) => (error as { code?: string }).code === "AccountExpired",
+    );
+
+    const preview = accountFor(accounts, undefined, undefined, { allowStale: true });
+    assert.equal(preview.needsRefresh, true);
+    assert.equal(preview.accessToken, "a");
+    assert.equal(preview.userType, "msa");
+
+    // 没有 refresh token 的连预览都拒：没人能把它换新，只能重新登录
+    assert.throws(
+        () =>
+            accountFor(
+                { schemaVersion: 1, accounts: [{ ...stale, refreshToken: null }] },
+                undefined,
+                undefined,
+                { allowStale: true },
+            ),
+        (error: unknown) => (error as { code?: string }).code === "AccountExpired",
+    );
 });

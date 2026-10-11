@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.13.1
+
+- 修 `launch --dry-run` 会真去续期微软凭据：预览跑了一趟换令牌的网络往返，结果又因为不落盘丢掉，「先 dry-run 取计划、确认后再真启动」的外壳会等两次。现在 `--dry-run` 完全不碰网络，过期的账户在计划里用 `account.needsRefresh: true` 标出来，续期只在真启动那一次
+- 顺带：预览时访问令牌过期不再报 `AccountExpired`（`planLaunch` 新增 `allowStaleAccount`），「令牌过期但能续」的账户照样出得来计划；没有 refresh token 的账户仍然拒绝，因为没人能把它换新
+- 续期这一步加进度事件：`--progress ndjson` 下前后各一帧，通道 `key` 是新增的 `account`（`done` 0 → 1，`total` 恒为 1），外壳不用再猜卡在哪
+- `launch --json` 的 `account` 多一个 `needsRefresh`；`mod search` / `mod list` 之外新增的 `mod` 通道见 1.13.0
+
 ## 1.13.0
 
 - `mod search` 加按实例过滤：给 `--version` / `--folder` 就把该实例的游戏版本与加载器拼进 Modrinth 的 facets，也可用 `--game <版本>` / `--loader <名字>` 手写条件。原先只按 `project_type:mod` 搜，加载器或游戏版本对不上的结果要等到装的时候才失败

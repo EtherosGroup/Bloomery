@@ -33,7 +33,7 @@ import {
     spawnGame,
     type LaunchPlan,
 } from "../../launch/index.ts";
-import { logger, print, progressReporter, versioned } from "../../output/index.ts";
+import { logger, print, PROGRESS_STAGES, progressReporter, versioned } from "../../output/index.ts";
 import { logDirectory } from "../../platform/index.ts";
 import {
     chooseInstance,
@@ -107,22 +107,24 @@ export async function runLaunch(command: LaunchCommand, ctx: Context): Promise<v
         return;
     }
 
+    // 预览不碰网络：续期要等微软应答，结果却落不了盘，白跑一趟
+    // 计划里把过期的账户标成 needsRefresh，真启动那一次再续
+    const loaded = await loadAccounts();
+    const accounts = dryRun
+        ? loaded
+        : await refreshCredentials(loaded, command.account, setting, ctx);
+
     const plan = await planLaunch(
         {
             setting,
             folder,
             config,
             instance,
-            accounts: await refreshCredentials(
-                await loadAccounts(),
-                command.account,
-                setting,
-                !dryRun,
-            ),
+            accounts,
             probes: state.javaProbe,
             accountName: command.account,
         },
-        { prepare: !dryRun, memoryMaxMb: command.memory },
+        { prepare: !dryRun, allowStaleAccount: dryRun, memoryMaxMb: command.memory },
     );
 
     const selected = pick.source === "selected" ? instance.id : null;
@@ -221,11 +223,12 @@ async function ensureFiles(
 }
 
 // 微软访问令牌按小时过期；过期或快过期时先续一次，续期用的 client id 存在账号里
+// 只在真启动那条路上调用：预览走后 allowStaleAccount，不花这次往返
 async function refreshCredentials(
     accounts: Accounts,
     wanted: string | undefined,
     setting: Setting,
-    persist: boolean,
+    ctx: Context,
 ): Promise<Accounts> {
     const account = pickAccount(accounts.accounts, wanted, setting.selectedAccount);
     if (account === undefined || !needsRefresh(account) || account.type !== "microsoft") {
@@ -243,11 +246,22 @@ async function refreshCredentials(
     }
 
     log.info("续期微软账户 %s", account.id);
-    const credentials = await refreshMicrosoft({
-        clientId,
-        refreshToken,
-        network: setting.network,
-    });
+    // 这一趟要等微软应答，前后各发一帧，外面才知道卡在哪一步
+    const progress = progressReporter(
+        ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
+    );
+    let credentials;
+    try {
+        progress.update(PROGRESS_STAGES.account, 0, 1);
+        credentials = await refreshMicrosoft({
+            clientId,
+            refreshToken,
+            network: setting.network,
+        });
+        progress.update(PROGRESS_STAGES.account, 1, 1);
+    } finally {
+        progress.close();
+    }
 
     // id 里带着游戏名，改名后沿用原来的 id，引用它的 selectedAccount 才不会断
     const updated: Account = {
@@ -258,9 +272,8 @@ async function refreshCredentials(
         ...accounts,
         accounts: accounts.accounts.map((item) => (item.id === account.id ? updated : item)),
     };
-    if (persist) {
-        await saveAccounts(next);
-    }
+    // 响应带新的 refresh token 时这次换到的就是它，不落盘下次还会拿旧的去换
+    await saveAccounts(next);
     return next;
 }
 
@@ -309,7 +322,9 @@ function report(
     lines.push(
         `启动 ${plan.versionName}${dryRun ? "（只预览）" : ""}`,
         `  Java      ${plan.executable}（${describeJava(plan)}）`,
-        `  账户      ${plan.account.name}（${plan.account.kind === "offline" ? "离线" : "微软"}）`,
+        `  账户      ${plan.account.name}（${
+            plan.account.kind === "offline" ? "离线" : "微软"
+        }${plan.account.needsRefresh ? "，访问令牌待续期" : ""}）`,
         `  目录      ${plan.directory}`,
         `  classpath ${plan.classpath.entries.length} 项${
             plan.classpath.missing.length === 0
@@ -401,6 +416,7 @@ function summary(plan: LaunchPlan): unknown {
             name: plan.account.name,
             uuid: plan.account.uuid,
             kind: plan.account.kind,
+            needsRefresh: plan.account.needsRefresh,
         },
         directory: plan.directory,
         classpath: plan.classpath.entries.length,

@@ -1488,3 +1488,68 @@ test("mod install 在非加载器实例上报 ModUnsupported", () => {
         rmSync(home, { recursive: true, force: true });
     }
 });
+
+test(
+    "launch --dry-run 不碰微软续期，过期令牌只标出来",
+    { skip: process.platform === "win32" },
+    () => {
+        const home = writableLaunchHome(["1.20.6"]);
+        try {
+            const config = join(home, ".config", "bloomery");
+            const accountsPath = join(config, "accounts.json");
+            writeFileSync(
+                accountsPath,
+                JSON.stringify({
+                    schemaVersion: 1,
+                    accounts: [
+                        {
+                            id: "microsoft:Alex",
+                            type: "microsoft",
+                            name: "Alex",
+                            uuid: "00000000-0000-0000-0000-000000000001",
+                            xuid: "123",
+                            clientId: "cid",
+                            refreshToken: "stale-refresh",
+                            accessToken: "stale-access",
+                            expiresAt: new Date(Date.now() - 3_600_000).toISOString(),
+                        },
+                    ],
+                }),
+            );
+
+            const settingPath = join(config, "setting.json");
+            const setting = JSON.parse(readFileSync(settingPath, "utf8")) as Record<
+                string,
+                unknown
+            >;
+            setting["selectedAccount"] = "microsoft:Alex";
+            // 代理指到没人听的端口：真去续期必然当场失败，这条测试就不会误报通过
+            setting["network"] = { proxy: "http://127.0.0.1:1" };
+            writeFileSync(settingPath, JSON.stringify(setting));
+
+            const before = readFileSync(accountsPath, "utf8");
+            const outcome = cliAt(home, [
+                "--json",
+                "launch",
+                "1.20.6",
+                "--folder",
+                "g",
+                "--dry-run",
+            ]);
+            assert.equal(outcome.status, 0, outcome.stderr);
+
+            const result = JSON.parse(outcome.stdout) as {
+                pid: number | null;
+                account: { name: string; kind: string; needsRefresh: boolean };
+            };
+            assert.equal(result.pid, null);
+            assert.equal(result.account.name, "Alex");
+            assert.equal(result.account.kind, "microsoft");
+            assert.equal(result.account.needsRefresh, true);
+            // 预览不落盘：令牌一个字节都不该动
+            assert.equal(readFileSync(accountsPath, "utf8"), before);
+        } finally {
+            rmSync(home, { recursive: true, force: true });
+        }
+    },
+);
