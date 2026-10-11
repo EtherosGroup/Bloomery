@@ -514,6 +514,7 @@ problem:string|null  lastPlayed:string|null  java:{required:{major:number},resol
 | `AccountExpired`           | 账户凭据需要刷新                         | 1    | false     |
 | `MicrosoftClientIdMissing` | 微软登录缺少 client id                   | 2    | false     |
 | `MicrosoftLoginFailed`     | 微软登录失败                             | 1    | false     |
+| `MicrosoftRefreshFailed`   | 微软凭据续期失败                         | 1    | **true**  |
 | `MicrosoftNotOwned`        | 这个微软账户没有 Minecraft: Java Edition | 1    | false     |
 | `ModNotFound`              | 没找到这个 MOD                           | 1    | false     |
 | `ModUnsupported`           | 这个实例装不了这个 MOD                   | 1    | false     |

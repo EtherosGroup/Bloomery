@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.13.2
+
+- 新增错误码 `MicrosoftRefreshFailed`（微软凭据续期失败，`retryable` **true**）：换令牌这一趟的网络错误（连接失败、超时、DNS）原先没有收口，冒到上层变成「内部错误，这是 bug，请附带调用栈」。现在整条续期流程（换 OAuth 令牌 + Xbox / XSTS / Minecraft 三步）的非 `AppError` 失败都归到它，`detail` 是「网络请求失败」、原因挂在 `cause` 上
+- 续期遇到 `HTTP 5xx` 与 `429` 也归到 `MicrosoftRefreshFailed`（`detail` 是 `HTTP <状态码>`）：这是微软那边这次没换成，凭据本身可能好好的，值得重试；真正的凭据失效（`invalid_grant` 这类 4xx）仍然是 `AccountExpired`，不会把用户往「重新登录」引错路
+- 登录流程同样收口：设备码、Xbox、Minecraft 各步的非 `AppError` 失败改成 `MicrosoftLoginFailed`，不再漏成「内部错误」；已有的 `AppError` 原样透出，不会被裹一层
+- `MicrosoftRefreshFailed` 进了可重试码集合，`--json` 信封里 `retryable` 为 `true`
+
 ## 1.13.1
 
 - 修 `launch --dry-run` 会真去续期微软凭据：预览跑了一趟换令牌的网络往返，结果又因为不落盘丢掉，「先 dry-run 取计划、确认后再真启动」的外壳会等两次。现在 `--dry-run` 完全不碰网络，过期的账户在计划里用 `account.needsRefresh: true` 标出来，续期只在真启动那一次

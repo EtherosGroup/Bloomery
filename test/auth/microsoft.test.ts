@@ -319,3 +319,88 @@ test("续期不重走设备码，响应没带新刷新令牌时沿用旧的", as
     const token = callTo(calls, TOKEN_URL).payload as { grant_type: string };
     assert.equal(token.grant_type, "refresh_token");
 });
+
+// 连接失败/超时这类传输层错误不该冒到上层变成「内部错误」
+const REFUSED: Transport = async () => {
+    throw new Error("connect ECONNREFUSED 127.0.0.1:1");
+};
+
+function codeOf(error: unknown): string {
+    assert.ok(error instanceof AppError, "应当是 AppError");
+    return error.code;
+}
+
+test("续期时连接失败报 MicrosoftRefreshFailed，可重试", async () => {
+    await assert.rejects(
+        refreshMicrosoft({
+            clientId: "client-1",
+            refreshToken: "old-refresh",
+            network: NETWORK,
+            transport: REFUSED,
+        }),
+        (error: unknown) => {
+            assert.equal(codeOf(error), "MicrosoftRefreshFailed");
+            assert.equal((error as AppError).context["detail"], "网络请求失败");
+            return true;
+        },
+    );
+});
+
+test("续期遇到 5xx 与 429 也算续期失败，不是凭据失效", async () => {
+    for (const status of [502, 429]) {
+        await assert.rejects(
+            refreshMicrosoft({
+                clientId: "client-1",
+                refreshToken: "old-refresh",
+                network: NETWORK,
+                transport: async () => ({ status, body: {} }),
+            }),
+            (error: unknown) => {
+                assert.equal(codeOf(error), "MicrosoftRefreshFailed", `HTTP ${status}`);
+                return true;
+            },
+        );
+    }
+});
+
+test("续期被拒（invalid_grant）仍然是 AccountExpired", async () => {
+    await assert.rejects(
+        refreshMicrosoft({
+            clientId: "client-1",
+            refreshToken: "dead-refresh",
+            network: NETWORK,
+            transport: async () => ({
+                status: 400,
+                body: { error: "invalid_grant", error_description: "刷新令牌已失效" },
+            }),
+        }),
+        (error: unknown) => codeOf(error) === "AccountExpired",
+    );
+});
+
+test("登录流程里连接失败报 MicrosoftLoginFailed", async () => {
+    await assert.rejects(
+        loginMicrosoft({
+            clientId: "client-1",
+            network: NETWORK,
+            prompt: () => {},
+            transport: REFUSED,
+        }),
+        (error: unknown) => {
+            assert.equal(codeOf(error), "MicrosoftLoginFailed");
+            return true;
+        },
+    );
+});
+
+test("登录流程里已有的 AppError 原样透出，不被裹成登录失败", async () => {
+    await assert.rejects(
+        loginMicrosoft({
+            clientId: "client-1",
+            network: NETWORK,
+            prompt: () => {},
+            transport: async () => ({ status: 400, body: { error: "authorization_declined" } }),
+        }),
+        (error: unknown) => codeOf(error) === "MicrosoftLoginFailed",
+    );
+});

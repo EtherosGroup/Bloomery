@@ -32,20 +32,32 @@ test("加载器安装失败：exit 1、不可重试", () => {
     assert.equal(error.retryable, false);
 });
 
-test("可重试的只有下载失败与依赖缺失", () => {
-    for (const code of ["DependencyMissing", "DownloadFailed"] as const) {
+test("可重试的是下载失败、依赖缺失与微软续期失败", () => {
+    for (const code of ["DependencyMissing", "DownloadFailed", "MicrosoftRefreshFailed"] as const) {
         assert.equal(envelope(code).retryable, true, code);
     }
-    // 这两个码是穷尽的：消费方复制这份集合就会漂移，应当读信封里的 retryable 字段
+    // 这份集合是穷尽的：消费方复制它就会漂移，应当读信封里的 retryable 字段
     for (const code of [
         "LoaderInstallFailed",
         "InstallBroken",
         "GameFilesMissing",
         "FileWriteFailed",
         "JavaNotFound",
+        "MicrosoftLoginFailed",
+        "AccountExpired",
     ] as const) {
         assert.equal(envelope(code).retryable, false, code);
     }
+});
+
+test("微软续期失败与登录失败分得开：exit 1、可重试", () => {
+    const refresh = envelope("MicrosoftRefreshFailed");
+    assert.equal(refresh.code, "MicrosoftRefreshFailed");
+    assert.equal(refresh.message, "微软凭据续期失败");
+    assert.equal(refresh.exit, 1);
+    // 网络抖一下重试就好，不像登录失败那样要用户再走一遍登录
+    assert.equal(refresh.retryable, true);
+    assert.notEqual(refresh.message, envelope("MicrosoftLoginFailed").message);
 });
 
 test("每个码都有中文文案，且退出码在 0 到 3 之间", () => {

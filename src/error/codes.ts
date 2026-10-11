@@ -31,6 +31,7 @@ export type ErrorCode =
     | "AccountExpired"
     | "MicrosoftClientIdMissing"
     | "MicrosoftLoginFailed"
+    | "MicrosoftRefreshFailed"
     | "MicrosoftNotOwned"
     | "ModNotFound"
     | "ModUnsupported"

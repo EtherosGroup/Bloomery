@@ -44,6 +44,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     AccountExpired: "账户凭据需要刷新",
     MicrosoftClientIdMissing: "微软登录缺少 client id",
     MicrosoftLoginFailed: "微软登录失败",
+    MicrosoftRefreshFailed: "微软凭据续期失败",
     MicrosoftNotOwned: "这个微软账户没有 Minecraft: Java Edition",
     ModNotFound: "没找到这个 MOD",
     ModUnsupported: "这个实例装不了这个 MOD",
@@ -79,6 +80,7 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     AccountExpired: 1,
     MicrosoftClientIdMissing: 2,
     MicrosoftLoginFailed: 1,
+    MicrosoftRefreshFailed: 1,
     MicrosoftNotOwned: 1,
     ModNotFound: 1,
     ModUnsupported: 1,
@@ -102,6 +104,7 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     MicrosoftClientIdMissing:
         "登录时加 --client-id <id>，或设 BLOOMERY_CLIENT_ID；见 README 的微软登录一节",
     MicrosoftLoginFailed: "确认网络与代理设置；client id 未被 Minecraft 服务认下时会在这里报出来",
+    MicrosoftRefreshFailed: "检查网络与代理设置后重试；凭据本身没失效时重试通常就好",
     MicrosoftNotOwned: "换一个已购买 Minecraft: Java Edition 的微软账户",
     ModNotFound: "换个关键词，或到 modrinth.com 上确认拼写",
     ModUnsupported: "用 bloomery install <版本> --loader fabric 装一个加载器版本再试",
@@ -168,6 +171,7 @@ function detailOf(error: AppError): string {
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
     "DownloadFailed",
     "DependencyMissing",
+    "MicrosoftRefreshFailed",
 ]);
 
 /** 错误码对应的中文短语，队列把失败记进文件时也要一份 */

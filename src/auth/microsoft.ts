@@ -80,44 +80,73 @@ export async function loginMicrosoft(input: LoginInput): Promise<MicrosoftCreden
     const transport = input.transport ?? defaultTransport;
     const wait = input.wait ?? sleepFor;
 
-    const device = await requestDeviceCode(transport, input.clientId, input.network);
-    input.prompt({
-        url: device.verificationUri,
-        code: device.userCode,
-        expiresIn: device.expiresIn,
-        completeUrl: device.verificationUriComplete,
-        interval: device.intervalMs / 1000,
-    });
+    try {
+        const device = await requestDeviceCode(transport, input.clientId, input.network);
+        input.prompt({
+            url: device.verificationUri,
+            code: device.userCode,
+            expiresIn: device.expiresIn,
+            completeUrl: device.verificationUriComplete,
+            interval: device.intervalMs / 1000,
+        });
 
-    const oauth = await pollToken(transport, {
-        clientId: input.clientId,
-        deviceCode: device.deviceCode,
-        intervalMs: device.intervalMs,
-        expiresAt: Date.now() + device.expiresIn * 1000,
-        network: input.network,
-        wait,
-    });
+        const oauth = await pollToken(transport, {
+            clientId: input.clientId,
+            deviceCode: device.deviceCode,
+            intervalMs: device.intervalMs,
+            expiresAt: Date.now() + device.expiresIn * 1000,
+            network: input.network,
+            wait,
+        });
 
-    return finish(transport, oauth, input.network);
+        return await finish(transport, oauth, input.network);
+    } catch (error) {
+        // 网络层失败冒到上层会变成「内部错误」，它其实只是一次登录没成
+        throw asAuthFailure("MicrosoftLoginFailed", error);
+    }
 }
 
 export async function refreshMicrosoft(input: RefreshInput): Promise<MicrosoftCredentials> {
     const transport = input.transport ?? defaultTransport;
-    const response = await transport(
-        "POST",
-        TOKEN_URL,
-        {
-            client_id: input.clientId,
-            grant_type: "refresh_token",
-            refresh_token: input.refreshToken,
-            scope: SCOPE,
-        },
-        input.network,
-        "form",
-    );
+    try {
+        const response = await transport(
+            "POST",
+            TOKEN_URL,
+            {
+                client_id: input.clientId,
+                grant_type: "refresh_token",
+                refresh_token: input.refreshToken,
+                scope: SCOPE,
+            },
+            input.network,
+            "form",
+        );
+        // 5xx 与 429 是微软这次没换成功，凭据本身可能好好的，值得重试
+        if (response.status >= 500 || response.status === 429) {
+            throw new AppError("auth", "MicrosoftRefreshFailed", {
+                context: { detail: `HTTP ${response.status}` },
+            });
+        }
 
-    const oauth = oauthToken(response, input.refreshToken);
-    return finish(transport, oauth, input.network);
+        const oauth = oauthToken(response, input.refreshToken);
+        return await finish(transport, oauth, input.network);
+    } catch (error) {
+        throw asAuthFailure("MicrosoftRefreshFailed", error);
+    }
+}
+
+// 已经是 AppError 的原样放过，其余（连接失败、超时、DNS）按这次流程的失败码收口
+function asAuthFailure(
+    code: "MicrosoftLoginFailed" | "MicrosoftRefreshFailed",
+    error: unknown,
+): AppError {
+    if (error instanceof AppError) {
+        return error;
+    }
+    return new AppError("auth", code, {
+        cause: error,
+        context: { detail: "网络请求失败" },
+    });
 }
 
 /* ---------- 设备码 ---------- */
