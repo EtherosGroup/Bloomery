@@ -126,3 +126,23 @@ async function exists(path: string): Promise<boolean> {
         () => false,
     );
 }
+
+test("报错时的 folder 用调用方给的 id，不给才用路径", async () => {
+    await withVersion(async (root) => {
+        await assert.rejects(
+            restoreVersion({ folderPath: root, id: "没有这个", folderId: "g" }),
+            (error: unknown) => {
+                assert.equal(codeOf(error), "VersionNotFound");
+                assert.equal((error as AppError).context["folder"], "g", "应当带上文件夹 id");
+                return true;
+            },
+        );
+        await assert.rejects(
+            removeVersion({ folderPath: root, id: "没有这个" }),
+            (error: unknown) => {
+                assert.equal((error as AppError).context["folder"], root);
+                return true;
+            },
+        );
+    });
+});

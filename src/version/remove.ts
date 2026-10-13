@@ -34,6 +34,8 @@ export interface RemovedVersion {
 export interface MoveInput {
     readonly folderPath: string;
     readonly id: string;
+    /** 报错时带出去的文件夹 id；不给就用路径，与 CLI 其它 VersionNotFound 一致时传 id */
+    readonly folderId?: string | undefined;
     readonly dryRun?: boolean | undefined;
 }
 
@@ -60,7 +62,7 @@ async function move(input: MoveInput, fromRoot: string, toRoot: string): Promise
 
     if (!(await pathExists(source))) {
         throw new AppError("cli", "VersionNotFound", {
-            context: { detail: input.id, folder: input.folderPath },
+            context: { detail: input.id, folder: input.folderId ?? input.folderPath },
         });
     }
     if (await pathExists(target)) {

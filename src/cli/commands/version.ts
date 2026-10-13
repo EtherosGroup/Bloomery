@@ -252,8 +252,8 @@ async function move(
     const id = command.id ?? "";
     const dryRun = command.dryRun === true;
     const report = restore
-        ? await restoreVersion({ folderPath, id, dryRun })
-        : await removeVersion({ folderPath, id, dryRun });
+        ? await restoreVersion({ folderPath, id, folderId, dryRun })
+        : await removeVersion({ folderPath, id, folderId, dryRun });
 
     if (!restore && !dryRun) {
         // 选中的那个被移走了就清掉：它已经不在列表里，留着只会让人以为还在

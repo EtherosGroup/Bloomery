@@ -1,5 +1,9 @@
 # 更新记录
 
+## 1.14.1
+
+- 修 `version remove` / `version restore` 报 `VersionNotFound` 时 `context.folder` 的含义不一致：`remove` 走 CLI 的实例查找，给的是文件夹 id；`restore` 的版本不在列表里、只能由底层挪动逻辑报错，给的是绝对路径。现在两处都是文件夹 id，与 `version info`、`mod install` 等实例类错误的 `folder` 一致（真机验 1.14.0 时发现）
+
 ## 1.14.0
 
 - 新增 `version remove <实例>`：把实例从列表里拿掉，**文件一个不删**。目录挪到 `<文件夹>/.removed/<实例>`，那里在 `versions/` 之外 —— 发现只认 `versions/` 下的目录，挪走就不会再被列出来，扫描也扫不回来
