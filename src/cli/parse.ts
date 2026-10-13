@@ -145,14 +145,14 @@ export interface FolderCommand {
 
 export interface VersionCommand {
     readonly name: "version";
-    readonly action: "list" | "info" | "select" | "rename";
-    /** info / select 给实例；rename 给旧名字 */
+    readonly action: "list" | "info" | "select" | "rename" | "remove" | "removed" | "restore";
+    /** info / select / remove / restore 给实例；rename 给旧名字 */
     readonly id?: string;
     /** rename 用：新名字 */
     readonly renameTo?: string;
     /** 省略时用当前文件夹 */
     readonly folder?: string;
-    /** rename 用：只算不改 */
+    /** rename / remove / restore 用：只算不改 */
     readonly dryRun?: boolean;
 }
 

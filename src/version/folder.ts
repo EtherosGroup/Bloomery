@@ -23,6 +23,7 @@ import {
     type DownloadEntry,
     type VersionType,
 } from "./descriptor.ts";
+import { isRemoved } from "./remove.ts";
 import { scanVersions, type LocalVersion } from "./store.ts";
 
 const log = logger("version");
@@ -109,9 +110,16 @@ export async function readFolder(folder: Folder): Promise<FolderView> {
     for (const instance of folder.instances) {
         configured.add(instance.id);
         const view = configuredView(instance, onDisk.get(instance.id), byId, scan.directory);
-        if (view.state === "missing" && folder.missingEntries === "drop") {
-            dropped.push(instance.id);
-            continue;
+        if (view.state === "missing") {
+            // 移除过的版本：目录在 .removed/ 下，配置里那条还在，但不该再列出来
+            // 恢复就是把它挪回来，实例设置与统计因此不用动
+            if (await isRemoved(path, instance.id)) {
+                continue;
+            }
+            if (folder.missingEntries === "drop") {
+                dropped.push(instance.id);
+                continue;
+            }
         }
         instances.push(view);
     }

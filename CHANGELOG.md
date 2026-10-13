@@ -1,5 +1,13 @@
 # 更新记录
 
+## 1.14.0
+
+- 新增 `version remove <实例>`：把实例从列表里拿掉，**文件一个不删**。目录挪到 `<文件夹>/.removed/<实例>`，那里在 `versions/` 之外 —— 发现只认 `versions/` 下的目录，挪走就不会再被列出来，扫描也扫不回来
+- 新增 `version removed`：列出这个文件夹里移除过的版本；新增 `version restore <实例>`：挪回 `versions/`
+- 配置与统计都不动：`folders.<id>.instances.<id>` 里的内存与 jvmArgs、`state.instances` 里的游玩次数与上次时间都留着，移除只是让那条配置不再出现在列表里（`.removed/<实例>` 在时跳过它）。找回来之后设置原样有效，不用重配
+- 当前选中项与 `state.lastInstance` 指向被移除的那个时才清掉，免得它们指着一个已经不在列表里的实例
+- 三个动作都认 `--dry-run`
+
 ## 1.13.3
 
 - 修资源索引拿不到时被静默跳过：索引下载失败、或下下来了读不出来，`prepareAssets` 只 push 一句警告然后返回 `null`，与「这个版本不需要资源」共用同一个返回值。于是补全当作没事发生，用户最后只看到一句 `GameFilesMissing · 资源索引 1.12`，既不知道是网络还是 json 缺地址，也没法重试。现在这两种情况就地抛错：网络类 `DependencyMissing`（可重试，`detail` 说明哪个索引没下下来，`first` 给落点与原因），校验不过、以及本地文件坏了 `InstallBroken`（`detail` 带上索引文件路径）

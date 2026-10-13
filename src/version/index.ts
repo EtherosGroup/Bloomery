@@ -49,6 +49,17 @@ export {
 } from "./folder.ts";
 export { readVersion, scanVersions, type LocalVersion, type VersionScan } from "./store.ts";
 export { renameVersion, versionNameOf, type RenameInput, type RenameReport } from "./rename.ts";
+export {
+    isRemoved,
+    listRemoved,
+    REMOVED_DIRECTORY,
+    removedRoot,
+    removeVersion,
+    restoreVersion,
+    type MoveInput,
+    type MoveReport,
+    type RemovedVersion,
+} from "./remove.ts";
 export { mergeManifests, MARK_KEY, type MergeInput } from "./merge.ts";
 export {
     assetIndexIdOf,

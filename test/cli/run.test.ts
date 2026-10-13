@@ -1581,3 +1581,96 @@ test("补不齐时错误信封里带上补全警告", { skip: process.platform =
         rmSync(home, { recursive: true, force: true });
     }
 });
+
+test(
+    "version remove 只挪目录，列表里消失，restore 找得回来",
+    { skip: process.platform === "win32" },
+    () => {
+        const home = writableLaunchHome(["1.20.6"]);
+        try {
+            const config = join(home, ".config", "bloomery");
+            const game = join(home, "game");
+            const settingPath = join(config, "setting.json");
+            const setting = JSON.parse(readFileSync(settingPath, "utf8")) as {
+                folders: Array<{ instances: unknown[] }>;
+                selectedInstance: string | null;
+            };
+            // 配置里留一条带设置的实例条目：移除后它不该继续出现在列表里
+            setting.folders[0]!.instances = [
+                {
+                    id: "1.20.6",
+                    target: "1.20.6",
+                    loader: { type: "vanilla", version: null },
+                    jvmArgs: ["-Dx=1"],
+                    gameArgs: [],
+                },
+            ];
+            setting.selectedInstance = "1.20.6";
+            writeFileSync(settingPath, JSON.stringify(setting));
+
+            const removed = cliAt(home, ["--json", "version", "remove", "1.20.6", "--folder", "g"]);
+            assert.equal(removed.status, 0, removed.stderr);
+            const removedJson = JSON.parse(removed.stdout) as {
+                action: string;
+                id: string;
+                moved: boolean;
+                path: string;
+            };
+            assert.equal(removedJson.action, "remove");
+            assert.equal(removedJson.id, "1.20.6");
+            assert.equal(removedJson.moved, true);
+            assert.equal(removedJson.path, join(game, ".removed", "1.20.6"));
+            assert.equal(existsSync(join(game, "versions", "1.20.6")), false);
+            // 文件一个没删
+            assert.equal(existsSync(join(game, ".removed", "1.20.6", "1.20.6.jar")), true);
+
+            const listed = cliAt(home, ["--json", "version", "list", "--folder", "g"]);
+            assert.deepEqual(
+                (JSON.parse(listed.stdout) as { instances: Array<{ id: string }> }).instances.map(
+                    (one) => one.id,
+                ),
+                [],
+            );
+
+            // 配置里那条还在（设置没丢），选中项指向它才清掉
+            const after = JSON.parse(readFileSync(settingPath, "utf8")) as {
+                folders: Array<{ instances: Array<{ id: string; jvmArgs: string[] }> }>;
+                selectedInstance: string | null;
+            };
+            assert.equal(after.folders[0]!.instances.length, 1);
+            assert.deepEqual(after.folders[0]!.instances[0]!.jvmArgs, ["-Dx=1"]);
+            assert.equal(after.selectedInstance, null);
+
+            const removedList = cliAt(home, ["--json", "version", "removed", "--folder", "g"]);
+            const removedJson2 = JSON.parse(removedList.stdout) as {
+                versions: Array<{ id: string }>;
+            };
+            assert.deepEqual(
+                removedJson2.versions.map((one) => one.id),
+                ["1.20.6"],
+            );
+
+            const restored = cliAt(home, [
+                "--json",
+                "version",
+                "restore",
+                "1.20.6",
+                "--folder",
+                "g",
+            ]);
+            assert.equal(restored.status, 0, restored.stderr);
+            assert.equal((JSON.parse(restored.stdout) as { action: string }).action, "restore");
+            assert.equal(existsSync(join(game, "versions", "1.20.6", "1.20.6.jar")), true);
+
+            const again = cliAt(home, ["--json", "version", "list", "--folder", "g"]);
+            assert.deepEqual(
+                (JSON.parse(again.stdout) as { instances: Array<{ id: string }> }).instances.map(
+                    (one) => one.id,
+                ),
+                ["1.20.6"],
+            );
+        } finally {
+            rmSync(home, { recursive: true, force: true });
+        }
+    },
+);

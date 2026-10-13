@@ -335,17 +335,17 @@ export const COMMANDS: CommandTable = {
     },
 
     version: {
-        summary: "列出、查看、选中与改名版本",
-        usage: "version <list|info|select|rename> [id] [新名字] [--folder <id>] [--dry-run]",
+        summary: "列出、查看、选中、改名、移除与找回版本",
+        usage: "version <list|info|select|rename|remove|removed|restore> [id] [新名字] [--folder <id>] [--dry-run]",
         options: {
             folder: { type: "string", value: "<id>", summary: "指定游戏文件夹" },
-            "dry-run": { type: "boolean", summary: "rename 只算不改" },
+            "dry-run": { type: "boolean", summary: "rename / remove / restore 只算不改" },
         },
         positionals: { names: ["action", "id", "新名字"], required: 1 },
         toCommand: (values, positionals) => {
             const action = requireChoice(
                 requirePositional(positionals, 0, "action"),
-                ["list", "info", "select", "rename"] as const,
+                ["list", "info", "select", "rename", "remove", "removed", "restore"] as const,
                 "action",
             );
             if (action === "rename") {
@@ -354,6 +354,15 @@ export const COMMANDS: CommandTable = {
                     action,
                     id: requirePositional(positionals, 1, "id"),
                     renameTo: requirePositional(positionals, 2, "新名字"),
+                    folder: optionalString(values, "folder"),
+                    dryRun: values["dry-run"] === true,
+                };
+            }
+            if (action === "remove" || action === "restore") {
+                return {
+                    name: "version",
+                    action,
+                    id: requirePositional(positionals, 1, "id"),
                     folder: optionalString(values, "folder"),
                     dryRun: values["dry-run"] === true,
                 };

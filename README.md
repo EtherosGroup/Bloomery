@@ -206,7 +206,12 @@ bloomery version info 1.20.6-fabric-0.19.5       # 单个实例详情
 bloomery version select 1.20.6-fabric-0.19.5     # 选中
 bloomery version rename 1.20.6 vanilla           # 改实例名
 bloomery version rename 1.20.6 vanilla --dry-run # 只算不改
+bloomery version remove 1.20.6                   # 从列表里拿掉，文件不删
+bloomery version removed                         # 这个文件夹移除过哪些
+bloomery version restore 1.20.6                  # 找回来
 ```
+
+`version remove` 只挪目录：`versions/<实例>` 移到 `<文件夹>/.removed/<实例>`，文件一个字节都不删。落点在 `versions/` 之外是有意的 —— 发现只认 `versions/` 下的目录，挪走就不会再被列出来。配置里的实例条目与 `state.json` 的游玩统计都留着，所以 `version restore` 挪回来之后，内存、jvmArgs 与上次游玩时间原样都在；只有当前选中项与上次启动项指向被移除的那个时才清掉。三个动作都认 `--dry-run`。
 
 选中后 `launch` 与 `mod install` 省略版本时都用它。优先级：命令行给的 > 当前选中 > 上次启动 > 第一个可用。
 
@@ -372,6 +377,9 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `version info <id>`                     | 对象   | 有   | `version list` 的 `instances[]` 元素加 `folder` 与 `descriptor`，且 `java.resolved` 有值                                                                                                                                                                         |
 | `version select <id>`                   | 对象   | 有   | `selected` `folder`                                                                                                                                                                                                                                              |
 | `version rename <旧> <新>`              | 对象   | 有   | `id` `from` `folder` `moved:boolean` `rewritten:string[]` `dryRun:boolean`                                                                                                                                                                                       |
+| `version remove <id>`                   | 对象   | 有   | `action:"remove"` `id` `folder` `path`（挪到哪）`moved:boolean` `dryRun:boolean`                                                                                                                                                                                 |
+| `version removed`                       | 对象   | 有   | `action:"removed"` `folder` `path`（.removed 目录）`versions[]`（`id` `path`）                                                                                                                                                                                   |
+| `version restore <id>`                  | 对象   | 有   | `action:"restore"` `id` `folder` `path`（挪回哪）`moved:boolean` `dryRun:boolean`                                                                                                                                                                                |
 | `launch [id]`                           | 对象   | 有   | `version` `executable` `java` `account{name,uuid,kind,needsRefresh}` `directory` `classpath`(数字) `natives` `assets` `args[]` `selectedInstance` `pid` `log` `missing` `repair`                                                                                 |
 | `launch [id] --dry-run`                 | 对象   | 有   | 同上，`--dry-run` 不启动进程、不续期微软凭据；`repair`、`pid` 与 `log` 恒为 `null`，`account.needsRefresh` 为 `true` 表示真启动时会先续一次                                                                                                                      |
 | `launch [id] --repair`                  | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                                                                           |
