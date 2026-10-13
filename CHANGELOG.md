@@ -1,5 +1,11 @@
 # 更新记录
 
+## 1.13.3
+
+- 修资源索引拿不到时被静默跳过：索引下载失败、或下下来了读不出来，`prepareAssets` 只 push 一句警告然后返回 `null`，与「这个版本不需要资源」共用同一个返回值。于是补全当作没事发生，用户最后只看到一句 `GameFilesMissing · 资源索引 1.12`，既不知道是网络还是 json 缺地址，也没法重试。现在这两种情况就地抛错：网络类 `DependencyMissing`（可重试，`detail` 说明哪个索引没下下来，`first` 给落点与原因），校验不过、以及本地文件坏了 `InstallBroken`（`detail` 带上索引文件路径）
+- `GameFilesMissing` 的 `context` 带上补全过程的 `warnings`（字符串数组）：失败路径上 `ensureFiles` 先抛异常、`RepairReport` 回不去，那句「没有资源索引 X 的地址」用户永远看不到。`ErrorContext` 因此允许字符串数组，人类可读那份按「；」拼起来
+- 没动的两处：版本 json 里没有索引地址、索引文件坏在本地但「缺件检测」这一层，仍然按老策略不报缺件（补全补不动它们，报出来只会拦住启动）。这次踩到的是「有地址但索引没下来」，走的是第一条
+
 ## 1.13.2
 
 - 新增错误码 `MicrosoftRefreshFailed`（微软凭据续期失败，`retryable` **true**）：换令牌这一趟的网络错误（连接失败、超时、DNS）原先没有收口，冒到上层变成「内部错误，这是 bug，请附带调用栈」。现在整条续期流程（换 OAuth 令牌 + Xbox / XSTS / Minecraft 三步）的非 `AppError` 失败都归到它，`detail` 是「网络请求失败」、原因挂在 `cause` 上

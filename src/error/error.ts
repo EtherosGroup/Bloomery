@@ -5,7 +5,11 @@
  */
 import type { ErrorCode } from "./codes.ts";
 
-export type ErrorContext = Record<string, string | number | boolean | undefined>;
+// 值是标量或字符串数组：数组给机器读（比如补全警告逐条列），人类可读那份按「；」拼起来
+export type ErrorContext = Record<
+    string,
+    string | number | boolean | readonly string[] | undefined
+>;
 
 export class AppError extends Error {
     readonly prefix: string;

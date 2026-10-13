@@ -212,8 +212,13 @@ async function ensureFiles(
 
         const after = await missingLaunchFiles({ folderPath: folder.path, instance });
         if (after.total > 0) {
+            // 补全过程中的警告在这里才见天日：这条路已经抛了异常，调用方拿不到 RepairReport
+            const warnings = repaired.warnings;
             throw new AppError("launch", "GameFilesMissing", {
-                context: { detail: firstMissing(after) ?? instance.id },
+                context: {
+                    detail: firstMissing(after) ?? instance.id,
+                    ...(warnings.length === 0 ? {} : { warnings }),
+                },
             });
         }
         return repaired;

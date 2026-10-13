@@ -152,7 +152,7 @@ export async function missingLaunchFiles(input: MissingInput): Promise<MissingFi
 }
 
 // 索引整份不在本地：条数要等索引取回，大小取版本 json 的 totalSize 与索引自身
-// 文件在但读不出来时不报：下载会跳过已存在的落点，补不动
+// 没地址、以及文件在但读不出来这两类不报：补全补不动它们，报出来只会拦住启动
 async function missingIndexAssets(
     assetsRoot: string,
     descriptor: Descriptor,

@@ -868,6 +868,8 @@ interface AssetPlan {
 }
 
 // 只下索引并算出对象任务，对象本体交给合并队列
+// 索引是资源的唯一清单：拿不到就报错，不返回 null —— null 是「这个版本不需要资源」的意思，
+// 两者混在一起会让补全当作没事发生，用户最后只看到一句「启动文件缺失」
 async function prepareAssets(
     descriptor: Descriptor,
     assetsRoot: string,
@@ -899,17 +901,35 @@ async function prepareAssets(
             options,
         );
     } else if (!(await pathExists(indexPath))) {
+        // 有索引 id 却没有地址，本地也没有：补不动，照旧跳过并留一句提示
         warnings.push(`没有资源索引 ${id} 的地址，资源只能跳过`);
         return null;
     }
 
     const parsed = await readAssetIndex(assetsRoot, id);
     if (parsed === null) {
-        warnings.push(`资源索引 ${id} 读不出来`);
-        return null;
+        // 索引下下来了却读不出来，或压根没下来：这是补全失败，不能当作补完了
+        throw indexFailure(id, indexPath, index);
     }
 
     return { id, index, parsed, tasks: objectTasks(assetsRoot, parsed) };
+}
+
+// 索引没下来或下下来了读不出来：判定与其它文件同一套，校验类不可重试、网络类可重试
+function indexFailure(id: string, indexPath: string, index: DownloadReport): AppError {
+    const failure = index.failures[0];
+    if (failure === undefined) {
+        return new AppError("install", "InstallBroken", {
+            context: { detail: `资源索引 ${id} 读不出来：${indexPath}` },
+        });
+    }
+    const verify = failure.error.startsWith(VERIFY_MISMATCH);
+    return new AppError("install", verify ? "InstallBroken" : "DependencyMissing", {
+        context: {
+            detail: verify ? `资源索引 ${id} 校验不过` : `资源索引 ${id} 没下下来`,
+            first: `${failure.target}：${failure.error}`,
+        },
+    });
 }
 
 // 同一个哈希可能挂在多个名字下，按目标去重

@@ -1553,3 +1553,31 @@ test(
         }
     },
 );
+
+test("补不齐时错误信封里带上补全警告", { skip: process.platform === "win32" }, () => {
+    const home = writableLaunchHome(["1.20.6"]);
+    try {
+        const directory = join(home, "game", "versions", "1.20.6");
+        // 版本 json 里没有客户端 jar 的下载信息，jar 也不在：补全补不动，自检照样报缺
+        rmSync(join(directory, "1.20.6.jar"), { force: true });
+
+        const outcome = cliAt(home, ["--json", "launch", "1.20.6", "--folder", "g"]);
+        assert.equal(outcome.status, 1, outcome.stderr);
+
+        const envelope = JSON.parse(outcome.stdout) as {
+            error: {
+                code: string;
+                detail: string;
+                context: Record<string, unknown>;
+            };
+        };
+        assert.equal(envelope.error.code, "GameFilesMissing");
+        assert.equal(envelope.error.detail, `客户端 jar ${join(directory, "1.20.6.jar")}`);
+        // 这条路已经抛了异常，调用方拿不到 RepairReport，警告只能从这里出去
+        assert.deepEqual(envelope.error.context["warnings"], [
+            "版本 json 里没有客户端 jar 的下载信息",
+        ]);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});

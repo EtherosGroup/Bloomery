@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -55,6 +55,8 @@ interface Fixture {
     breakLibrary(): void;
     /** 库返回 404，制造网络失败 */
     removeLibrary(): void;
+    /** 资源索引返回 404：补全拿不到资源的唯一清单 */
+    removeIndex(): void;
 }
 
 // 版本清单、版本 json、客户端 jar、库、natives、资源全由本地服务提供
@@ -62,6 +64,7 @@ async function setup(): Promise<Fixture> {
     let base = "";
     let broken = false;
     let gone = false;
+    let noIndex = false;
     const server = await serve(({ path }) => {
         switch (path) {
             case "/mc/game/version_manifest_v2.json":
@@ -84,6 +87,9 @@ async function setup(): Promise<Fixture> {
             case "/natives.jar":
                 return { status: 200, body: NATIVES_JAR };
             case "/indexes/t.json":
+                if (noIndex) {
+                    return { status: 404 };
+                }
                 return { status: 200, body: ASSET_INDEX };
             case `/assets/${ASSET_HASH.slice(0, 2)}/${ASSET_HASH}`:
                 return { status: 200, body: ASSET_OBJECT };
@@ -107,6 +113,9 @@ async function setup(): Promise<Fixture> {
         },
         removeLibrary: () => {
             gone = true;
+        },
+        removeIndex: () => {
+            noIndex = true;
         },
     };
 }
@@ -315,6 +324,62 @@ test("文件校验不过时报 InstallBroken，不可重试", async () => {
                 assert.match(String(app.context?.["first"]), /sha1 不符/);
                 const envelope = errorJson(error) as { error: { retryable: boolean } };
                 assert.equal(envelope.error.retryable, false);
+                return true;
+            },
+        );
+    } finally {
+        await close(fixture);
+    }
+});
+
+test("资源索引下不下来时报 DependencyMissing，不再静默跳过资源", async () => {
+    const fixture = await setup();
+    try {
+        await install(fixture);
+        const descriptor = await readDescriptorOf(fixture);
+        // 索引要重下，服务端却 404：这正是「补全当作没事发生、自检再报启动文件缺失」那条路
+        await rm(join(fixture.root, "assets", "indexes", "t.json"));
+        fixture.removeIndex();
+
+        await assert.rejects(
+            repairVersion(repairInput(fixture, descriptor, true)),
+            (error: unknown) => {
+                const app = error as { code?: string; context?: Record<string, unknown> };
+                assert.equal(app.code, "DependencyMissing");
+                assert.match(String(app.context?.["detail"]), /资源索引 t 没下下来/);
+                assert.match(String(app.context?.["first"]), /indexes\/t\.json/);
+                assert.equal(
+                    (errorJson(error) as { error: { retryable: boolean } }).error.retryable,
+                    true,
+                );
+                return true;
+            },
+        );
+    } finally {
+        await close(fixture);
+    }
+});
+
+test("索引文件坏在本地时报 InstallBroken，并给出路径", async () => {
+    const fixture = await setup();
+    try {
+        await install(fixture);
+        const descriptor = await readDescriptorOf(fixture);
+        const indexPath = join(fixture.root, "assets", "indexes", "t.json");
+        // 文件在，下载会跳过它，只有报出来用户才知道该删掉重来
+        await writeFile(indexPath, "{ 不是 json");
+
+        await assert.rejects(
+            repairVersion(repairInput(fixture, descriptor, true)),
+            (error: unknown) => {
+                const app = error as { code?: string; context?: Record<string, unknown> };
+                assert.equal(app.code, "InstallBroken");
+                assert.match(String(app.context?.["detail"]), /资源索引 t 读不出来/);
+                assert.match(String(app.context?.["detail"]), /indexes\/t\.json/);
+                assert.equal(
+                    (errorJson(error) as { error: { retryable: boolean } }).error.retryable,
+                    false,
+                );
                 return true;
             },
         );

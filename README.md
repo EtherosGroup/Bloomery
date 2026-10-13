@@ -444,7 +444,7 @@ assets:{index:string,present:number,total:number|null,missing:number|null,size:n
 
 `launch` 顶层的 `assets` 是规划时的统计，形状与 `missing.assets` 相同（索引不在本地时为 `null`）。
 
-`launch` 的 `repair` 为 `null` 表示这次没补（没有缺件，或 `--dry-run`）；补过时给 `clientJar` `libraries` `natives` `assets` 四类的下载报告（形状同 `install` 的对应字段，`downloaded` 是新下的个数，`skipped` 是已有的个数）、`timing` 与 `warnings[]`。
+`launch` 的 `repair` 为 `null` 表示这次没补（没有缺件，或 `--dry-run`）；补过时给 `clientJar` `libraries` `natives` `assets` 四类的下载报告（形状同 `install` 的对应字段，`downloaded` 是新下的个数，`skipped` 是已有的个数）、`timing` 与 `warnings[]`。补不齐时抛 `GameFilesMissing`，这条路已经出了异常、`RepairReport` 回不去，补全过程的 `warnings` 改由错误的 `context.warnings`（字符串数组）带出来。
 
 实例对象出现在 `folder scan` 元素的 `instances[]`、`version list` 的 `instances[]` 与 `version info` 里：
 

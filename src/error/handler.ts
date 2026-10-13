@@ -159,7 +159,7 @@ function detailOf(error: AppError): string {
     const detail = entries.find(([key]) => key === "detail")?.[1];
     const rest = entries
         .filter(([key]) => key !== "detail")
-        .map(([key, value]) => `${key}=${String(value)}`);
+        .map(([key, value]) => `${key}=${Array.isArray(value) ? value.join("；") : String(value)}`);
 
     const head = detail === undefined ? "" : `：${String(detail)}`;
     return rest.length === 0 ? head : `${head}（${rest.join(" ")}）`;
