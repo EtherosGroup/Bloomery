@@ -7,7 +7,9 @@
 - 新增 `mod list --refresh-names`：忽略 24h TTL 重下中文名表。表地址主源 jsDelivr、备源 GitHub raw，`BLOOMERY_CN_NAMES_URL` 可覆盖（本地与 GUI 联调）
 - `mod list --json` 加顶层 `names:{path,source,updatedAt,count}`：`updatedAt` 是表内容更新时间，没成功拉过为 `null`；`count` 是表里条目数，给外壳显示缓存状态
 - `--progress ndjson` 下 `mod list` 反查每解析完一批文件推 `key` 为 `mod-item` 的逐条事件（`file` `project` `version`）：项目信息只能批量换，因此帧按每 50 个文件一批推，单帧已带齐 `project` 与 `version`；反查失败的文件照推，两项为 `null`；`--offline` 不推。最终整批 JSON 仍是权威值，帧只做增量刷新
-- 数据托管在仓库 `metadata/cn-names.tsv`，由 MC百科快照生成；PCL 的 `WikiEntries.txt` 只在本地核对覆盖率用，不随包分发。抓取许可与频率确认前，表可能不存在，此时全部 `titleZh` 为 `null`
+- 表内置在仓库 `metadata/cn-names.tsv`（5362 条），由 `metadata/generate.ts` 生成：MC百科模组列表给中文名与英文名，Modrinth 公开 API 给 slug，两边归一化后精确匹配，同名多义按下载量取最常见的一项。PCL 的 `WikiEntries.txt` 只在本地核对覆盖率用，不随包分发
+- 表每月生成一次即可；CLI 侧只认常量地址，表没上线或拉取失败时全部 `titleZh` 为 `null`
+- 代码注释与 CLI 文案按 `comment-style` 规范过一遍：去掉劝导与辩解口气、口语化文案与第一人称，无行为变化
 
 ## 1.14.1
 
