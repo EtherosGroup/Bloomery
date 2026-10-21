@@ -101,7 +101,7 @@ export async function loginMicrosoft(input: LoginInput): Promise<MicrosoftCreden
 
         return await finish(transport, oauth, input.network);
     } catch (error) {
-        // 网络层失败冒到上层会变成「内部错误」，它其实只是一次登录没成
+        // 网络层失败归到登录失败，不再冒成内部错误
         throw asAuthFailure("MicrosoftLoginFailed", error);
     }
 }
@@ -223,7 +223,7 @@ async function pollToken(transport: Transport, input: PollInput): Promise<OAuthT
     for (;;) {
         if (Date.now() >= input.expiresAt) {
             throw new AppError("auth", "MicrosoftLoginFailed", {
-                context: { detail: "设备码超时，请重新登录" },
+                context: { detail: "设备码超时，重新登录" },
             });
         }
         await input.wait(interval);
@@ -253,7 +253,7 @@ async function pollToken(transport: Transport, input: PollInput): Promise<OAuthT
                 continue;
             case "expired_token":
                 throw new AppError("auth", "MicrosoftLoginFailed", {
-                    context: { detail: "设备码已过期，请重新登录" },
+                    context: { detail: "设备码已过期，重新登录" },
                 });
             case "authorization_declined":
                 throw new AppError("auth", "MicrosoftLoginFailed", {
@@ -274,7 +274,7 @@ function oauthToken(response: JsonResponse, previous?: string): OAuthToken {
     if (response.status >= 400 || accessToken === undefined) {
         const detail = field(body, "error_description") ?? field(body, "error") ?? "";
         throw new AppError("auth", "AccountExpired", {
-            context: { detail: detail === "" ? "刷新令牌已失效，请重新登录" : detail },
+            context: { detail: detail === "" ? "刷新令牌已失效，重新登录" : detail },
         });
     }
     return {
@@ -389,7 +389,7 @@ async function loginWithXbox(
         throw new AppError("auth", "MicrosoftLoginFailed", {
             context: {
                 detail: rejected
-                    ? "Minecraft 服务不认这个 client id（Invalid app registration），OAuth 与 Xbox 那几步都过了"
+                    ? "Minecraft 服务拒绝这个 client id（Invalid app registration），OAuth 与 Xbox 各步已通过"
                     : "Minecraft 登录失败",
                 status: response.status,
                 reason: text.slice(0, 200),

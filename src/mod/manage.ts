@@ -84,7 +84,7 @@ export async function manageMods(input: ModManageInput): Promise<ModManageReport
 
 /* ---------- 内部 ---------- */
 
-// 精确命中优先；否则按去掉 .jar / .jar.disabled 的名字找，多个候选算重名
+// 精确命中优先；不命中时按去掉 .jar / .jar.disabled 的名字找，多个候选算重名
 function match(
     target: string,
     files: readonly ScannedMod[],

@@ -26,6 +26,8 @@ export {
 export { requiresShell } from "./process.ts";
 export {
     accountsFile,
+    cnNamesFile,
+    cnNamesMetaFile,
     configDirectory,
     downloadCancelFile,
     downloadLockFile,
@@ -33,6 +35,7 @@ export {
     expandHome,
     homeDirectory,
     logDirectory,
+    metadataDirectory,
     settingFile,
     stateFile,
 } from "./path.ts";

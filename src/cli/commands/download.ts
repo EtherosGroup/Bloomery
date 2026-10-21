@@ -90,7 +90,7 @@ async function info(command: DownloadCommand, ctx: Context): Promise<void> {
         return;
     }
     if (queue.tasks.length === 0) {
-        print("队列是空的");
+        print("队列为空");
         return;
     }
 
@@ -255,7 +255,7 @@ async function cancel(command: DownloadCommand, ctx: Context): Promise<void> {
         print(`已取消 ${id}`);
         return;
     }
-    print(`${id} 正在跑，已递上中止请求`);
+    print(`${id} 运行中，已递中止请求`);
     print("等它停下：bloomery download info");
 }
 

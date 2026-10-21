@@ -320,7 +320,7 @@ test("续期不重走设备码，响应没带新刷新令牌时沿用旧的", as
     assert.equal(token.grant_type, "refresh_token");
 });
 
-// 连接失败/超时这类传输层错误不该冒到上层变成「内部错误」
+// 传输层错误归到登录失败
 const REFUSED: Transport = async () => {
     throw new Error("connect ECONNREFUSED 127.0.0.1:1");
 };

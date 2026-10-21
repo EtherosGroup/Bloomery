@@ -25,7 +25,7 @@ export async function main(): Promise<void> {
         failure = error;
     }
 
-    // 记录是排队写的，先等落盘再决定日志路径要不要提示：路径必须真的存在
+    // 记录排队写，落盘后再决定是否提示日志路径
     // process.exit() 不会等队列，退出路径上都得靠 flush
     await flush();
     try {

@@ -136,7 +136,7 @@ async function versions(
     nextPage(`bloomery view loader ${name}`, command, page, ctx);
     if (!INSTALLABLE.includes(name)) {
         print("");
-        print(`注意：安装目前只支持 ${INSTALLABLE.join(" / ")}，${name} 只列版本`);
+        print(`安装只支持 ${INSTALLABLE.join(" / ")}，${name} 只列版本`);
     }
 }
 

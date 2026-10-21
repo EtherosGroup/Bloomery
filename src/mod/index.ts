@@ -8,6 +8,18 @@
  */
 
 export {
+    CN_NAMES_TIMEOUT_MS,
+    CN_NAMES_TTL_MS,
+    CN_NAMES_URLS,
+    cnNamesUrls,
+    loadCnNames,
+    parseCnNames,
+    type CnNames,
+    type CnNamesInfo,
+    type CnNamesInput,
+    type NamesTransport,
+} from "./cnNames.ts";
+export {
     MODRINTH_API,
     listVersions,
     pickVersion,
@@ -35,10 +47,12 @@ export {
 } from "./install.ts";
 export {
     listInstalledMods,
+    modItemOf,
     scanMods,
     sha1Of,
     MOD_FILE,
     type InstalledMod,
+    type ModItemEvent,
     type ModListInput,
     type ModProjectRef,
     type ModVersionRef,

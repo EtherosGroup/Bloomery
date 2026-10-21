@@ -50,7 +50,7 @@ export interface FileSinkOptions {
 export interface FileSink {
     /** 本次运行的文件路径 */
     readonly path: string;
-    /** 是否已经落过盘，没写过就不该把路径提示给用户 */
+    /** 是否已经落过盘，没写过时不提示路径 */
     readonly opened: boolean;
     /** 等队列排空后调用，释放锁，之后写入的记录直接丢弃 */
     close(): Promise<void>;
@@ -242,7 +242,7 @@ function stampOf(at: number): string {
     ].join("");
 }
 
-// 会话头，出问题时这几行省掉一半来回；argv 里不要放密码或 token
+// 会话头；argv 不含密码或 token
 async function sessionHeader(): Promise<string> {
     return [
         `# bloomery ${packageVersion()}`,

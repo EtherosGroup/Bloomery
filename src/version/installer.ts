@@ -113,7 +113,7 @@ export interface InstallReport {
     readonly name: string;
     readonly versionId: string;
     readonly loader: { readonly name: LoaderName; readonly version: string } | null;
-    /** 加载器版本要的基础版本是本来就在，还是这次顺带装的 */
+    /** 加载器版本要的基础版本是本来就有，还是这次装的 */
     readonly base: "none" | "present" | "installed";
     readonly clientJar: boolean;
     readonly libraries: DownloadReport;
@@ -198,7 +198,7 @@ export async function installVersion(input: InstallInput): Promise<InstallReport
         // 原版 json 先拉下来：合并要用它，挑 java 也要它 —— 此刻它还没落盘，读不了磁盘
         const vanilla = await fetchVanillaJson(input.versionId, options);
         const java = await input.officialJavaFor?.(requiredJavaOf(vanilla));
-        // 挑不到就别往下走了：原版那一份要下上百兆，先报出来省得白等
+        // 挑不到时先报错：原版 json 要下上百兆
         if (java === undefined && input.officialJavaFor !== undefined) {
             throw new AppError("install", "JavaNotFound", {
                 context: {
@@ -331,9 +331,8 @@ async function officialLoaderVersion(
         return wanted;
     }
     // 走 logLine 回调：--json 时调用方不给，标准输出才只有结果那一份 JSON
-    say(
-        `正在取 ${name} 的版本清单（${name === "forge" ? "文件较大，国内可能较慢；指定 @<版本> 可跳过" : "稍等"}）…`,
-    );
+    const note = name === "forge" ? "（文件较大，国内可能较慢；指定 @<版本> 跳过）" : "";
+    say(`取 ${name} 版本清单${note}`);
     const list = await listLoaderVersionsFor(name, game, options);
     const picked = list.find((item) => item.channel === "release") ?? list[0];
     if (picked === undefined) {

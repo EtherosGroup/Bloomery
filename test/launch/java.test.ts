@@ -80,7 +80,7 @@ test("属性行解析", () => {
     assert.equal(properties["java.vendor"], "Oracle Corporation");
     assert.equal(properties["os.arch"], "amd64");
     assert.equal(properties["java.home"], "/usr/lib/jvm/jdk-21.0.12.1-oracle-x64");
-    // 标题行没有 "= "，不该进表
+    // 标题行没有 "= "，不进表
     assert.equal(Object.hasOwn(properties, "Property settings"), false);
 });
 

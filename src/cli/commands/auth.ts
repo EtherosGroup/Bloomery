@@ -104,7 +104,7 @@ async function login(username: string, ctx: Context): Promise<void> {
     }
     await saveAccounts({ ...accounts, accounts: [...accounts.accounts, account] });
 
-    // 登录通常就是要用它，顺手设成当前账号
+    // 登录后设为当前账号
     const setting = await loadSetting();
     await saveSetting({ ...setting, selectedAccount: account.id });
 

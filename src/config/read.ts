@@ -47,7 +47,7 @@ export function object(value: unknown, where: string): Record<string, unknown> |
     return undefined;
 }
 
-// 解析 JSON；失败返回 undefined，要不要备份由调用方决定
+// 解析 JSON；失败返回 undefined，备份由调用方决定
 export function parseJson(text: string, where: string): unknown {
     try {
         return JSON.parse(text);

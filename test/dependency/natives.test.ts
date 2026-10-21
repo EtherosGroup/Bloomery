@@ -35,7 +35,7 @@ test("natives 分类名按平台与架构筛", () => {
         ["natives-linux", context("linux", "arm64"), false],
         ["natives-linux-arm64", context("linux", "x64"), false],
         ["natives-linux-arm64", context("linux", "arm64"), true],
-        // 第二段不是架构：按不带架构段处理，Intel 用的补丁版不该上 arm64
+        // 第二段不是架构：按不带架构段处理，Intel 用的补丁版不用于 arm64
         ["natives-macos-patch", context("osx", "x64"), true],
         ["natives-macos-patch", context("osx", "arm64"), false],
         ["natives-macos-arm64", context("osx", "arm64"), true],

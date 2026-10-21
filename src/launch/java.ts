@@ -439,7 +439,7 @@ export async function resolveJavaFor(
 }
 
 /**
- * 详情与启动共用：实例或文件夹指定的路径优先，否则按主版本从清单里挑
+ * 详情与启动共用：指定路径优先；未指定时按主版本从清单里挑
  *
  * detail 是指定路径用不了时的详情：manualMissing 给原始输入，manualBroken 给落到的那条
  */

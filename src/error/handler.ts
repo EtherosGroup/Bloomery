@@ -47,7 +47,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     MicrosoftRefreshFailed: "微软凭据续期失败",
     MicrosoftNotOwned: "这个微软账户没有 Minecraft: Java Edition",
     ModNotFound: "没找到这个 MOD",
-    ModUnsupported: "这个实例装不了这个 MOD",
+    ModUnsupported: "该实例不支持这个 MOD",
     LaunchFailed: "游戏进程没起来",
 };
 
@@ -117,7 +117,7 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
 export function handleError(error: unknown, logPath?: string): number {
     if (!(error instanceof AppError)) {
         log.error("内部错误 %s", error instanceof Error ? error.message : String(error));
-        printError("错误：内部错误，这是 bug，请附带下面的调用栈反馈");
+        printError("错误：内部错误：附下面的调用栈反馈");
         printError(format(error));
         printLogPath(logPath);
         return EXIT_CODES.UnknownError;
@@ -167,7 +167,7 @@ function detailOf(error: AppError): string {
 
 // 机器可读的错误对象，--json 时给外壳用
 // 可重试的错误码：网络与临时性
-// 消费方应当读错误信封里的 retryable 字段，不要自己复制这份集合
+// 消费方按错误信封里的 retryable 字段判断，不复制这份集合
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
     "DownloadFailed",
     "DependencyMissing",

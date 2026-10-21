@@ -23,6 +23,7 @@ export {
 export { addFileSink, type FileSink, type FileSinkOptions } from "./file.ts";
 export {
     EXISTING_NOTE,
+    ndjsonWriter,
     PROGRESS_STAGES,
     progressReporter,
     renderBar,

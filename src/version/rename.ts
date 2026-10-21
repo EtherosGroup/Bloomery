@@ -3,7 +3,7 @@
  *
  * 目录名即实例 id，json 文件名与 jar 文件名都跟着目录名走
  * json 里的 id 是游戏版本号，改名不动它
- * 别的版本靠 inheritsFrom 或 jar 指向这个目录名，改名时必须一起改写，否则继承链断掉
+ * 别的版本靠 inheritsFrom 或 jar 指向这个目录名，改名时一起改写才不断链
  * @author IsCibocaz
  * @since 1.12.0
  */

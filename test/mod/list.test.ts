@@ -12,7 +12,7 @@ import { test } from "node:test";
 
 import { AppError } from "../../src/error/index.ts";
 import type { TransferOptions } from "../../src/infra/download.ts";
-import { listInstalledMods, scanMods, sha1Of } from "../../src/mod/index.ts";
+import { listInstalledMods, modItemOf, scanMods, sha1Of } from "../../src/mod/index.ts";
 import type { Transport } from "../../src/mod/index.ts";
 
 const SOURCE = { provider: "official" as const, rewrite: (url: string) => url };
@@ -196,5 +196,139 @@ test("项目批量接口失败时只丢标题，版本仍在", async () => {
         assert.equal(files[0]?.resolved, false);
         assert.equal(files[0]?.project, null);
         assert.equal(files[0]?.version?.id, "v1");
+    });
+});
+
+test("中文名按 slug 补进 project，表里没有的给 null", async () => {
+    await withMods(["sodium.jar"], async (mods) => {
+        const names = new Map([["sodium", "钠"]]);
+        const files = await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            transport: fakeTransport([], {}),
+            names,
+        });
+        assert.equal(files[0]?.project?.title, "Sodium");
+        assert.equal(files[0]?.project?.titleZh, "钠");
+
+        const unknown = await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            transport: fakeTransport([], {}),
+            names: new Map(),
+        });
+        assert.equal(unknown[0]?.project?.titleZh, null);
+    });
+});
+
+test("逐条回调按文件名顺序，失败文件也回调", async () => {
+    await withMods(["a.jar", "b.jar"], async (mods) => {
+        let lookups = 0;
+        const transport: Transport = async (url: string) => {
+            if (url.includes("/projects?")) {
+                return Buffer.from(JSON.stringify([PROJECT]));
+            }
+            lookups += 1;
+            if (lookups === 1) {
+                throw notFound(url);
+            }
+            return Buffer.from(JSON.stringify(VERSION));
+        };
+
+        const seen: Array<{ file: string; project: string | null; version: string | null }> = [];
+        const names = new Map([["sodium", "钠"]]);
+        await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            transport,
+            names,
+            onFile: (item) =>
+                seen.push({
+                    file: item.filename,
+                    project: item.project?.slug ?? null,
+                    version: item.version?.id ?? null,
+                }),
+        });
+
+        assert.deepEqual(seen, [
+            { file: "a.jar", project: null, version: null },
+            { file: "b.jar", project: "sodium", version: "v1" },
+        ]);
+    });
+});
+
+test("反查按每批 50 个文件走，帧顺序与 files 一致", async () => {
+    const filenames = Array.from(
+        { length: 51 },
+        (_, index) => `mod-${String(index).padStart(2, "0")}.jar`,
+    );
+    await withMods(filenames, async (mods) => {
+        let lookups = 0;
+        const projectCalls: string[][] = [];
+        const transport: Transport = async (url: string) => {
+            if (url.includes("/projects?")) {
+                const ids = JSON.parse(
+                    decodeURIComponent(/ids=([^&]+)/.exec(url)?.[1] ?? "[]"),
+                ) as string[];
+                projectCalls.push(ids);
+                return Buffer.from(
+                    JSON.stringify(
+                        ids.map((id) => ({ id, slug: `slug-${id}`, title: `Title ${id}` })),
+                    ),
+                );
+            }
+            lookups += 1;
+            return Buffer.from(
+                JSON.stringify({ ...VERSION, id: `v${lookups}`, project_id: `p${lookups}` }),
+            );
+        };
+
+        const framed: string[] = [];
+        const files = await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            transport,
+            names: new Map([["slug-p1", "一"]]),
+            onFile: (item) => framed.push(item.filename),
+        });
+
+        assert.equal(files.length, 51);
+        assert.deepEqual(framed, filenames);
+        // 两批：前 50 个一批，剩下 1 个一批
+        assert.equal(projectCalls.length, 2);
+        assert.equal(projectCalls[0]?.length, 50);
+        assert.equal(projectCalls[1]?.length, 1);
+        assert.equal(files[0]?.project?.titleZh, "一");
+        assert.equal(files[0]?.project?.slug, "slug-p1");
+        assert.equal(files[50]?.project?.titleZh, null);
+    });
+});
+
+test("逐条帧负载：文件、项目、版本，缺的一律 null", async () => {
+    await withMods(["sodium.jar"], async (mods) => {
+        const files = await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            transport: fakeTransport([], {}),
+            names: new Map([["sodium", "钠"]]),
+        });
+        assert.deepEqual(modItemOf(files[0]!), {
+            key: "mod-item",
+            file: "sodium.jar",
+            project: { id: "AANobbMI", slug: "sodium", title: "Sodium", titleZh: "钠" },
+            version: { id: "v1", number: "mc1.20.1-0.5.3", type: "release" },
+        });
+
+        const offline = await listInstalledMods({
+            modsDirectory: mods,
+            network: NETWORK,
+            offline: true,
+        });
+        assert.deepEqual(modItemOf(offline[0]!), {
+            key: "mod-item",
+            file: "sodium.jar",
+            project: null,
+            version: null,
+        });
     });
 });

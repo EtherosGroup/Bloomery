@@ -656,7 +656,7 @@ test("config 写实例级内存覆盖，启动计划跟着变", { skip: process.
     }
 });
 
-// 数据目录只读：让落盘失败可诊断，而不是笼统的内部错误
+// 数据目录只读：落盘失败可诊断，不报成内部错误
 test(
     "配置写不下去时报 FileWriteFailed，detail 带 errno 与路径",
     { skip: process.platform === "win32" },
@@ -1546,7 +1546,7 @@ test(
             assert.equal(result.account.name, "Alex");
             assert.equal(result.account.kind, "microsoft");
             assert.equal(result.account.needsRefresh, true);
-            // 预览不落盘：令牌一个字节都不该动
+            // 预览不落盘：令牌不落盘
             assert.equal(readFileSync(accountsPath, "utf8"), before);
         } finally {
             rmSync(home, { recursive: true, force: true });
@@ -1595,7 +1595,7 @@ test(
                 folders: Array<{ instances: unknown[] }>;
                 selectedInstance: string | null;
             };
-            // 配置里留一条带设置的实例条目：移除后它不该继续出现在列表里
+            // 配置里留一条带设置的实例条目：移除后不再出现在列表里
             setting.folders[0]!.instances = [
                 {
                     id: "1.20.6",

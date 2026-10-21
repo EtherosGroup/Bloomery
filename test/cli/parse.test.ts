@@ -111,3 +111,12 @@ test("mod 的三个管理动作各收一堆目标", () => {
 test("未知的 mod 动作报用法错误", () => {
     assert.match(usageDetail(["mod", "update", "sodium"]), /action/);
 });
+
+test("mod list 的 --refresh-names 落位", () => {
+    const parsed = parse(["mod", "list", "--refresh-names"], CLI_SPEC);
+    if (parsed.kind !== "command" || parsed.command.name !== "mod") {
+        assert.fail("应该是 mod 命令");
+    }
+    assert.equal(parsed.command.action, "list");
+    assert.equal(parsed.command.refreshNames, true);
+});

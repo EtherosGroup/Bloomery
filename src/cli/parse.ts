@@ -86,6 +86,8 @@ export interface ModCommand {
     readonly loader?: string;
     /** list / remove 等用：不联网反查 */
     readonly offline?: boolean;
+    /** list 用：忽略缓存，重下中文名表 */
+    readonly refreshNames?: boolean;
 }
 
 export interface DownloadCommand {

@@ -143,12 +143,12 @@ export const COMMANDS: CommandTable = {
 
     mod: {
         summary: "MOD 检索、安装与管理",
-        usage: "mod <search|install|list|remove|disable|enable> [目标...] [--version <id>] [--folder <id>] [--game <版本>] [--loader <名字>] [--limit <n>] [--dry-run] [--deps|--no-deps] [--offline] [--async]",
+        usage: "mod <search|install|list|remove|disable|enable> [目标...] [--version <id>] [--folder <id>] [--game <版本>] [--loader <名字>] [--limit <n>] [--dry-run] [--deps|--no-deps] [--offline] [--refresh-names] [--async]",
         options: {
             version: {
                 type: "string",
                 value: "<id>",
-                summary: "针对哪个实例，省略按上次启动的",
+                summary: "针对哪个实例，省略时用上次启动的实例",
             },
             folder: { type: "string", value: "<id>", summary: "游戏文件夹" },
             game: { type: "string", value: "<版本>", summary: "search 按游戏版本过滤" },
@@ -157,6 +157,7 @@ export const COMMANDS: CommandTable = {
             deps: { type: "boolean", summary: "连必需依赖一起装" },
             "no-deps": { type: "boolean", summary: "只装这一个，不动依赖" },
             offline: { type: "boolean", summary: "不联网反查已装 MOD" },
+            "refresh-names": { type: "boolean", summary: "忽略缓存，重下 MOD 中文名表" },
             async: { type: "boolean", summary: "入队并拉起后台 worker，立刻返回" },
             limit: { type: "string", value: "<n>", summary: "搜索结果条数，默认 10" },
         },
@@ -193,6 +194,7 @@ export const COMMANDS: CommandTable = {
                 gameVersion: optionalString(values, "game"),
                 loader: optionalString(values, "loader"),
                 offline: values["offline"] === true,
+                refreshNames: values["refresh-names"] === true,
             };
         },
         run: runMod,
@@ -220,7 +222,7 @@ export const COMMANDS: CommandTable = {
         usage: "mirror <list|use|update> [name] [--url <地址>] [--from <地址>]",
         options: {
             url: { type: "string", value: "<地址>", summary: "custom 的根地址" },
-            from: { type: "string", value: "<地址>", summary: "镜像清单地址，省略用上次的" },
+            from: { type: "string", value: "<地址>", summary: "镜像清单地址，省略时用上次的清单" },
         },
         positionals: { names: ["action", "name"], required: 1 },
         toCommand: (values, positionals) => {

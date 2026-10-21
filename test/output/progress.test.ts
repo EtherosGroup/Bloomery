@@ -9,6 +9,7 @@ import { test } from "node:test";
 
 import {
     liveColumns,
+    ndjsonWriter,
     PROGRESS_STAGES,
     progressReporter,
     renderBar,
@@ -401,4 +402,15 @@ test("ndjson：背压时丢中间帧，收尾强制写", () => {
     assert.equal(events.length, 2);
     assert.equal(JSON.parse(events.at(-1) ?? "").done, 100);
     assert.equal(JSON.parse(events.at(-1) ?? "").key, "assets");
+});
+
+test("ndjson 逐条帧：补 v，非 ndjson 不给写口", () => {
+    const io = fakeIo();
+    const write = ndjsonWriter("ndjson", io);
+    assert.ok(write !== null);
+    write({ key: "mod-item", file: "sodium.jar", project: null, version: null });
+    assert.deepEqual(io.events, [
+        '{"v":1,"key":"mod-item","file":"sodium.jar","project":null,"version":null}\n',
+    ]);
+    assert.equal(ndjsonWriter("bar", io), null);
 });

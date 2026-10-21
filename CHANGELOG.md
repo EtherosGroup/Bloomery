@@ -1,5 +1,14 @@
 # 更新记录
 
+## 1.15.0
+
+- `mod list` / `mod search --json` 的项目加 `titleZh`：MC百科中文名，按项目 slug 对表，查不到恒为 `null`（字段不省略，与 `title` / `slug` 同级）。`api` 仍是 2，加字段不算破坏性变更
+- 中文名表缓存在 `<配置目录>/metadata/cn-names.tsv`，24h 内命中缓存不联网，过期带 `If-None-Match` / `If-Modified-Since` 条件请求，304 沿用本地；网络失败、文件损坏沿用上一份缓存，没有缓存时全部 `null`。拉表超时封顶 3s、不重试，失败不阻塞列表
+- 新增 `mod list --refresh-names`：忽略 24h TTL 重下中文名表。表地址主源 jsDelivr、备源 GitHub raw，`BLOOMERY_CN_NAMES_URL` 可覆盖（本地与 GUI 联调）
+- `mod list --json` 加顶层 `names:{path,source,updatedAt,count}`：`updatedAt` 是表内容更新时间，没成功拉过为 `null`；`count` 是表里条目数，给外壳显示缓存状态
+- `--progress ndjson` 下 `mod list` 反查每解析完一批文件推 `key` 为 `mod-item` 的逐条事件（`file` `project` `version`）：项目信息只能批量换，因此帧按每 50 个文件一批推，单帧已带齐 `project` 与 `version`；反查失败的文件照推，两项为 `null`；`--offline` 不推。最终整批 JSON 仍是权威值，帧只做增量刷新
+- 数据托管在仓库 `metadata/cn-names.tsv`，由 MC百科快照生成；PCL 的 `WikiEntries.txt` 只在本地核对覆盖率用，不随包分发。抓取许可与频率确认前，表可能不存在，此时全部 `titleZh` 为 `null`
+
 ## 1.14.1
 
 - 修 `version remove` / `version restore` 报 `VersionNotFound` 时 `context.folder` 的含义不一致：`remove` 走 CLI 的实例查找，给的是文件夹 id；`restore` 的版本不在列表里、只能由底层挪动逻辑报错，给的是绝对路径。现在两处都是文件夹 id，与 `version info`、`mod install` 等实例类错误的 `folder` 一致（真机验 1.14.0 时发现）

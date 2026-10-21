@@ -311,7 +311,7 @@ test("没有这个版本时报出来", async () => {
 /* ---------- artifact 与 natives 同时存在的库 ---------- */
 
 // 官方 1.12.2 的 lwjgl-platform 就是这种：artifact 是个 22 字节的空 jar，
-// 类路径要它、natives 要 classifier，两份都得下，否则检查与下载会互相打架
+// 类路径要它、natives 要 classifier，两份都下载，检查与下载一致
 function mixedJson(base: string, artifact: Buffer): unknown {
     const entry = (url: string, data: Buffer): unknown => ({
         sha1: sha1(data),
@@ -397,7 +397,7 @@ test("既声明 artifact 又带 natives 的库，两份都下", async () => {
             true,
         );
 
-        // 回归本体：类路径检查与下载任务必须一致，装完不该再报缺件
+        // 回归本体：类路径检查与下载任务必须一致，装完不再报缺件
         const read = await readDescriptor(join(root, "versions", "t", "t.json"), "t");
         assert.ok(read.descriptor !== null);
         const missing = await missingLaunchFiles({

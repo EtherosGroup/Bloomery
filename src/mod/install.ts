@@ -118,7 +118,7 @@ export async function installMod(input: ModInstallInput): Promise<ModInstallRepo
 
     await installOne(project, version, context, 0);
 
-    log.info("装了 %s：%d 个文件", project.slug, context.files.length);
+    log.info("装入 %s：%d 个文件", project.slug, context.files.length);
     return {
         project: { id: project.id, slug: project.slug, title: project.title },
         version: {

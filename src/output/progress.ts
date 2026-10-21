@@ -143,6 +143,20 @@ export function liveColumns(stream: TerminalStream = process.stdout): number | n
     }
 }
 
+/** ndjson 逐条事件；非 ndjson 返回 null，调用方据此免掉序列化 */
+export function ndjsonWriter(
+    style: ProgressStyle,
+    io: ProgressIo = terminalIo(),
+): ((event: object) => void) | null {
+    const emit = io.emit;
+    if (style !== "ndjson" || emit === undefined) {
+        return null;
+    }
+    return (event) => {
+        emit(`${JSON.stringify({ v: 1, ...event })}\n`);
+    };
+}
+
 export function progressReporter(
     style: ProgressStyle,
     io: ProgressIo = terminalIo(),

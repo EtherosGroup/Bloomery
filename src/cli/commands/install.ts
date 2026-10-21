@@ -46,7 +46,7 @@ export async function runInstall(command: InstallCommand, ctx: Context): Promise
     }
 
     // forge 与 neoforge 要跑官方安装器，java 由安装那边回调挑：
-    // 主版本要求来自刚拉下来的原版 json，此刻它还没落盘，读磁盘等于没有（1.12.2 要 8）
+    // 主版本要求来自刚拉下来的原版 json，此刻还没落盘；1.12.2 要 8
     const folderPath = resolveFolderPath(folder);
     const officialJavaFor =
         loader !== null && (loader.name === "forge" || loader.name === "neoforge")

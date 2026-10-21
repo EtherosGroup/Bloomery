@@ -180,7 +180,7 @@ export function quiet(): boolean {
     return threshold >= SEVERITY.Warning;
 }
 
-// 这个 fd 要不要绕开直写、交给流
+// 这个 fd 是否绕开直写、交给流
 // Windows 的控制台按代码页解释写进去的字节，UTF-8 会变成乱码，换行还会被当成双字节字符吃掉
 // 流会把正文转成 UTF-16 走 WriteConsoleW；管道与 POSIX 直写更省事，也保住了 EPIPE 与 EAGAIN 的处理
 export function throughStream(platform: NodeJS.Platform, isTTY: boolean): boolean {

@@ -104,6 +104,25 @@ export function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export interface BufferResponse {
+    readonly status: number;
+    readonly headers: IncomingHttpHeaders;
+    readonly body: Buffer;
+}
+
+// 单次请求并读出正文；304 原样返回，调用方按状态决定用缓存还是新内容
+export async function httpGetResponse(
+    url: string,
+    options: NetworkOptions,
+): Promise<BufferResponse> {
+    const response = await httpGet(url, options);
+    return {
+        status: response.status,
+        headers: response.headers,
+        body: await readAll(response.stream, MAX_BUFFER),
+    };
+}
+
 // 单次 JSON 请求：4xx 也把正文交回调用方，OAuth 的 authorization_pending 就在 400 的正文里
 export async function httpJson(
     method: "GET" | "POST",
@@ -286,7 +305,7 @@ function send(target: URL, options: NetworkOptions): Promise<RawResponse> {
         }, options.timeoutMs);
 
         // 空闲超时交给 socket
-        // 不要在 response 上挂 data 监听来重置：那会把与响应头同批到达的正文冲掉
+        // 在 response 上挂 data 监听会冲掉与响应头同批到达的正文
         request.setTimeout(options.timeoutMs, () => {
             const error = new Error(`请求空闲超过 ${options.timeoutMs}ms：${target.href}`);
             if (response !== undefined) {

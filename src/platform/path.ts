@@ -74,3 +74,18 @@ export function downloadLockFile(): string {
 export function downloadCancelFile(): string {
     return join(configDirectory(), "downloads.cancel");
 }
+
+// 元数据缓存：<配置文件夹>/metadata
+export function metadataDirectory(): string {
+    return join(configDirectory(), "metadata");
+}
+
+// 中文名表：一行 slug<TAB>中文名
+export function cnNamesFile(): string {
+    return join(metadataDirectory(), "cn-names.tsv");
+}
+
+// 中文名表的更新时间与校验值
+export function cnNamesMetaFile(): string {
+    return join(metadataDirectory(), "cn-names.meta.json");
+}

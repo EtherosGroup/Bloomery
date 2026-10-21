@@ -132,7 +132,7 @@ export async function downloadAll(
                         options,
                         byBytes
                             ? (chunk: number) => {
-                                  // 别让在途字节越过这个文件的份额
+                                  // 在途字节不超过本文件的份额
                                   const step = Math.min(streamed + chunk, weight) - streamed;
                                   streamed += step;
                                   doneBytes += step;

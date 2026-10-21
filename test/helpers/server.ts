@@ -41,7 +41,7 @@ export interface SelfSigned {
     readonly cert: string;
 }
 
-// 传了证书就是 https，否则 http
+// 有证书为 https，无证书为 http
 export async function serve(
     handler: (request: TestRequest) => TestRoute,
     tls?: SelfSigned,

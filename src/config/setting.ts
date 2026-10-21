@@ -76,7 +76,7 @@ export async function loadSetting(): Promise<Setting> {
     if (extras.length > 0) {
         const kept = await backupFile(path);
         log.warn(
-            "%s 里有不认识的键，已丢弃并在 %s 留了一份：%s",
+            "%s 里有不认识的键，已丢弃，原文件在 %s：%s",
             path,
             kept ?? "(备份失败)",
             extras.join(", "),

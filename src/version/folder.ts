@@ -111,7 +111,7 @@ export async function readFolder(folder: Folder): Promise<FolderView> {
         configured.add(instance.id);
         const view = configuredView(instance, onDisk.get(instance.id), byId, scan.directory);
         if (view.state === "missing") {
-            // 移除过的版本：目录在 .removed/ 下，配置里那条还在，但不该再列出来
+            // 移除过的版本：目录在 .removed/ 下，配置里那条还在，但不再列出来
             // 恢复就是把它挪回来，实例设置与统计因此不用动
             if (await isRemoved(path, instance.id)) {
                 continue;

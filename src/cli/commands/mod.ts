@@ -25,7 +25,9 @@ import { sourcesOf } from "../../infra/source.ts";
 import {
     installMod,
     listInstalledMods,
+    loadCnNames,
     manageMods,
+    modItemOf,
     requireModTarget,
     searchMods,
     type InstalledMod,
@@ -35,6 +37,7 @@ import {
 } from "../../mod/index.ts";
 import {
     logger,
+    ndjsonWriter,
     print,
     PROGRESS_STAGES,
     progressReporter,
@@ -148,7 +151,11 @@ async function search(
     const loader = command.loader ?? located?.loader ?? null;
     const gameVersion = command.gameVersion ?? located?.gameVersion ?? null;
     const query = command.query ?? "";
-    const hits = await searchMods(query, { network, limit: command.limit, loader, gameVersion });
+    const [found, names] = await Promise.all([
+        searchMods(query, { network, limit: command.limit, loader, gameVersion }),
+        loadCnNames({ network, refresh: command.refreshNames === true }),
+    ]);
+    const hits = found.map((hit) => ({ ...hit, titleZh: names.names.get(hit.slug) ?? null }));
 
     if (ctx.json) {
         print(
@@ -158,6 +165,7 @@ async function search(
                     instance: located?.instanceId ?? null,
                     gameVersion,
                     loader,
+                    names: names.info,
                     hits,
                 }),
                 null,
@@ -197,14 +205,23 @@ async function list(
     ctx: Context,
 ): Promise<void> {
     const located = await locate(command, setting);
-    const progress = progressReporter(
-        ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress),
-    );
+    const style = ctx.progress ?? (ctx.json ? "off" : setting.appearance.progress);
+    const progress = progressReporter(style);
+    const offline = command.offline === true;
+    const names = await loadCnNames({
+        network,
+        offline,
+        refresh: command.refreshNames === true,
+    });
+    // 逐条帧只在 ndjson 下发；offline 不反查，也没有帧
+    const frame = offline ? null : ndjsonWriter(style);
     const files = await listInstalledMods({
         modsDirectory: located.modsDirectory,
         network,
-        offline: command.offline === true,
+        offline,
+        names: names.names,
         onResolve: (done, total) => progress.update(PROGRESS_STAGES.mod, done, total),
+        onFile: frame === null ? undefined : (item) => frame(modItemOf(item)),
     });
 
     if (ctx.json) {
@@ -213,6 +230,7 @@ async function list(
                 versioned({
                     instance: located.instanceId,
                     mods: located.modsDirectory,
+                    names: names.info,
                     files,
                 }),
                 null,
@@ -268,7 +286,7 @@ async function install(
 ): Promise<void> {
     const located = await locate(command, setting);
     const targets = [...(command.targets ?? [])];
-    // 整批共用一个前置条件：不是加载器实例谁也别装
+    // 整批共用一个前置条件：非加载器实例直接报错
     requireModTarget(located.loader, located.gameVersion);
     const withDependencies = command.deps ?? setting.mod.installDependencies;
 

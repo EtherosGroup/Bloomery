@@ -36,7 +36,7 @@ test("可重试的是下载失败、依赖缺失与微软续期失败", () => {
     for (const code of ["DependencyMissing", "DownloadFailed", "MicrosoftRefreshFailed"] as const) {
         assert.equal(envelope(code).retryable, true, code);
     }
-    // 这份集合是穷尽的：消费方复制它就会漂移，应当读信封里的 retryable 字段
+    // 这份集合是穷尽的：消费方读信封里的 retryable 字段
     for (const code of [
         "LoaderInstallFailed",
         "InstallBroken",
