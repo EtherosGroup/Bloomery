@@ -35,4 +35,5 @@ export type ErrorCode =
     | "MicrosoftNotOwned"
     | "ModNotFound"
     | "ModUnsupported"
-    | "LaunchFailed";
+    | "LaunchFailed"
+    | "ImportUnrecognized";

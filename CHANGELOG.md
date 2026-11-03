@@ -1,5 +1,15 @@
 # 更新记录
 
+## 1.16.0
+
+- `version select` 同时把当前文件夹切到实例所属文件夹：选中项与当前文件夹是两个独立字段，用 `--folder b` 选中 b 里的实例后当前文件夹还是 a 的话，`launch` 会在 a 里找那个实例并报 `VersionNotFound`。结果里的 `folder` 是切换后的当前文件夹
+- 新增 `import <目录>`：把 HMCL 3.16 起（拆分式配置）的启动器数据一次性转成 Bloomery 的配置。认 user home（`config/user-*.json` + `javaCache.json`）与 local home（`config/launcher-settings.json` / `game-directories.json` / `accounts.json`）两种布局，user home 下的 `local-stable/` 之类子目录会被自动找出来
+    - 导入文件夹（按路径去重，已登记的跳过）、Java（读 `javaCache.json` 后逐个探测）、离线账号（`type: "offline"` → `名字@offline`）、选中文件夹 / 实例 / 账号
+    - `--base` 指定 HMCL 相对路径的基准（默认家目录）；`--dry-run` 只规划不落盘
+    - 不迁移微软账号凭据（HMCL 加密存在 `private/`）、外置登录账号、每实例内存与 JVM 参数，写进 `warnings[]`
+    - 新增错误码 `ImportUnrecognized`（exit 1、不可重试）：目录不像 HMCL 数据目录时报它
+- README 补 `import` 命令节、`version select` 的文件夹联动说明、输出形状表与错误码表
+
 ## 1.15.0
 
 - `mod list` / `mod search --json` 的项目加 `titleZh`：MC百科中文名，按项目 slug 对表，查不到恒为 `null`（字段不省略，与 `title` / `slug` 同级）。`api` 仍是 2，加字段不算破坏性变更

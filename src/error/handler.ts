@@ -49,6 +49,7 @@ const MESSAGES: Record<ErrorCode, string> = {
     ModNotFound: "没找到这个 MOD",
     ModUnsupported: "该实例不支持这个 MOD",
     LaunchFailed: "游戏进程没起来",
+    ImportUnrecognized: "无法识别的导入数据",
 };
 
 // 退出码约定：0 成功，1 内部错误，2 用法错误，3 未实现
@@ -85,6 +86,7 @@ const EXIT_CODES: Record<ErrorCode, number> = {
     ModNotFound: 1,
     ModUnsupported: 1,
     LaunchFailed: 1,
+    ImportUnrecognized: 1,
 };
 
 const HINTS: Partial<Record<ErrorCode, string>> = {
@@ -112,6 +114,8 @@ const HINTS: Partial<Record<ErrorCode, string>> = {
     DownloadFailed: "检查网络，或设置里的下载源与代理",
     TaskNotFound: "运行 bloomery download info 查看队列里的任务",
     WorkerBusy: "运行 bloomery download info 看进度，等它结束再跑 download run",
+    ImportUnrecognized:
+        "传 HMCL 的数据目录：含 config/launcher-settings.json 或 config/user-game-directories.json",
 };
 
 export function handleError(error: unknown, logPath?: string): number {

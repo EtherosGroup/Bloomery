@@ -1316,6 +1316,93 @@ test("version rename 的名字与目标校验", () => {
     }
 });
 
+/* ---------- version select 与当前文件夹 ---------- */
+
+// 两个文件夹各一个实例：选中项与当前文件夹是两个字段，选中要一起切
+function twoFolderHome(): string {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-select-"));
+    const config = join(home, ".config", "bloomery");
+    mkdirSync(config, { recursive: true });
+    const folders = [
+        { id: "a", name: "alpha", path: join(home, "first") },
+        { id: "b", name: "beta", path: join(home, "second") },
+    ];
+    for (const folder of folders) {
+        const versions = join(folder.path, "versions", folder.name);
+        mkdirSync(versions, { recursive: true });
+        writeFileSync(
+            join(versions, `${folder.name}.json`),
+            JSON.stringify({ id: "1.20.6", mainClass: "x.Y", type: "release" }),
+        );
+        writeFileSync(join(versions, `${folder.name}.jar`), "");
+    }
+    writeFileSync(
+        join(config, "setting.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            folders: folders.map((folder) => ({
+                id: folder.id,
+                path: folder.path,
+                autoDiscover: true,
+                missingEntries: "keep",
+                instances: [],
+            })),
+            selectedFolder: "a",
+            selectedInstance: "alpha",
+        }),
+    );
+    return home;
+}
+
+test("version select 把当前文件夹切到实例所属文件夹", () => {
+    const home = twoFolderHome();
+    const config = join(home, ".config", "bloomery");
+    try {
+        const outcome = cliAt(home, [
+            "--home",
+            home,
+            "--json",
+            "version",
+            "select",
+            "beta",
+            "--folder",
+            "b",
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        const result = JSON.parse(outcome.stdout) as { selected: string; folder: string };
+        assert.equal(result.selected, "beta");
+        assert.equal(result.folder, "b");
+
+        // 两个字段一起落盘：只记 selectedInstance 时 launch 会在 a 里找不到 beta
+        const setting = readJsonAt(join(config, "setting.json"));
+        assert.equal(setting["selectedFolder"], "b");
+        assert.equal(setting["selectedInstance"], "beta");
+
+        const rows = JSON.parse(cliAt(home, ["--json", "folder", "list"]).stdout) as Array<{
+            id: string;
+            selected: boolean;
+        }>;
+        assert.deepEqual(
+            rows.map((row) => ({ id: row.id, selected: row.selected })),
+            [
+                { id: "a", selected: false },
+                { id: "b", selected: true },
+            ],
+        );
+
+        // 不带 --folder 时按当前文件夹找，能选中同文件夹的另一个
+        const within = cliAt(home, ["--home", home, "--json", "version", "select", "beta"]);
+        assert.equal(within.status, 0, within.stderr);
+        const current = cliAt(home, ["--json", "version", "list"]);
+        assert.equal(
+            (JSON.parse(current.stdout) as { selectedInstance: string | null }).selectedInstance,
+            "beta",
+        );
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});
+
 /* ---------- mod：列表与管理 ---------- */
 
 // 建一个带实例的游戏目录，并在实例下放两个 MOD
@@ -1674,3 +1761,284 @@ test(
         }
     },
 );
+
+/* ---------- import：HMCL 数据迁移 ---------- */
+
+// 假 java：探测时答属性，用来验 Java 列表导入
+function fakeJava(path: string): void {
+    writeFileSync(
+        path,
+        `#!/bin/sh
+case "$*" in
+    *-XshowSettings:properties*)
+        printf '    java.version = 21.0.1\\n    os.arch = amd64\\n    java.vendor = Fake\\n'
+        ;;
+esac
+exit 0
+`,
+        { mode: 0o755 },
+    );
+}
+
+function versionDir(root: string, id: string): void {
+    const directory = join(root, "versions", id);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+        join(directory, `${id}.json`),
+        JSON.stringify({ id: "1.20.6", mainClass: "x.Y", type: "release" }),
+    );
+    writeFileSync(join(directory, `${id}.jar`), "");
+}
+
+interface HmclHome {
+    readonly home: string;
+    readonly hmcl: string;
+    readonly oldGame: string;
+    readonly newGame: string;
+    readonly relativeGame: string;
+    readonly java: string;
+}
+
+function hmclHome(): HmclHome {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-import-"));
+    const config = join(home, ".config", "bloomery");
+    mkdirSync(config, { recursive: true });
+
+    // Bloomery 已有文件夹：HMCL 里同名路径应跳过
+    const oldGame = join(home, "old-game");
+    mkdirSync(join(oldGame, "versions", "old1"), { recursive: true });
+    writeFileSync(
+        join(oldGame, "versions", "old1", "old1.json"),
+        JSON.stringify({ id: "1.20.6", mainClass: "x.Y", type: "release" }),
+    );
+    writeFileSync(join(oldGame, "versions", "old1", "old1.jar"), "");
+    const java = join(home, "fake-java");
+    fakeJava(java);
+    writeFileSync(
+        join(config, "setting.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            folders: [
+                {
+                    id: "old",
+                    path: oldGame,
+                    autoDiscover: true,
+                    missingEntries: "keep",
+                    instances: [],
+                },
+            ],
+            java: { autoDetect: false, autoDownload: false, runtimeDirectory: null, list: [] },
+            selectedFolder: "old",
+            selectedInstance: "old1",
+        }),
+    );
+
+    // HMCL user home：user-*.json，外加顶层 javaCache.json
+    const hmcl = join(home, "hmcl");
+    const userConfig = join(hmcl, "config");
+    mkdirSync(userConfig, { recursive: true });
+    const newGame = join(home, "new-game");
+    versionDir(newGame, "new1");
+    const relativeGame = join(home, ".rel-game");
+    versionDir(relativeGame, "rel1");
+    writeFileSync(
+        join(userConfig, "user-game-directories.json"),
+        JSON.stringify({
+            directories: [
+                { id: "game-directory:old", path: oldGame },
+                { id: "game-directory:rel", path: ".rel-game" },
+            ],
+        }),
+    );
+    writeFileSync(
+        join(userConfig, "user-accounts.json"),
+        JSON.stringify({
+            accounts: [
+                {
+                    type: "offline",
+                    accountID: "account:aaa",
+                    profileID: "11111111-1111-1111-1111-111111111111",
+                    profileName: "Steve",
+                },
+                { type: "microsoft", accountID: "account:bbb", profileID: "2222" },
+            ],
+        }),
+    );
+    writeFileSync(
+        join(hmcl, "javaCache.json"),
+        JSON.stringify({
+            caches: [{ path: java }, { path: join(home, "missing-java") }],
+        }),
+    );
+
+    // HMCL local home：local-stable/config/*.json
+    const localConfig = join(hmcl, "local-stable", "config");
+    mkdirSync(localConfig, { recursive: true });
+    writeFileSync(
+        join(localConfig, "game-directories.json"),
+        JSON.stringify({ directories: [{ id: "game-directory:new", path: newGame }] }),
+    );
+    writeFileSync(
+        join(localConfig, "launcher-settings.json"),
+        JSON.stringify({
+            selectedGameDirectory: "game-directory:new",
+            selectedInstance: { "game-directory:new": "new1" },
+            selectedAccount: "account:aaa",
+        }),
+    );
+    return { home, hmcl, oldGame, newGame, relativeGame, java };
+}
+
+test("import 把 HMCL 的文件夹、Java、离线账号与选中状态并进来", () => {
+    const fixture = hmclHome();
+    const config = join(fixture.home, ".config", "bloomery");
+    try {
+        const outcome = cliAt(fixture.home, [
+            "--json",
+            "import",
+            fixture.hmcl,
+            "--base",
+            fixture.home,
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        const result = JSON.parse(outcome.stdout) as {
+            source: { kind: string; localHome: string | null; userHome: string | null };
+            folders: {
+                added: Array<{ id: string; path: string; versionCount: number }>;
+                skipped: Array<{ path: string; reason: string }>;
+            };
+            java: { added: Array<{ path: string; major: number | null }>; skipped: unknown[] };
+            accounts: {
+                added: Array<{ id: string }>;
+                skipped: Array<{ type: string; reason: string }>;
+            };
+            selected: { folder: string | null; instance: string | null; account: string | null };
+            warnings: string[];
+        };
+
+        assert.equal(result.source.kind, "hmcl");
+        assert.equal(result.source.userHome, fixture.hmcl);
+        assert.equal(result.source.localHome, join(fixture.hmcl, "local-stable"));
+
+        // 已登记的 old-game 跳过，new-game 与相对路径的 .rel-game 各加一条
+        assert.deepEqual(
+            result.folders.added.map((item) => ({ id: item.id, path: item.path })),
+            [
+                { id: "new-game", path: fixture.newGame },
+                { id: "rel-game", path: fixture.relativeGame },
+            ],
+        );
+        assert.deepEqual(result.folders.skipped, [{ path: fixture.oldGame, reason: "exists" }]);
+
+        // 假 java 探测成功，缺失的那个跳过
+        assert.deepEqual(
+            result.java.added.map((item) => ({ path: item.path, major: item.major })),
+            [{ path: fixture.java, major: 21 }],
+        );
+        assert.deepEqual(result.java.skipped, [
+            { path: join(fixture.home, "missing-java"), reason: "not-found" },
+        ]);
+
+        // 离线账号进来，微软账号只记跳过
+        assert.deepEqual(
+            result.accounts.added.map((item) => item.id),
+            ["Steve@offline"],
+        );
+        assert.deepEqual(result.accounts.skipped, [
+            { name: "account:bbb", type: "microsoft", reason: "credential" },
+        ]);
+        assert.deepEqual(result.selected, {
+            folder: "new-game",
+            instance: "new1",
+            account: "Steve@offline",
+        });
+        assert.equal(result.warnings.length, 1);
+
+        // 落盘：文件夹不重复、选中项与账号都写进配置
+        const setting = readJsonAt(join(config, "setting.json"));
+        const folders = setting["folders"] as Array<{ id: string; path: string }>;
+        assert.deepEqual(
+            folders.map((item) => item.id),
+            ["old", "new-game", "rel-game"],
+        );
+        assert.equal(setting["selectedFolder"], "new-game");
+        assert.equal(setting["selectedInstance"], "new1");
+        assert.equal(setting["selectedAccount"], "Steve@offline");
+
+        const accounts = readJsonAt(join(config, "accounts.json"));
+        assert.deepEqual(
+            (accounts["accounts"] as Array<{ id: string }>).map((item) => item.id),
+            ["Steve@offline"],
+        );
+
+        const javaList = (setting["java"] as { list: Array<{ path: string }> }).list;
+        assert.deepEqual(
+            javaList.map((item) => item.path),
+            [fixture.java],
+        );
+
+        // 再跑一次：同样的数据全部跳过，不重复加
+        const again = cliAt(fixture.home, [
+            "--json",
+            "import",
+            fixture.hmcl,
+            "--base",
+            fixture.home,
+        ]);
+        assert.equal(again.status, 0, again.stderr);
+        const second = JSON.parse(again.stdout) as {
+            folders: { added: unknown[] };
+            java: { added: unknown[] };
+            accounts: { added: unknown[] };
+        };
+        assert.deepEqual(second.folders.added, []);
+        assert.deepEqual(second.java.added, []);
+        assert.deepEqual(second.accounts.added, []);
+    } finally {
+        rmSync(fixture.home, { recursive: true, force: true });
+    }
+});
+
+test("import --dry-run 不写配置与账号文件", () => {
+    const fixture = hmclHome();
+    const config = join(fixture.home, ".config", "bloomery");
+    try {
+        const before = readFileSync(join(config, "setting.json"), "utf8");
+        const outcome = cliAt(fixture.home, [
+            "--json",
+            "import",
+            fixture.hmcl,
+            "--base",
+            fixture.home,
+            "--dry-run",
+        ]);
+        assert.equal(outcome.status, 0, outcome.stderr);
+        const result = JSON.parse(outcome.stdout) as {
+            dryRun: boolean;
+            folders: { added: unknown[] };
+        };
+        assert.equal(result.dryRun, true);
+        assert.equal(result.folders.added.length, 2);
+
+        assert.equal(readFileSync(join(config, "setting.json"), "utf8"), before);
+        assert.equal(existsSync(join(config, "accounts.json")), false);
+    } finally {
+        rmSync(fixture.home, { recursive: true, force: true });
+    }
+});
+
+test("import 认不出的目录报 ImportUnrecognized", () => {
+    const home = mkdtempSync(join(tmpdir(), "bloomery-import-bad-"));
+    try {
+        const outcome = cliAt(home, ["--json", "import", join(home, "不是 HMCL")]);
+        assert.equal(outcome.status, 1, outcome.stderr);
+        const result = JSON.parse(outcome.stdout) as {
+            error: { code: string; message: string; retryable: boolean };
+        };
+        assert.equal(result.error.code, "ImportUnrecognized");
+        assert.equal(result.error.message, "无法识别的导入数据");
+        assert.equal(result.error.retryable, false);
+    } finally {
+        rmSync(home, { recursive: true, force: true });
+    }
+});

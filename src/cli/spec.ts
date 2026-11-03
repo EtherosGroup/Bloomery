@@ -11,6 +11,7 @@ import { runConfig } from "./commands/config.ts";
 import { runStatus } from "./commands/status.ts";
 import { runDownload } from "./commands/download.ts";
 import { runFolder } from "./commands/folder.ts";
+import { runImport } from "./commands/import.ts";
 import { runInstall } from "./commands/install.ts";
 import { runJava } from "./commands/java.ts";
 import { runLaunch } from "./commands/launch.ts";
@@ -303,6 +304,27 @@ export const COMMANDS: CommandTable = {
             noAssets: values["no-assets"] === true,
         }),
         run: runModpack,
+    },
+
+    import: {
+        summary: "导入其他启动器的数据（HMCL）",
+        usage: "import <HMCL 数据目录> [--base <dir>] [--dry-run]",
+        options: {
+            base: {
+                type: "string",
+                value: "<dir>",
+                summary: "HMCL 相对游戏文件夹的基准目录，省略按家目录",
+            },
+            "dry-run": { type: "boolean", summary: "只算不落盘" },
+        },
+        positionals: { names: ["directory"], required: 1 },
+        toCommand: (values, positionals) => ({
+            name: "import",
+            path: requirePositional(positionals, 0, "directory"),
+            base: optionalString(values, "base"),
+            dryRun: values["dry-run"] === true,
+        }),
+        run: runImport,
     },
 
     folder: {

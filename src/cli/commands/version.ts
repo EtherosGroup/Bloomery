@@ -57,8 +57,14 @@ export async function runVersion(command: VersionCommand, ctx: Context): Promise
     }
 
     // 选中只是记一条配置，launch 与 mod install 不给 --version 时用它
+    // 所属文件夹一并设为当前：选中项与当前文件夹是两个独立字段，只记实例会让
+    // launch 在旧文件夹里找它，落成 VersionNotFound
     if (command.action === "select") {
-        await saveSetting({ ...setting, selectedInstance: instance.id });
+        await saveSetting({
+            ...setting,
+            selectedFolder: view.id,
+            selectedInstance: instance.id,
+        });
         if (ctx.json) {
             print(JSON.stringify(versioned({ selected: instance.id, folder: view.id }), null, 4));
             return;
