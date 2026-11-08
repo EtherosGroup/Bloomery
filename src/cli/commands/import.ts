@@ -15,7 +15,13 @@ import {
     updateState,
 } from "../../config/index.ts";
 import { print, versioned } from "../../output/index.ts";
-import { applyHmclImport, planHmclImport, type HmclImportPlan } from "../../importer/index.ts";
+import {
+    applyHmclImport,
+    detectHmclHomes,
+    planHmclImport,
+    type HmclHomeKind,
+    type HmclImportPlan,
+} from "../../importer/index.ts";
 import { logger } from "../../output/index.ts";
 import type { Setting } from "../../config/types.ts";
 import type { Context, ImportCommand } from "../parse.ts";
@@ -23,6 +29,11 @@ import type { Context, ImportCommand } from "../parse.ts";
 const log = logger("import");
 
 export async function runImport(command: ImportCommand, ctx: Context): Promise<void> {
+    // 不给目录就是「找一找」：列出探测到的候选，由调用方挑一个再导入
+    if (command.path === undefined) {
+        await detect(ctx);
+        return;
+    }
     const setting = await loadSetting();
     const accounts = await loadAccounts();
     const plan = await planHmclImport({
@@ -60,6 +71,31 @@ export async function runImport(command: ImportCommand, ctx: Context): Promise<v
         return;
     }
     print(render(plan, command.dryRun === true));
+}
+
+const KIND_LABEL: Record<HmclHomeKind, string> = {
+    local: "便携数据",
+    user: "用户数据",
+};
+
+async function detect(ctx: Context): Promise<void> {
+    const candidates = await detectHmclHomes();
+    if (ctx.json) {
+        print(JSON.stringify(versioned({ candidates }), null, 4));
+        return;
+    }
+    if (candidates.length === 0) {
+        print("未找到 HMCL 数据目录。用 bloomery import <目录> 手动指定");
+        return;
+    }
+    const lines = [`找到 ${candidates.length} 个 HMCL 数据目录`];
+    for (const item of candidates) {
+        lines.push(
+            `  ${item.path}  ${KIND_LABEL[item.kind]}  文件夹 ${item.folders} · 账号 ${item.accounts}`,
+        );
+    }
+    lines.push("用 bloomery import <目录> 导入，可分别导入每一处");
+    print(lines.join("\n"));
 }
 
 // 选中项也算改动：只导入账号时不写 setting 的话 selectedAccount 就落不了盘

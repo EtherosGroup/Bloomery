@@ -307,20 +307,20 @@ export const COMMANDS: CommandTable = {
     },
 
     import: {
-        summary: "导入其他启动器的数据（HMCL）",
-        usage: "import <HMCL 数据目录> [--base <dir>] [--dry-run]",
+        summary: "导入其他启动器的数据（HMCL）；省略目录时列出探测到的 HMCL 数据目录",
+        usage: "import [HMCL 数据目录] [--base <dir>] [--dry-run]",
         options: {
             base: {
                 type: "string",
                 value: "<dir>",
-                summary: "HMCL 相对游戏文件夹的基准目录，省略按家目录",
+                summary: "HMCL 相对游戏文件夹的基准目录，省略按便携安装的工作目录或家目录",
             },
             "dry-run": { type: "boolean", summary: "只算不落盘" },
         },
-        positionals: { names: ["directory"], required: 1 },
+        positionals: { names: ["directory"], required: 0 },
         toCommand: (values, positionals) => ({
             name: "import",
-            path: requirePositional(positionals, 0, "directory"),
+            path: optionalPositional(positionals, 0, "directory"),
             base: optionalString(values, "base"),
             dryRun: values["dry-run"] === true,
         }),

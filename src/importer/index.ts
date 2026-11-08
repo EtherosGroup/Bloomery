@@ -5,9 +5,13 @@
  */
 export {
     applyHmclImport,
+    detectHmclHomes,
     planHmclImport,
     type AccountSkipReason,
     type HmclApplyResult,
+    type HmclCandidate,
+    type HmclDetectOptions,
+    type HmclHomeKind,
     type HmclImportInput,
     type HmclImportPlan,
     type HmclSelection,
