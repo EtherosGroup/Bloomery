@@ -119,3 +119,80 @@ test("planHmclImport：省略 base 时便携安装的相对路径按它的工作
         await rm(root, { recursive: true, force: true });
     }
 });
+
+/** 造一份不是 .hmcl 命名的用户数据：<root>/home/.local/share/hmcl，local home 在它下面的 local-stable */
+async function makeSharedUserHome(root: string): Promise<{ home: string; userHome: string }> {
+    const userHome = join(root, "home");
+    const home = join(userHome, ".local", "share", "hmcl");
+    await mkdir(join(home, "config"), { recursive: true });
+    await writeFile(join(home, "config", "user-settings.json"), "{}");
+    const local = join(home, "local-stable");
+    await mkdir(join(local, "config"), { recursive: true });
+    await writeFile(
+        join(local, "config", "game-directories.json"),
+        JSON.stringify({
+            directories: [{ id: "minecraft-1", path: ".minecraft", name: "Minecraft" }],
+        }),
+    );
+    return { home, userHome };
+}
+
+/** 临时把家目录指到 path，返回恢复函数（Windows 认 USERPROFILE，其它平台认 HOME） */
+function useHome(path: string): () => void {
+    const keys = ["HOME", "USERPROFILE"];
+    const saved = keys.map((key) => [key, process.env[key]] as const);
+    for (const key of keys) {
+        process.env[key] = path;
+    }
+    return () => {
+        for (const [key, value] of saved) {
+            if (value === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = value;
+            }
+        }
+    };
+}
+
+test("detectHmclHomes：目录不叫 .hmcl 时基准回退家目录", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bloomery-hmcl-"));
+    const restore = useHome(join(root, "home"));
+    try {
+        const { home, userHome } = await makeSharedUserHome(root);
+        const candidates = await detectHmclHomes({ roots: [home] });
+        assert.deepEqual(
+            candidates.map((item) => [item.kind, item.path]),
+            [["user", home]],
+        );
+        // 推不出 HMCL 的工作目录，按家目录展开
+        assert.equal(candidates[0]?.base, userHome);
+    } finally {
+        restore();
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test("planHmclImport：local home 不叫 .hmcl 时基准回退家目录", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bloomery-hmcl-"));
+    const restore = useHome(join(root, "home"));
+    try {
+        const { home, userHome } = await makeSharedUserHome(root);
+        const plan = await planHmclImport({
+            path: home,
+            setting: defaultSetting(),
+            accounts: defaultAccounts(),
+        });
+        assert.equal(plan.localHome, join(home, "local-stable"));
+        assert.equal(plan.userHome, home);
+        assert.equal(plan.base, userHome);
+        // 相对路径按家目录展开，而不是 local home 的上一层
+        assert.deepEqual(
+            plan.folders.skipped.map((item) => [item.path, item.reason]),
+            [[join(userHome, ".minecraft"), "not-found"]],
+        );
+    } finally {
+        restore();
+        await rm(root, { recursive: true, force: true });
+    }
+});

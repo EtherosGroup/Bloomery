@@ -12,7 +12,7 @@
 import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import type { Accounts, Folder, JavaEntry, OfflineAccount, Setting } from "../config/types.ts";
 import { offlineAccount } from "../config/accounts.ts";
@@ -246,7 +246,7 @@ export type HmclHomeKind = "local" | "user";
 export interface HmclCandidate {
     /** 交给 import 的目录 */
     readonly path: string;
-    /** 相对路径的基准：便携安装是 local home 的父目录，用户数据是家目录 */
+    /** 相对路径的基准：目录名为 .hmcl（便携安装）取父目录，其余回退家目录 */
     readonly base: string;
     readonly kind: HmclHomeKind;
     /** config 里登记的游戏文件夹条数，不探测版本 */
@@ -306,7 +306,7 @@ async function describe(path: string, kind: HmclHomeKind): Promise<HmclCandidate
         .catch(() => null);
     return {
         path,
-        base: dirname(path),
+        base: baseOf(path),
         kind,
         folders,
         accounts,
@@ -314,15 +314,29 @@ async function describe(path: string, kind: HmclHomeKind): Promise<HmclCandidate
     };
 }
 
-// 相对路径以 HMCL 的工作目录为准，也就是数据目录的上一层：便携版在 HMCL 旁边，
-// 用户数据在 %APPDATA%（Windows）/ Application Support（macOS）这一层
-function defaultBase(homes: HmclHomes): string {
-    const home = homes.localHome ?? homes.userHome;
-    return home === null ? homedir() : resolve(home, "..");
+// 相对路径以 HMCL 的工作目录为准。只有数据目录本身就叫 .hmcl（便携安装）时，
+// 它的父目录才等于工作目录；其它布局（如 ~/.local/share/hmcl/local-stable）推不出来，回退家目录
+function baseOf(home: string): string {
+    return basename(home) === ".hmcl" ? resolve(home, "..") : homedir();
 }
 
-// A、B 是软驱盘符，留着无害
-const DRIVE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function defaultBase(homes: HmclHomes): string {
+    const home = homes.localHome ?? homes.userHome;
+    return home === null ? homedir() : baseOf(home);
+}
+
+// 只扫系统盘与常见盘符：A、B 是软驱，X–Z 常被映射成网络驱动器，stat 可能卡住；
+// 装在别的盘上只能手动把目录传给 import
+const COMMON_DRIVE_LETTERS = ["C", "D", "E", "F", "G"];
+
+function windowsDrives(): string[] {
+    const letters = new Set<string>(COMMON_DRIVE_LETTERS);
+    const system = process.env["SystemDrive"];
+    if (system !== undefined && /^[A-Za-z]:$/.test(system)) {
+        letters.add(system.slice(0, 1).toUpperCase());
+    }
+    return [...letters].sort();
+}
 
 function candidateRoots(): string[] {
     const home = homedir();
@@ -338,7 +352,7 @@ function candidateRoots(): string[] {
             }
             roots.push(join(home, ".hmcl"), join(home, ".minecraft", ".hmcl"));
             // 便携版把 .hmcl 放在 HMCL 的工作目录，最常见的就是盘符根
-            for (const drive of DRIVE_LETTERS) {
+            for (const drive of windowsDrives()) {
                 roots.push(`${drive}:\\.hmcl`);
             }
             return roots;
