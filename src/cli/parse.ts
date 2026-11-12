@@ -138,7 +138,7 @@ export interface ImportCommand {
     readonly name: "import";
     /** HMCL 数据目录：含 config/launcher-settings.json 或 config/user-game-directories.json；省略时只列出探测到的候选 */
     readonly path?: string;
-    /** HMCL 相对游戏文件夹的基准目录，省略按家目录 */
+    /** HMCL 相对游戏文件夹的基准；省略时 .hmcl 便携目录用父目录，其余按家目录 */
     readonly base?: string;
     /** 只算不落盘 */
     readonly dryRun?: boolean;

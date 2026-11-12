@@ -313,7 +313,7 @@ export const COMMANDS: CommandTable = {
             base: {
                 type: "string",
                 value: "<dir>",
-                summary: "HMCL 相对游戏文件夹的基准目录，省略按便携安装的工作目录或家目录",
+                summary: "HMCL 相对游戏文件夹的基准；省略时 .hmcl 便携目录用父目录，其余按家目录",
             },
             "dry-run": { type: "boolean", summary: "只算不落盘" },
         },

@@ -1,7 +1,7 @@
 /**
  * HMCL 数据目录：自动探测与相对路径基准
  * @author IsCibocaz
- * @since 1.16.0
+ * @since 1.17.0
  */
 
 import assert from "node:assert/strict";

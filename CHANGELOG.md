@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.17.0
+
+- 新增 `import` 省略目录时的数据目录探测：Windows（`%APPDATA%` / `%LOCALAPPDATA%` 下的 `.hmcl` 与 `hmcl`、家目录、`%SystemDrive%` 与 C–G 盘根）、macOS（`Application Support`）、其它平台（`XDG_DATA_HOME`）的固定位置，列出路径、类别、登记的文件夹数与账号数，按目录最后修改时间倒序；`--json` 下是 `candidates[]`。不递归扫盘，装在别处的仍手动传目录
+- `--base` 的默认值按布局分流：数据目录本身叫 `.hmcl`（便携安装）时取它的父目录，也就是 HMCL 的工作目录；其余布局（用户数据目录、user home 下的 `local-stable` 之类）推不出工作目录，回退家目录。此前 Windows 便携版把相对的 `.minecraft` 解到家目录，游戏文件夹认不出来
+- 补 `test/importer/hmcl.test.ts`：便携/用户数据的基准、非 `.hmcl` 布局回退家目录、重复根去重、空目录与省略 base 的路径展开
+- README 补无目录 `import` 的用法、`candidates[]` 字段与 `--base` 的新默认规则，输出形状表加「`import`（不带目录）」一行
+
 ## 1.16.0
 
 - `version select` 同时把当前文件夹切到实例所属文件夹：选中项与当前文件夹是两个独立字段，用 `--folder b` 选中 b 里的实例后当前文件夹还是 a 的话，`launch` 会在 a 里找那个实例并报 `VersionNotFound`。结果里的 `folder` 是切换后的当前文件夹
