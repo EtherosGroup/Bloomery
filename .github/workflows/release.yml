@@ -76,12 +76,15 @@ jobs:
                   grep -E "total files|package size|unpacked size" /tmp/pack.txt
 
             # 附件名与参考仓库的约定一致：项目名-版本.后缀
+            # 包名带作用域时 npm pack 产出的文件名是 <scope>-<name>-<version>.tgz，按包名推出实际文件名
             - name: 归置产物
               run: |
                   set -euo pipefail
                   version="$(node -p "require('./package.json').version")"
+                  name="$(node -p "require('./package.json').name")"
+                  slug="$(printf '%s' "$name" | sed 's|^@||; s|/|-|g')"
                   mkdir -p release
-                  cp "bloomery-${version}.tgz" "release/Bloomery-${version}.tgz"
+                  cp "${slug}-${version}.tgz" "release/Bloomery-${version}.tgz"
                   ls -l release/
 
             # 推标签时由 release job 取出来发版，手动触发时留作演练产物，因此两条路都上传
