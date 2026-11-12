@@ -10,16 +10,16 @@
  */
 
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import type { Accounts, Folder, JavaEntry, OfflineAccount, Setting } from "../config/types.ts";
 import { offlineAccount } from "../config/accounts.ts";
 import { AppError } from "../error/index.ts";
 import { readText } from "../infra/fs.ts";
 import { javaEntryOf, javaProbeOf, probeJava } from "../launch/index.ts";
-import { expandHome } from "../platform/index.ts";
+import { expandHome, platform } from "../platform/index.ts";
 import {
     folderIdOf,
     probeFolder,
@@ -118,7 +118,7 @@ export async function planHmclImport(input: HmclImportInput): Promise<HmclImport
         throw new AppError("cli", "ImportUnrecognized", { context: { detail: target } });
     }
 
-    const base = resolve(expandHome(input.base ?? homedir()));
+    const base = resolve(expandHome(input.base ?? defaultBase(homes)));
     const warnings: string[] = [];
 
     const folders = await planFolders(input.setting, homes, base);
@@ -237,6 +237,138 @@ async function isUserHome(directory: string): Promise<boolean> {
 async function subdirectories(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+}
+
+/* ---------- 自动探测 ---------- */
+
+export type HmclHomeKind = "local" | "user";
+
+export interface HmclCandidate {
+    /** 交给 import 的目录 */
+    readonly path: string;
+    /** 相对路径的基准：目录名为 .hmcl（便携安装）取父目录，其余回退家目录 */
+    readonly base: string;
+    readonly kind: HmclHomeKind;
+    /** config 里登记的游戏文件夹条数，不探测版本 */
+    readonly folders: number;
+    /** config 里登记的账号条数 */
+    readonly accounts: number;
+    /** 目录最后改动时间（毫秒），读不到给 null */
+    readonly modified: number | null;
+}
+
+export interface HmclDetectOptions {
+    /** 覆盖候选位置，测试用；不给就按平台取默认的那些 */
+    readonly roots?: readonly string[];
+}
+
+/**
+ * 找 HMCL 的数据目录
+ *
+ * 只看固定的几个位置，不递归扫盘：便携数据放在 HMCL 工作目录的 .hmcl，
+ * 用户数据按平台放在固定位置。装在别处的只能手动把目录传给 import。
+ */
+export async function detectHmclHomes(options: HmclDetectOptions = {}): Promise<HmclCandidate[]> {
+    const seen = new Set<string>();
+    const found: HmclCandidate[] = [];
+    for (const root of options.roots ?? candidateRoots()) {
+        const path = resolve(expandHome(root));
+        // Windows 的路径不区分大小写，两个根指到同一处时只留一个
+        const key = platform === "Windows" ? path.toLowerCase() : path;
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        if (await isLocalHome(path)) {
+            found.push(await describe(path, "local"));
+            continue;
+        }
+        if (await isUserHome(path)) {
+            found.push(await describe(path, "user"));
+        }
+    }
+    // 最近动过的排前面：同时装了几个 HMCL 时，常用的那个在最上面
+    return found.sort(
+        (left, right) =>
+            (right.modified ?? 0) - (left.modified ?? 0) || left.path.localeCompare(right.path),
+    );
+}
+
+async function describe(path: string, kind: HmclHomeKind): Promise<HmclCandidate> {
+    const folders =
+        (await readDirectories(path, "game-directories.json")).length +
+        (await readDirectories(path, "user-game-directories.json")).length;
+    const accounts =
+        (await readAccounts(path, "accounts.json")).length +
+        (await readAccounts(path, "user-accounts.json")).length;
+    const modified = await stat(path)
+        .then((info) => Math.round(info.mtimeMs))
+        .catch(() => null);
+    return {
+        path,
+        base: baseOf(path),
+        kind,
+        folders,
+        accounts,
+        modified,
+    };
+}
+
+// 相对路径以 HMCL 的工作目录为准。只有数据目录本身就叫 .hmcl（便携安装）时，
+// 它的父目录才等于工作目录；其它布局（如 ~/.local/share/hmcl/local-stable）推不出来，回退家目录
+function baseOf(home: string): string {
+    return basename(home) === ".hmcl" ? resolve(home, "..") : homedir();
+}
+
+function defaultBase(homes: HmclHomes): string {
+    const home = homes.localHome ?? homes.userHome;
+    return home === null ? homedir() : baseOf(home);
+}
+
+// 只扫系统盘与常见盘符：A、B 是软驱，X–Z 常被映射成网络驱动器，stat 可能卡住；
+// 装在别的盘上只能手动把目录传给 import
+const COMMON_DRIVE_LETTERS = ["C", "D", "E", "F", "G"];
+
+function windowsDrives(): string[] {
+    const letters = new Set<string>(COMMON_DRIVE_LETTERS);
+    const system = process.env["SystemDrive"];
+    if (system !== undefined && /^[A-Za-z]:$/.test(system)) {
+        letters.add(system.slice(0, 1).toUpperCase());
+    }
+    return [...letters].sort();
+}
+
+function candidateRoots(): string[] {
+    const home = homedir();
+    switch (platform) {
+        case "Windows": {
+            const roots: string[] = [];
+            for (const key of ["APPDATA", "LOCALAPPDATA"]) {
+                const base = process.env[key];
+                if (base === undefined || base === "") {
+                    continue;
+                }
+                roots.push(join(base, ".hmcl"), join(base, "hmcl"));
+            }
+            roots.push(join(home, ".hmcl"), join(home, ".minecraft", ".hmcl"));
+            // 便携版把 .hmcl 放在 HMCL 的工作目录，最常见的就是盘符根
+            for (const drive of windowsDrives()) {
+                roots.push(`${drive}:\\.hmcl`);
+            }
+            return roots;
+        }
+        case "macOS":
+            return [
+                join(home, "Library", "Application Support", "hmcl"),
+                join(home, "Library", "Application Support", ".hmcl"),
+                join(home, ".hmcl"),
+            ];
+        default: {
+            const data = process.env["XDG_DATA_HOME"];
+            const base = data === undefined || data === "" ? join(home, ".local", "share") : data;
+            return [join(base, "hmcl"), join(home, ".hmcl")];
+        }
+    }
 }
 
 /* ---------- 文件夹 ---------- */

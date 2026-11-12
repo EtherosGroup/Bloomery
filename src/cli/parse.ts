@@ -136,8 +136,8 @@ export interface ModpackCommand {
 
 export interface ImportCommand {
     readonly name: "import";
-    /** HMCL 数据目录：含 config/launcher-settings.json 或 config/user-game-directories.json */
-    readonly path: string;
+    /** HMCL 数据目录：含 config/launcher-settings.json 或 config/user-game-directories.json；省略时只列出探测到的候选 */
+    readonly path?: string;
     /** HMCL 相对游戏文件夹的基准目录，省略按家目录 */
     readonly base?: string;
     /** 只算不落盘 */

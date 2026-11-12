@@ -190,16 +190,19 @@ bloomery modpack pack.mrpack --no-assets
 导入其他启动器的数据，目前只认 HMCL 3.16 起（配置拆成 `config/*.json` 的版本）。一次性的迁移，不长期兼容 HMCL 的格式；3.16 之前的单文件 `hmcl.json` 不认。
 
 ```bash
+bloomery import                                   # 只列出找到的 HMCL 数据目录，不导入
 bloomery import ~/.local/share/hmcl               # HMCL 的用户数据目录
 bloomery import ~/Games/HMCL --base ~            # 传 local home（含 config/launcher-settings.json）
 bloomery import ~/.local/share/hmcl --dry-run    # 只算不写
 ```
 
+省略目录时只探测、不导入：按平台的固定位置找数据目录，把候选按最后改动时间倒序列出来，每个带 `path` / `base` / `kind` / `folders` / `accounts` / `modified`，把 `path` 传给下一次 `import` 才真的导入。Windows 看 `%APPDATA%` 与 `%LOCALAPPDATA%` 下的 `.hmcl` / `hmcl`、家目录的 `.hmcl` 与 `.minecraft\.hmcl`、以及 `%SystemDrive%` 与 C–G 盘根；macOS 看 `~/Library/Application Support/{hmcl,.hmcl}`；其它平台看 `$XDG_DATA_HOME/hmcl` 与 `~/.hmcl`。装在别处的直接把目录传进来。
+
 两种布局都认：user home（`config/user-*.json` + 顶层 `javaCache.json`）与 local home（`config/launcher-settings.json`、`game-directories.json`、`accounts.json`）。传 user home 时，它下面的 `local-stable/` 之类子目录会被自动找出来当 local home；传 local home 时 user home 从上一层取。
 
 导入的内容：
 
-- 游戏文件夹：按路径去重，已经登记过的跳过。`--base` 是 HMCL 相对路径（例如 local home 里的 `.minecraft`）的基准，默认家目录
+- 游戏文件夹：按路径去重，已经登记过的跳过。`--base` 是 HMCL 相对路径（例如 local home 里的 `.minecraft`）的基准：数据目录本身叫 `.hmcl`（便携安装）时取它的上一层，也就是 HMCL 的工作目录；其它布局（如 `~/.local/share/hmcl/local-stable`）推不出工作目录，回退家目录
 - Java：读 HMCL 的 `javaCache.json`，逐个探测，文件不在或探测失败的跳过
 - 离线账号：HMCL 的 `offline` 账号转成 `名字@offline`；同名已存在时跳过
 - 选中状态：当前文件夹、当前实例、选中账号，只在解析得到时写
@@ -410,7 +413,8 @@ bloomery install 1.20.6 --json      # UsageError：全局选项 --json 要写在
 | `launch [id] --dry-run`                 | 对象   | 有   | 同上，`--dry-run` 不启动进程、不续期微软凭据；`repair`、`pid` 与 `log` 恒为 `null`，`account.needsRefresh` 为 `true` 表示真启动时会先续一次                                                                                                                                                                          |
 | `launch [id] --repair`                  | 对象   | 有   | `version` `directory` `missing` `repair`，不带启动计划                                                                                                                                                                                                                                                               |
 | `install <version>`                     | 对象   | 有   | `name` `versionId` `loader` `base` `clientJar` `libraries` `natives` `assets` `timing` `official` `warnings[]`                                                                                                                                                                                                       |
-| `import <目录>`                         | 对象   | 有   | `source{kind,path,localHome,userHome}` `dryRun:boolean` `folders{added[]（`id` `path` `versionCount`）,skipped[]（`path` `reason`）}` `java{added[]（JavaEntry）,skipped[]（`path` `reason`）}` `accounts{added[]（账号对象）,skipped[]（`name` `type` `reason`）}` `selected{folder,instance,account}` `warnings[]` |
+| `import [目录]`                         | 对象   | 有   | `source{kind,path,localHome,userHome}` `dryRun:boolean` `folders{added[]（`id` `path` `versionCount`）,skipped[]（`path` `reason`）}` `java{added[]（JavaEntry）,skipped[]（`path` `reason`）}` `accounts{added[]（账号对象）,skipped[]（`name` `type` `reason`）}` `selected{folder,instance,account}` `warnings[]` |
+| `import`（不带目录）                    | 对象   | 有   | `candidates[]`（`path` `base` `kind`：`local` / `user` `folders` `accounts` `modified:number\|null`，按 `modified` 倒序）                                                                                                                                                                                            |
 | `mod search <关键词>`                   | 对象   | 有   | `query` `instance` `gameVersion` `loader` `names` `hits[]`（元素：`id:string` `slug:string` `title:string` `titleZh:string\|null` `description:string` `downloads:number` `loaders:string[]` `gameVersions:string[]` `categories:string[]`）；没给 `--version`/`--folder` 时前三个后位是 `null`                      |
 | `mod install <目标...>`                 | 对象   | 有   | `instance` `mods` `installs[]`（`query` `ok:true` `project` `version` `files[]` `dependencies[]` `warnings[]`）`failed[]`（`query` `ok:false` `code` `detail` `retryable`）                                                                                                                                          |
 | `mod install <目标...> --async`         | 对象   | 有   | `instance` `tasks[]`（队列任务，形状同 `download info`）`spawn:{outcome:string,pid:number\|null,log:string}`（这次拉起后台 worker 的结果）                                                                                                                                                                           |
