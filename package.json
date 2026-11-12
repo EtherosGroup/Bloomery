@@ -1,6 +1,6 @@
 {
-    "name": "bloomery",
-    "version": "1.17.0",
+    "name": "@etheros/bloomery",
+    "version": "1.17.1",
     "description": "Minecraft 启动器",
     "keywords": [
         "Bloomery",
@@ -24,6 +24,9 @@
     ],
     "type": "module",
     "main": "dist/main.js",
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "start": "node ./src/main.ts",
         "dev": "node ./src/main-dev.ts",

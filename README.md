@@ -5,9 +5,11 @@ Minecraft 启动器命令行。TypeScript 编写，Node ≥ 20，零运行时依
 ## 安装
 
 ```bash
-npm i -g bloomery
+npm i -g @etheros/bloomery
 bloomery --version
 ```
+
+包名是 `@etheros/bloomery`，装出来的命令仍是 `bloomery`。
 
 从源码：
 
@@ -21,7 +23,7 @@ npm run start -- --version
 ## 更新
 
 ```bash
-npm i -g bloomery@latest
+npm i -g @etheros/bloomery@latest
 ```
 
 ## 快速开始

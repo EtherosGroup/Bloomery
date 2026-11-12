@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.17.1
+
+- npm 包名从 `bloomery` 改为 `@etheros/bloomery`（原账号已注销，包随之不存在）：安装与更新命令改成 `npm i -g @etheros/bloomery`，装出来的命令仍是 `bloomery`。`publishConfig.access` 固定为 `public`
+- 代码与 1.17.0 相同
+
 ## 1.17.0
 
 - 新增 `import` 省略目录时的数据目录探测：Windows（`%APPDATA%` / `%LOCALAPPDATA%` 下的 `.hmcl` 与 `hmcl`、家目录、`%SystemDrive%` 与 C–G 盘根）、macOS（`Application Support`）、其它平台（`XDG_DATA_HOME`）的固定位置，列出路径、类别、登记的文件夹数与账号数，按目录最后修改时间倒序；`--json` 下是 `candidates[]`。不递归扫盘，装在别处的仍手动传目录
